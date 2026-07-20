@@ -8,6 +8,8 @@ from django.test import Client
 from django.utils import timezone
 
 from apps.accounts.models import PasswordResetRequest, User, UserRole
+from apps.audit.models import AuditEvent
+from apps.audit.registry import AuditAction
 
 CURRENT_PASSWORD = "correct horse battery staple"  # noqa: S105
 NEW_PASSWORD = "new correct horse battery staple"  # noqa: S105
@@ -170,6 +172,16 @@ def test_own_password_change_checks_current_password_and_revokes_other_sessions(
     assert current_client.get("/api/v1/session").status_code == 200
     assert other_client.get("/api/v1/session").status_code == 401
     assert not Session.objects.filter(session_key=other_key).exists()
+    event = AuditEvent.objects.get(action=AuditAction.PASSWORD_CHANGED)
+    assert event.actor_id == user.pk
+    assert event.before == {
+        "must_change_password": False,
+        "temporary_password_expires_at": None,
+    }
+    assert event.after == {
+        "must_change_password": False,
+        "temporary_password_expires_at": None,
+    }
 
 
 @pytest.mark.django_db
@@ -203,6 +215,10 @@ def test_reset_request_response_does_not_enumerate_accounts_and_deduplicates_que
     assert known.status_code == repeated.status_code == unknown.status_code == 202
     assert known.json() == repeated.json() == unknown.json()
     assert PasswordResetRequest.objects.filter(user=user, resolved_at__isnull=True).count() == 1
+    event = AuditEvent.objects.get(action=AuditAction.PASSWORD_RESET_REQUESTED)
+    assert event.actor_id is None
+    assert event.actor_role == "anonymous"
+    assert event.object_id == str(user.pk)
 
 
 @pytest.mark.django_db
@@ -257,6 +273,10 @@ def test_admin_queue_and_temporary_password_resolve_request_and_revoke_sessions(
     assert target.temporary_password_expires_at is not None
     assert reset_request.resolved_by == admin
     assert reset_request.resolved_at is not None
+    event = AuditEvent.objects.get(action=AuditAction.TEMPORARY_PASSWORD_SET)
+    assert event.actor_id == admin.pk
+    assert event.object_id == str(target.pk)
+    assert "password" not in event.after
 
     forced_client, forced_token = csrf_client()
     forced_login = login(forced_client, target.email, TEMPORARY_PASSWORD, forced_token)

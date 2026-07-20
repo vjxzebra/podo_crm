@@ -2,6 +2,7 @@ export type IconName =
   | "overview"
   | "calendar"
   | "patients"
+  | "team"
   | "tasks"
   | "finance"
   | "inventory"
@@ -39,6 +40,13 @@ const iconPaths: Record<IconName, React.ReactNode> = {
     <>
       <circle cx="9" cy="8" r="4" />
       <path d="M3 21v-2a6 6 0 0 1 12 0v2M16 11a4 4 0 0 1 5 4v2" />
+    </>
+  ),
+  team: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M3 20v-1.5a6 6 0 0 1 12 0V20M14 14.5a5 5 0 0 1 7 4.5v1" />
     </>
   ),
   tasks: (

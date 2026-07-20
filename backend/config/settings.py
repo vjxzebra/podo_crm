@@ -34,6 +34,8 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "apps.accounts",
+    "apps.audit",
+    "apps.clinic",
 ]
 
 MIDDLEWARE = [
@@ -142,6 +144,11 @@ MINIO_HEALTH_URL = os.getenv(
     "MINIO_HEALTH_URL",
     "http://minio:9000/minio/health/ready",
 )
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "podoria_minio")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "podoria_minio_dev_password")
+MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "podoria-private")
+CLINIC_LOGO_MAX_BYTES = 5 * 1024 * 1024
 
 LOGGING = {
     "version": 1,

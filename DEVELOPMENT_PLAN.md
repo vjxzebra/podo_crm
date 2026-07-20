@@ -218,7 +218,7 @@ Compose-профілі:
 
 **Gate:** UI і API негативно перевірені для кожної ролі; заборонений прямий URL повертає 403/API error і безпечний UI redirect; ресепшн не бачить admin endpoints.
 
-**Стан:** TP-201—TP-202 завершено 2026-07-21 — email login/logout, server session, CSRF/cookie policy, три фіксовані ролі, централізована RBAC matrix, role-safe navigation, примусовий first-login, зміна власного пароля, enumeration-safe forgot request, admin reset queue/temporary password і відкликання сесій реалізовані. Наступним можна вести TP-203 або незалежний TP-207.
+**Стан:** TP-201—TP-205 і TP-207 завершено 2026-07-21 — email login/logout, server session, CSRF/cookie policy, три фіксовані ролі, role-safe navigation, password lifecycle, append-only audit foundation, team lifecycle, singleton clinic profile, private logo lifecycle, room catalog і service catalog реалізовані. Admin керує контактами однієї локації, кімнатами й послугами; optimistic version захищає від lost updates, довідники не видаляються, усі mutation атомарно пишуть audit. Неадмінські ролі читають лише активну service picker projection. Наступний пакет — TP-206 system statuses і clinic-wide work schedule.
 
 ### Етап 3. Пацієнти й внутрішні справи — 1–1.5 тижня
 

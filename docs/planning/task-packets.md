@@ -33,7 +33,12 @@
 | TP-103 | `done` | Route/auth contracts; 14 component/a11y tests; responsive screenshots 1440×900, 768×1024, 390×844 |
 | TP-201 | `done` | Email login/logout/session; centralized RBAC matrix; 31 backend + 16 frontend tests; direct-URL/browser evidence |
 | TP-202 | `done` | Force-change session, own password, enumeration-safe forgot, admin reset queue/temp password, session revocation |
-| TP-203—TP-904 | `planned` | Наступні: TP-203 team lifecycle або незалежний TP-207 audit infrastructure |
+| TP-203 | `done` | Admin team list/create/edit/reactivate/deactivate/temp password; fixed roles; session revocation; concurrent last-admin guard; audit; responsive evidence |
+| TP-204 | `done` | Singleton clinic profile; private validated logo; one-location room catalog; optimistic conflicts; audit/RBAC; responsive Edge evidence |
+| TP-205 | `done` | Service CRUD without delete; unique code/domain constraints; admin catalog/palette/conflicts; active picker projection; audit/RBAC; responsive Edge evidence |
+| TP-206 | `planned` | Наступний: system status configs і clinic-wide work schedule |
+| TP-207 | `done` | UUID event registry; same-transaction service; recursive secret redaction; model/queryset + PostgreSQL append-only guards; admin list/detail API |
+| TP-301—TP-904 | `planned` | Наступні domain packets використовують TP-207 service; повний audit UI та event coverage registry закриває TP-803 |
 
 ## 3. Володіння модулями
 
@@ -166,4 +171,4 @@
 
 ## 6. Порядок найближчого запуску
 
-ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201 і TP-202 завершено. Наступним можна вести TP-203 team lifecycle або незалежний TP-207 audit infrastructure. Password lifecycle тепер зафіксований typed API та session policy; базовий RBAC уже відкрив залежні довідники й домени, а inventory TP-501—503 може йти паралельно з TP-301—404 після append-only audit infrastructure.
+ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201—TP-205 і TP-207 завершено. Наступним слід вести TP-206 system status configs і clinic-wide schedule, використовуючи готові RBAC, audit та settings UI conventions. Після TP-206 етап довідників закрито; inventory TP-501—503 може йти паралельно з TP-301—404.

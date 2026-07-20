@@ -110,6 +110,17 @@ export const routeRegistry = [
     requiresSession: true,
   },
   {
+    id: "team",
+    path: "/team",
+    label: "Команда",
+    shortLabel: "Команда",
+    description: "Працівники, ролі й доступ",
+    icon: "team",
+    group: "utility",
+    surface: "module",
+    requiresSession: true,
+  },
+  {
     id: "settings",
     path: "/settings",
     label: "Налаштування",

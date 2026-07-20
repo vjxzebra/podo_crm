@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { App } from "../App";
 
 describe("application shell accessibility", () => {
-  it.each(["/", "/previews/empty", "/previews/error", "/previews/forbidden", "/missing-route"])(
+  it.each(["/", "/team", "/settings", "/previews/empty", "/previews/error", "/previews/forbidden", "/missing-route"])(
     "has no detectable accessibility violations at %s",
     async (path) => {
       const { container } = render(
@@ -16,6 +16,12 @@ describe("application shell accessibility", () => {
       );
 
       await screen.findByTestId("desktop-sidebar");
+      if (path === "/team") {
+        await screen.findByText("Працівників не знайдено");
+      }
+      if (path === "/settings") {
+        await screen.findByRole("heading", { name: "Профіль кабінету" });
+      }
 
       const results = await axe.run(container, {
         rules: {

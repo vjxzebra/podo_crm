@@ -22,12 +22,23 @@ docker compose up --build
 
 ### Локальний користувач для входу
 
-У `DEBUG` можна явно створити або оновити один тестовий профіль. Команда відмовляється працювати поза development mode і не створює default credentials автоматично:
+У `DEBUG` можна явно створити або оновити один тестовий профіль. Команда відмовляється працювати поза development mode і не створює default credentials автоматично.
+
+Поточний локальний доступ до адміністративного інтерфейсу CRM зберігається в проігнорованому Git файлі `.env.local`:
+
+- URL: <http://localhost:8088>;
+- email: змінна `PODORIA_LOCAL_ADMIN_EMAIL`;
+- пароль: змінна `PODORIA_LOCAL_ADMIN_PASSWORD`;
+- роль: `admin`.
+
+Ці credentials призначені виключно для локальної розробки. Не використовуйте їх у staging або production і не додавайте `.env.local` до Git. Безпечні placeholders наведені в `.env.example`. Після очищення PostgreSQL volume профіль можна відтворити командою:
 
 ```powershell
+$localAccess = Get-Content .env.local -Raw | ConvertFrom-StringData
+
 docker compose run --rm backend python manage.py provision_dev_user `
-  --email admin@podoria.local `
-  --password "replace-for-local-use" `
+  --email $localAccess["PODORIA_LOCAL_ADMIN_EMAIL"] `
+  --password $localAccess["PODORIA_LOCAL_ADMIN_PASSWORD"] `
   --role admin `
   --first-name Локальний `
   --last-name Адміністратор
@@ -64,3 +75,11 @@ Readiness повертає `200`, лише коли PostgreSQL, Redis і MinIO �
 Session authentication використовує `podoria_sessionid` (`HttpOnly`, `SameSite=Lax`; `Secure` за замовчуванням поза `DEBUG`) та окремий CSRF cookie для `X-CSRFToken` на login/logout і інших unsafe requests.
 
 Password lifecycle з TP-202 додає примусовий first-login для тимчасових паролів, зміну власного пароля з перевіркою поточного, enumeration-safe reset request та admin-only чергу відновлення. Тимчасовий пароль за замовчуванням діє 24 години (`TEMPORARY_PASSWORD_TTL_HOURS`); його встановлення відкликає всі сесії працівника, а зміна власного пароля зберігає лише поточну сесію.
+
+Audit foundation з TP-207 надає admin-only `GET /api/v1/audit-events` і `GET /api/v1/audit-events/{id}`, стабільну cursor pagination, пошук/фільтри та redacted «Було → Стало». Domain services записують лише зареєстровані event types усередині `transaction.atomic()`; application API та PostgreSQL trigger забороняють update/delete. Password change, reset request і temporary password уже інтегровані з аудитом.
+
+Team lifecycle з TP-203 додає admin-only `GET/POST /api/v1/users`, `GET/PATCH /api/v1/users/{id}` і `POST /api/v1/users/{id}/deactivate`. Профіль містить ім’я, телефон, case-insensitive unique email, одну з трьох ролей, active/first-login state і last login. Зміна ролі та деактивація відкликають сесії; row-level locking не дозволяє двом concurrent mutation прибрати останнього активного адміністратора. Responsive `/team` підтримує search/status filter, create/edit/reactivate/deactivate і temporary-password flows.
+
+Clinic settings з TP-204 додають singleton `GET/PATCH /api/v1/clinic-profile`, authenticated private-read та admin-only upload `/api/v1/clinic-profile/logo`, а також `GET/POST /api/v1/rooms` і `PATCH /api/v1/rooms/{id}`. Профіль містить повні name/phone/email/address/description поля; PNG/JPEG до 5 МБ зберігається в private MinIO bucket. Кімнати мають case-insensitive unique name, optimistic version та active state без delete, щоб майбутні appointment зберігали історичний snapshot. Responsive `/settings` покриває profile, logo, room empty/create/deactivate/conflict states.
+
+Service catalog з TP-205 додає authenticated `GET /api/v1/services`, `GET /api/v1/services/{id}` і admin-only `POST/PATCH`. Адміністратор керує unique code, назвою, додатною тривалістю, ціною в integer minor units, кольором календаря та active state з optimistic version; фізичного delete немає. Рецепція й подолог отримують лише активну picker-проєкцію без status/version/timestamps. Третя вкладка `/settings` має search/status filter, responsive table/cards, палітру, create/edit/deactivate/conflict states та audit для кожної mutation.

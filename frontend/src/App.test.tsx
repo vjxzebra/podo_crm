@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
@@ -8,6 +8,9 @@ import {
   adminSession,
   anonymousProblem,
   forcedPasswordSession,
+  clinicProfile,
+  clinicRoom,
+  clinicService,
   jsonResponse,
   receptionSession,
 } from "./test/setup";
@@ -55,7 +58,7 @@ describe("authenticated application shell", () => {
   });
 
   it("keeps authorization claims out of the route registry", () => {
-      expect(routeRegistry).toHaveLength(11);
+    expect(routeRegistry).toHaveLength(12);
     for (const route of routeRegistry) {
       expect(route.requiresSession).toBe(true);
       expect(Object.keys(route)).not.toContain("roles");
@@ -100,6 +103,7 @@ describe("session boundary and role-safe routes", () => {
     expect(await screen.findByRole("heading", { name: "Добрий день" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Цей розділ недоступний");
     expect(screen.queryByRole("link", { name: "Склад" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Команда" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Фінанси" })).not.toHaveLength(0);
   });
 
@@ -228,5 +232,244 @@ describe("session boundary and role-safe routes", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent("Усі попередні сесії відкликано");
     expect(screen.getByText("Нових запитів немає")).toBeInTheDocument();
+  });
+
+  it("lets an administrator create a team member with a role access summary", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const adminUser = {
+      id: 1,
+      first_name: "Тест",
+      last_name: "Адміністратор",
+      display_name: "Тест Адміністратор",
+      phone: "+380 50 100 20 30",
+      email: "admin@example.test",
+      role: "admin",
+      is_active: true,
+      must_change_password: false,
+      temporary_password_expires_at: null,
+      last_login: "2026-07-21T10:00:00+03:00",
+    } as const;
+    const createdUser = {
+      id: 8,
+      first_name: "Марія",
+      last_name: "Бондар",
+      display_name: "Марія Бондар",
+      phone: "+380 93 555 66 77",
+      email: "maria@example.test",
+      role: "podologist",
+      is_active: true,
+      must_change_password: true,
+      temporary_password_expires_at: "2026-07-22T10:00:00+03:00",
+      last_login: null,
+    } as const;
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse({ users: [adminUser] }))
+      .mockResolvedValueOnce(jsonResponse(createdUser, 201));
+    renderApp("/team");
+
+    expect(await screen.findByRole("heading", { name: "Команда" })).toBeInTheDocument();
+    expect(await screen.findAllByText("Тест Адміністратор")).not.toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Додати працівника" }));
+    expect(screen.getByRole("heading", { name: "Новий працівник" })).toBeInTheDocument();
+    expect(screen.getByText(/Власний календар, доступ до медичних даних/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Ім’я"), { target: { value: "Марія" } });
+    fireEvent.change(screen.getByLabelText("Прізвище"), { target: { value: "Бондар" } });
+    fireEvent.change(screen.getByLabelText("Робочий email"), { target: { value: "maria@example.test" } });
+    fireEvent.change(screen.getByLabelText("Телефон"), { target: { value: "+380 93 555 66 77" } });
+    fireEvent.change(screen.getByLabelText("Тимчасовий пароль"), { target: { value: "temporary correct horse battery staple" } });
+    fireEvent.change(screen.getByLabelText("Повторіть пароль"), { target: { value: "temporary correct horse battery staple" } });
+    fireEvent.click(screen.getByRole("button", { name: "Створити працівника" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Профіль Марія Бондар створено");
+    expect(screen.getByText("maria@example.test")).toBeInTheDocument();
+  });
+
+  it("shows the server last-admin guard inside the edit dialog", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const adminUser = {
+      id: 1,
+      first_name: "Тест",
+      last_name: "Адміністратор",
+      display_name: "Тест Адміністратор",
+      phone: "",
+      email: "admin@example.test",
+      role: "admin",
+      is_active: true,
+      must_change_password: false,
+      temporary_password_expires_at: null,
+      last_login: null,
+    } as const;
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse({ users: [adminUser] }))
+      .mockResolvedValueOnce(jsonResponse({
+        ...anonymousProblem,
+        code: "last_admin_protected",
+        message: "Не можна деактивувати або змінити роль останнього адміністратора.",
+      }, 409));
+    renderApp("/team");
+
+    await screen.findByRole("heading", { name: "Команда" });
+    fireEvent.click(await screen.findByRole("button", { name: "Редагувати Тест Адміністратор" }));
+    fireEvent.change(screen.getByLabelText("Роль"), { target: { value: "reception" } });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти зміни" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("останнього адміністратора");
+    expect(screen.getByRole("heading", { name: "Редагувати працівника" })).toBeInTheDocument();
+  });
+
+  it("loads and saves every required clinic profile field", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [clinicRoom] }))
+      .mockResolvedValueOnce(jsonResponse({
+        ...clinicProfile,
+        name: "Podoria Подологія",
+        phone: "+380 93 100 20 30",
+        version: 2,
+      }));
+    renderApp("/settings");
+
+    expect(await screen.findByRole("heading", { name: "Налаштування кабінету" })).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Київ, вул. Прикладна, 10")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Філія/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Назва кабінету"), { target: { value: "Podoria Подологія" } });
+    fireEvent.change(screen.getByLabelText("Телефон"), { target: { value: "+380 93 100 20 30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти профіль" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Профіль кабінету збережено");
+    expect(screen.getByDisplayValue("Podoria Подологія")).toBeInTheDocument();
+  });
+
+  it("creates a room from the empty state and preserves a duplicate-name conflict", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const createdRoom = { ...clinicRoom, name: "Процедурна", version: 1 };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [] }))
+      .mockResolvedValueOnce(jsonResponse(createdRoom, 201))
+      .mockResolvedValueOnce(jsonResponse({
+        ...anonymousProblem,
+        code: "room_name_already_exists",
+        message: "Кімната з такою назвою вже існує.",
+        fields: { name: ["Укажіть іншу назву кімнати."] },
+      }, 409));
+    renderApp("/settings");
+
+    await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    fireEvent.click(await screen.findByRole("button", { name: /Кімнати/ }));
+    expect(screen.getByRole("heading", { name: "Кімнат ще немає" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Створити кімнату" }));
+    fireEvent.change(screen.getByLabelText("Назва кімнати"), { target: { value: "Процедурна" } });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Створити кімнату" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Кімнату «Процедурна» створено");
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати кімнату" }));
+    fireEvent.change(screen.getByLabelText("Назва кімнати"), { target: { value: "процедурна" } });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Створити кімнату" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Кімната з такою назвою вже існує");
+    expect(screen.getByRole("heading", { name: "Нова кімната" })).toBeInTheDocument();
+    expect(screen.getByText("Укажіть іншу назву кімнати.")).toBeInTheDocument();
+  });
+
+  it("keeps a stale room conflict in the editor for a safe retry", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [clinicRoom] }))
+      .mockResolvedValueOnce(jsonResponse({
+        ...anonymousProblem,
+        code: "stale_version",
+        message: "Кімнату уже змінено в іншій сесії. Оновіть дані та повторіть дію.",
+      }, 409));
+    renderApp("/settings");
+
+    await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    fireEvent.click(await screen.findByRole("button", { name: /Кімнати/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Налаштувати" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Активна кімната/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти зміни" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("змінено в іншій сесії");
+    expect(screen.getByRole("heading", { name: "Налаштувати кімнату" })).toBeInTheDocument();
+  });
+
+  it("searches the service catalog and creates a color-coded service in minor money units", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const createdService = {
+      ...clinicService,
+      id: "8487d46c-e741-4a09-bd3f-123c14fb4e21",
+      code: "NAIL-CARE",
+      name: "Обробка нігтів",
+      duration_minutes: 60,
+      price_minor: 85050,
+      color: "#7C3AED",
+    } as const;
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [clinicRoom] }))
+      .mockResolvedValueOnce(jsonResponse({ services: [clinicService] }))
+      .mockResolvedValueOnce(jsonResponse(createdService, 201));
+    renderApp("/settings");
+
+    await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    fireEvent.click(screen.getByTestId("settings-services-tab"));
+    expect(await screen.findByRole("heading", { name: "Послуги кабінету" })).toBeInTheDocument();
+    expect(await screen.findByText("Первинна консультація")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Пошук"), { target: { value: "неіснуюча" } });
+    expect(screen.getByRole("heading", { name: "Послуг не знайдено" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Скинути фільтри"));
+    fireEvent.click(screen.getByRole("button", { name: "Додати послугу" }));
+    fireEvent.change(screen.getByLabelText("Код послуги"), { target: { value: "nail-care" } });
+    fireEvent.change(screen.getByLabelText("Назва"), { target: { value: "Обробка нігтів" } });
+    fireEvent.change(screen.getByLabelText("Тривалість, хв"), { target: { value: "60" } });
+    fireEvent.change(screen.getByLabelText("Ціна, ₴"), { target: { value: "850,50" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Фіолетовий" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Створити послугу" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Послугу «Обробка нігтів» створено");
+    expect(screen.getByText("Обробка нігтів")).toBeInTheDocument();
+    const createRequest = fetchMock.mock.calls.at(-1)?.[0];
+    expect(createRequest).toBeInstanceOf(Request);
+    expect(await (createRequest as Request).clone().json()).toMatchObject({
+      code: "NAIL-CARE",
+      duration_minutes: 60,
+      price_minor: 85050,
+      color: "#7C3AED",
+    });
+  });
+
+  it("keeps a duplicate service-code conflict inside the editor", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [clinicRoom] }))
+      .mockResolvedValueOnce(jsonResponse({ services: [clinicService] }))
+      .mockResolvedValueOnce(jsonResponse({
+        ...anonymousProblem,
+        code: "service_code_already_exists",
+        message: "Послуга з таким кодом уже існує.",
+        fields: { code: ["Укажіть інший унікальний код послуги."] },
+      }, 409));
+    renderApp("/settings");
+
+    await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    fireEvent.click(screen.getByTestId("settings-services-tab"));
+    await screen.findByText("Первинна консультація");
+    fireEvent.click(screen.getByRole("button", { name: "Редагувати Первинна консультація" }));
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти зміни" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Послуга з таким кодом уже існує");
+    expect(screen.getByRole("heading", { name: "Редагувати послугу" })).toBeInTheDocument();
+    expect(screen.getByText("Укажіть інший унікальний код послуги.")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("CONSULT")).toBeInTheDocument();
   });
 });

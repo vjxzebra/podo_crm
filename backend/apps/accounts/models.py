@@ -57,6 +57,7 @@ class UserManager(BaseUserManager["User"]):
 class User(AbstractUser):
     username = None  # type: ignore[assignment]
     email = models.EmailField("email", unique=True)
+    phone = models.CharField(max_length=32, blank=True)
     role = models.CharField(max_length=20, choices=UserRole.choices)
     must_change_password = models.BooleanField(default=False)
     temporary_password_expires_at = models.DateTimeField(blank=True, null=True)

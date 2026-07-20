@@ -25,9 +25,14 @@ from apps.accounts.serializers import (
     TemporaryPasswordRequestSerializer,
     TemporaryPasswordResultSerializer,
 )
-from apps.accounts.services import change_own_password, set_temporary_password
+from apps.accounts.services import (
+    change_own_password,
+    request_password_reset,
+    set_temporary_password,
+)
 from config.api.exceptions import ApiProblem
 from config.api.serializers import ErrorEnvelopeSerializer
+from config.middleware import get_request_id
 
 
 def session_payload(user: User) -> dict[str, object]:
@@ -230,7 +235,10 @@ class PasswordResetRequestView(APIView):
         email = User.objects.normalize_login(serializer.validated_data["email"])
         user = User.objects.filter(email__iexact=email, is_active=True).first()
         if user is not None:
-            PasswordResetRequest.objects.get_or_create(user=user, resolved_at__isnull=True)
+            request_password_reset(
+                user=user,
+                correlation_id=get_request_id(request),
+            )
         return Response(
             {
                 "message": (
@@ -301,6 +309,7 @@ class TemporaryPasswordView(APIView):
             actor=request.user,
             target=target,
             temporary_password=serializer.validated_data["temporary_password"],
+            correlation_id=get_request_id(request),
         )
         return Response(
             {

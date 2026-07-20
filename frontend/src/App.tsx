@@ -9,10 +9,18 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
 import { FirstLoginPage } from "./auth/PasswordLifecycle";
 import { PasswordResetRequestsPage } from "./auth/PasswordResetRequestsPage";
+import { SettingsPage } from "./settings/SettingsPage";
+import { TeamPage } from "./team/TeamPage";
 
 function pageForRoute(route: AppRouteDefinition) {
   if (route.id === "password-resets") {
     return <PasswordResetRequestsPage />;
+  }
+  if (route.id === "team") {
+    return <TeamPage />;
+  }
+  if (route.id === "settings") {
+    return <SettingsPage />;
   }
   if (route.surface === "overview") {
     return <OverviewPage />;

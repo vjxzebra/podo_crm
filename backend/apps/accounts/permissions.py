@@ -25,5 +25,13 @@ class HasInventoryAccess(HasScope):
     required_scope = AccessScope.INVENTORY
 
 
+class HasAuditAccess(HasScope):
+    required_scope = AccessScope.AUDIT
+
+
+class HasTeamAccess(HasScope):
+    required_scope = AccessScope.TEAM
+
+
 class IsAdmin(HasScope):
     required_scope = AccessScope.SETTINGS
