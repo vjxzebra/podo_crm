@@ -693,12 +693,12 @@ Locking rules:
 
 | ADR | Вплив на модель | Запропонований default до рішення |
 |---|---|---|
-| ADR-001 Rooms | `Room` table, appointment FK, optional room exclusion | One location, multiple active rooms, room occupancy constraint |
-| ADR-002 Schedule | Чи має workday FK на specialist | Only clinic-wide workdays/breaks, без individual schedules |
-| ADR-003 Refund | `Payment`→`Refund` cardinality, amount rules | One full refund per payment |
-| ADR-004 Photos | upload state, metadata, deletion/retention | Private JPEG/PNG/WebP ≤10 MB; draft delete; completed retention policy окремо |
-| ADR-005 Backup | Не змінює business ERD; впливає на operational runbook | Daily PostgreSQL + MinIO backup outside production host |
-| ADR-006 Payment methods | enum/check constraint and analytics grouping | `CASH`, `CARD`, `TRANSFER` |
+| [ADR-001 Rooms](decisions/0001-rooms-and-occupancy.md) | `Room` table, appointment FK, room exclusion | One location, multiple active rooms, room occupancy constraint |
+| [ADR-002 Schedule](decisions/0002-clinic-wide-schedule.md) | Чи має workday FK на specialist | Only clinic-wide workdays/breaks, без individual schedules |
+| [ADR-003 Refund](decisions/0003-full-refunds-only.md) | `Payment`→`Refund` cardinality, amount rules | One full refund per payment |
+| [ADR-004 Photos](decisions/0004-private-visit-photos.md) | upload state, metadata, deletion/retention | Private JPEG/PNG/WebP ≤10 MB; max 10 per kind; no automatic completed-photo expiry |
+| [ADR-005 Backup](decisions/0005-backup-and-restore-policy.md) | Не змінює business ERD; впливає на operational runbook | Daily off-host PostgreSQL + MinIO backup; RPO 24h / RTO 4h |
+| [ADR-006 Payment methods](decisions/0006-payment-methods.md) | enum/check constraint and analytics grouping | `CASH`, `CARD`, `TRANSFER` |
 
 Модель навмисно не маскує ці рішення. До прийняття ADR migration, що залежить від конкретного choice, не створюється.
 

@@ -175,7 +175,8 @@ Compose-профілі:
 - [x] створити [traceability matrix](docs/requirements/traceability-matrix.md) для 23 критеріїв готовності;
 - [x] скласти [карту екранів, станів, модалок і доступів](docs/requirements/screen-state-access-map.md) трьох ролей;
 - [ ] погодити [ERD і життєві цикли](docs/architecture/domain-model.md) appointment, visit, payment, cash shift, stock movement — проєкт підготовлено, очікує погодження;
-- зафіксувати ADR щодо кімнат, графіків, повернень, фото й політики зберігання;
+- [x] підготувати [реєстр і проєкти ADR-001—ADR-006](docs/architecture/decisions/README.md) щодо кімнат, графіків, повернень, фото, backup і способів оплати;
+- [ ] погодити ADR-001—ADR-006; до статусу `Accepted` залежні migrations не створювати;
 - розбити роботу на вертикальні task packets;
 - позначити прототипні заглушки й невідповідності.
 
@@ -379,14 +380,14 @@ flowchart LR
 
 ## 9. Рішення, які слід закрити на етапі 0
 
-1. **Кімнати:** вважати систему однією локацією з кількома кімнатами та перевіряти конфлікт кімнати, чи кімната лише текстова мітка.
-2. **Графік:** специфікація виключає індивідуальні графіки, але дизайн показує різні години працівників. Потрібно вибрати одну модель для MVP.
-3. **Повернення:** лише повне повернення чи дозволена частина раніше повної оплати.
-4. **Фото:** допустимі формати, максимальний розмір/кількість, політика зберігання й видалення.
-5. **Резервні копії:** частота, строк зберігання, RPO/RTO і місце поза production host.
-6. **Способи оплати:** готівка, картка, переказ — остаточний перелік.
+1. **Кімнати:** [ADR-001](docs/architecture/decisions/0001-rooms-and-occupancy.md) — одна локація, довідник кімнат і room occupancy constraint.
+2. **Графік:** [ADR-002](docs/architecture/decisions/0002-clinic-wide-schedule.md) — лише спільний тижневий графік кабінету.
+3. **Повернення:** [ADR-003](docs/architecture/decisions/0003-full-refunds-only.md) — одне повне повернення на payment.
+4. **Фото:** [ADR-004](docs/architecture/decisions/0004-private-visit-photos.md) — private storage, формати, ліміти, доступ і retention.
+5. **Резервні копії:** [ADR-005](docs/architecture/decisions/0005-backup-and-restore-policy.md) — off-host backup, retention, RPO/RTO і restore drill.
+6. **Способи оплати:** [ADR-006](docs/architecture/decisions/0006-payment-methods.md) — `CASH`, `CARD`, `TRANSFER`.
 
-Без окремого рішення безпечні defaults такі: одна локація з кімнатами й перевіркою їх зайнятості; лише загальний графік кабінету; лише повне повернення; приватні JPEG/PNG/WebP до 10 МБ; щоденний backup БД і фото; готівка/картка/переказ.
+Усі шість ADR мають статус `Proposed`. Їхні defaults можна використовувати для документації та task packets, але залежні migrations дозволені лише після `Accepted`.
 
 ## 10. Найбільші ризики
 
