@@ -31,8 +31,9 @@
 | TP-101 | `done` | Compose config; 5 backend smoke tests; full stack healthy; live/readiness/proxy integration smoke |
 | TP-102 | `done` | OpenAPI/error contract; generated client; backend/frontend quality gates; Docker CI test profile |
 | TP-103 | `done` | Route/auth contracts; 14 component/a11y tests; responsive screenshots 1440×900, 768×1024, 390×844 |
-| TP-201 | `ready` | Наступний: login/logout/session і централізований RBAC |
-| TP-202—TP-904 | `planned` | Відкриваються за dependency graph |
+| TP-201 | `done` | Email login/logout/session; centralized RBAC matrix; 31 backend + 16 frontend tests; direct-URL/browser evidence |
+| TP-202 | `ready` | Наступний: first login, own password change, forgot request і admin temporary password |
+| TP-203—TP-904 | `planned` | Відкриваються за dependency graph |
 
 ## 3. Володіння модулями
 
@@ -165,4 +166,4 @@
 
 ## 6. Порядок найближчого запуску
 
-ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-102 завершено. Наступний packet — TP-103. Етап 2 починається після зеленого Stage 1 gate; TP-201 і TP-207 відкривають більшість наступних доменів. Inventory TP-501—503 може йти паралельно з TP-301—404 після завершення базового RBAC/audit.
+ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103 і TP-201 завершено. Наступний packet — TP-202; TP-207 можна вести окремо після фіксації password lifecycle. Базовий RBAC уже відкрив залежні довідники й домени, а inventory TP-501—503 може йти паралельно з TP-301—404 після append-only audit infrastructure.

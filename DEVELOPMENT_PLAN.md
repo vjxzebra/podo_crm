@@ -202,7 +202,7 @@ Compose-профілі:
 
 **Gate:** новий клон запускається однією Docker-командою; lint, migrations, unit smoke та production build проходять у test profile.
 
-**Стан:** TP-101—TP-103 завершено 2026-07-20 — Compose runtime, health/readiness, OpenAPI snapshot, shared error envelope, generated TypeScript client, Docker quality gates, responsive route shell, design tokens, auth-boundary interface, system states і viewport evidence реалізовані. Gate етапу 1 закрито; наступний packet — TP-201.
+**Стан:** TP-101—TP-103 завершено 2026-07-20 — Compose runtime, health/readiness, OpenAPI snapshot, shared error envelope, generated TypeScript client, Docker quality gates, responsive route shell, design tokens, auth-boundary interface, system states і viewport evidence реалізовані. Gate етапу 1 закрито.
 
 ### Етап 2. Ідентифікація, RBAC, команда й довідники — 1–1.5 тижня
 
@@ -217,6 +217,8 @@ Compose-профілі:
 - append-only audit event infrastructure, яку далі використовує кожен домен.
 
 **Gate:** UI і API негативно перевірені для кожної ролі; заборонений прямий URL повертає 403/API error і безпечний UI redirect; ресепшн не бачить admin endpoints.
+
+**Стан:** TP-201 завершено 2026-07-20 — email login/logout, server session, CSRF/cookie policy, три фіксовані ролі, централізована RBAC matrix, role-safe desktop/mobile navigation і direct-URL redirect реалізовані. Наступний packet — TP-202.
 
 ### Етап 3. Пацієнти й внутрішні справи — 1–1.5 тижня
 

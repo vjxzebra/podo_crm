@@ -44,9 +44,9 @@ export function OverviewPage() {
     <>
       <header className="page-heading overview-heading">
         <div>
-          <p className="eyebrow">Понеділок, 20 липня · UI preview</p>
+          <p className="eyebrow">Понеділок, 20 липня · Операційний огляд</p>
           <h1>Добрий день</h1>
-          <p>Операційний огляд майбутньої серверної сесії без реальних даних.</p>
+          <p>Сесія активна; показники модулів залишаються демонстраційними до відповідних task packets.</p>
         </div>
         <div className="date-switcher" aria-label="Навігація за датою">
           <button type="button" aria-label="Попередній день">

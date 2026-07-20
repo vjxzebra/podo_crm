@@ -66,9 +66,10 @@ const stateCopy: Record<SystemStateKind, StateCopy> = {
 interface SystemStateProps {
   readonly kind: SystemStateKind;
   readonly compact?: boolean;
+  readonly onAction?: (() => void) | undefined;
 }
 
-export function SystemState({ kind, compact = false }: SystemStateProps) {
+export function SystemState({ kind, compact = false, onAction }: SystemStateProps) {
   const copy = stateCopy[kind];
   const isLoading = kind === "loading";
 
@@ -91,11 +92,16 @@ export function SystemState({ kind, compact = false }: SystemStateProps) {
           <span />
           <span />
         </div>
-      ) : (
+      ) : onAction === undefined ? (
         <Link className="button button--primary" to="/">
           <Icon name={kind === "error" ? "refresh" : "arrow-left"} />
           {copy.action}
         </Link>
+      ) : (
+        <button className="button button--primary" onClick={onAction} type="button">
+          <Icon name="refresh" />
+          {copy.action}
+        </button>
       )}
     </section>
   );

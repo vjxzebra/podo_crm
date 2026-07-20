@@ -1,10 +1,12 @@
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
 
 import { AppShell } from "./app/AppShell";
 import { AuthBoundary } from "./app/AuthBoundary";
 import { ContractLabPage, ModulePreviewPage, OverviewPage } from "./app/pages";
 import { routeRegistry, type AppRouteDefinition } from "./app/routes";
 import { SystemState, type SystemStateKind } from "./app/SystemState";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { LoginPage } from "./auth/LoginPage";
 
 function pageForRoute(route: AppRouteDefinition) {
   if (route.surface === "overview") {
@@ -18,20 +20,38 @@ function pageForRoute(route: AppRouteDefinition) {
 
 const stateRoutes = ["loading", "empty", "error", "forbidden"] as const satisfies readonly SystemStateKind[];
 
+function RoleSafePage({ route }: { readonly route: AppRouteDefinition }) {
+  const { state } = useAuth();
+  if (state.status !== "authenticated") {
+    return null;
+  }
+  if (!state.session.route_ids.includes(route.id)) {
+    return <Navigate replace to="/?notice=forbidden" />;
+  }
+  return pageForRoute(route);
+}
+
 export function App() {
   return (
-    <AuthBoundary state={{ status: "unconfigured" }}>
+    <AuthProvider>
       <Routes>
-        <Route element={<AppShell />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          element={
+            <AuthBoundary>
+              <AppShell />
+            </AuthBoundary>
+          }
+        >
           {routeRegistry.map((route) => (
-            <Route key={route.id} path={route.path} element={pageForRoute(route)} />
+            <Route key={route.id} path={route.path} element={<RoleSafePage route={route} />} />
           ))}
-          {stateRoutes.map((state) => (
-            <Route key={state} path={`/previews/${state}`} element={<SystemState kind={state} />} />
+          {stateRoutes.map((stateKind) => (
+            <Route key={stateKind} path={`/previews/${stateKind}`} element={<SystemState kind={stateKind} />} />
           ))}
           <Route path="*" element={<SystemState kind="not-found" />} />
         </Route>
       </Routes>
-    </AuthBoundary>
+    </AuthProvider>
   );
 }

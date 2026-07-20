@@ -1,5 +1,5 @@
 import axe from "axe-core";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
@@ -14,6 +14,8 @@ describe("application shell accessibility", () => {
           <App />
         </MemoryRouter>,
       );
+
+      await screen.findByTestId("desktop-sidebar");
 
       const results = await axe.run(container, {
         rules: {

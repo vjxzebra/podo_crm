@@ -20,6 +20,21 @@ docker compose up --build
 
 Для власних портів і credentials скопіюйте `.env.example` у `.env`. Production deployment не повинен використовувати dev defaults.
 
+### Локальний користувач для входу
+
+У `DEBUG` можна явно створити або оновити один тестовий профіль. Команда відмовляється працювати поза development mode і не створює default credentials автоматично:
+
+```powershell
+docker compose run --rm backend python manage.py provision_dev_user `
+  --email admin@podoria.local `
+  --password "replace-for-local-use" `
+  --role admin `
+  --first-name Локальний `
+  --last-name Адміністратор
+```
+
+Доступні ролі: `admin`, `reception`, `podologist`. Роль і список доступних маршрутів надходять тільки із `GET /api/v1/session`; frontend не є джерелом авторизації.
+
 ## Контракти API
 
 OpenAPI snapshot зберігається в `backend/openapi/schema.json`, а типи клієнта — у
@@ -45,3 +60,5 @@ mypy, Django checks і migrations, pytest, OpenAPI snapshot, ESLint, strict Type
 Readiness повертає `200`, лише коли PostgreSQL, Redis і MinIO доступні. API-помилки
 використовують envelope `code`, `message`, `fields`, `correlation_id`; кожна backend
 відповідь містить `X-Request-ID`, а application logs пишуться як JSON.
+
+Session authentication використовує `podoria_sessionid` (`HttpOnly`, `SameSite=Lax`; `Secure` за замовчуванням поза `DEBUG`) та окремий CSRF cookie для `X-CSRFToken` на login/logout і інших unsafe requests.

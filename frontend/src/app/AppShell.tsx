@@ -1,12 +1,18 @@
 import { Link, Outlet, useLocation } from "react-router";
 
 import { DesktopNavigation, MobileNavigation } from "./Navigation";
+import { roleLabels, useAuth } from "../auth/AuthContext";
 import { Icon } from "./Icon";
 import { findRouteByPath } from "./routes";
 
 export function AppShell() {
   const location = useLocation();
   const currentRoute = findRouteByPath(location.pathname);
+  const { state } = useAuth();
+  if (state.status !== "authenticated") {
+    return null;
+  }
+  const showForbiddenNotice = new URLSearchParams(location.search).get("notice") === "forbidden";
 
   return (
     <div className="app-shell">
@@ -26,9 +32,9 @@ export function AppShell() {
           </label>
           <span className="visually-hidden" id="search-preview-note">Пошук буде підключено в окремому task packet</span>
           <div className="topbar__actions">
-            <span className="session-role" title="Роль надасть серверна сесія">
+            <span className="session-role" title="Роль із серверної сесії">
               <span className="session-role__dot" />
-              Роль із сесії
+              {roleLabels[state.session.user.role]}
             </span>
             <Link className="icon-button topbar__notifications" to="/notifications" aria-label="Сповіщення">
               <Icon name="bell" />
@@ -40,10 +46,12 @@ export function AppShell() {
             </Link>
           </div>
         </header>
-        <div className="preview-banner" role="note">
-          <Icon name="lock" />
-          <span><strong>UI preview.</strong> Реальну сесію та рольову навігацію підключить TP-201.</span>
-        </div>
+        {showForbiddenNotice ? (
+          <div className="access-notice" role="status">
+            <Icon name="lock" />
+            <span>Цей розділ недоступний для ролі «{roleLabels[state.session.user.role]}». Повернули вас до огляду.</span>
+          </div>
+        ) : null}
         <main className="content-wrap" id="main-content">
           <Outlet />
         </main>

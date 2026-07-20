@@ -1,35 +1,24 @@
 import type { ReactNode } from "react";
+import { Navigate, useLocation } from "react-router";
 
+import { useAuth } from "../auth/AuthContext";
 import { SystemState } from "./SystemState";
 
-export type AuthBoundaryState =
-  | { readonly status: "unconfigured" }
-  | { readonly status: "checking" }
-  | { readonly status: "anonymous" }
-  | { readonly status: "authenticated" }
-  | { readonly status: "forbidden" }
-  | { readonly status: "error" };
-
 interface AuthBoundaryProps {
-  readonly state: AuthBoundaryState;
   readonly children: ReactNode;
 }
 
-/**
- * A rendering contract for TP-201. It deliberately contains no roles,
- * permissions, route allowlists, or client-side authorization decisions.
- */
-export function AuthBoundary({ state, children }: AuthBoundaryProps) {
-  if (state.status === "unconfigured" || state.status === "authenticated") {
-    return <div data-auth-boundary={state.status}>{children}</div>;
+export function AuthBoundary({ children }: AuthBoundaryProps) {
+  const { state, retry } = useAuth();
+  const location = useLocation();
+
+  if (state.status === "authenticated") {
+    return <div data-auth-boundary="authenticated">{children}</div>;
   }
 
-  const stateKind =
-    state.status === "checking"
-      ? "loading"
-      : state.status === "error"
-        ? "error"
-        : state.status;
+  if (state.status === "anonymous") {
+    return <Navigate replace state={{ from: location.pathname }} to="/login" />;
+  }
 
   return (
     <main className="standalone-state">
@@ -37,7 +26,10 @@ export function AuthBoundary({ state, children }: AuthBoundaryProps) {
         До повідомлення
       </a>
       <div id="auth-state">
-        <SystemState kind={stateKind} />
+        <SystemState
+          kind={state.status === "checking" ? "loading" : "error"}
+          onAction={state.status === "error" ? () => void retry() : undefined}
+        />
       </div>
     </main>
   );

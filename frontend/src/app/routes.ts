@@ -141,6 +141,11 @@ export const moreMenuRoutes = routeRegistry.filter(
   (route) => route.group !== "primary" || route.id === "work-items",
 );
 
+export function routesForIds(routeIds: readonly string[]): readonly AppRouteDefinition[] {
+  const allowedIds = new Set(routeIds);
+  return routeRegistry.filter((route) => allowedIds.has(route.id));
+}
+
 export function findRouteByPath(pathname: string): AppRouteDefinition | undefined {
   return routeRegistry.find((route) => route.path === pathname);
 }
