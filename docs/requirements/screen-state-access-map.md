@@ -215,6 +215,8 @@ Prototype preview references retained only for visual QA:
 
 ## 11. Виявлені розбіжності та рішення карти
 
+Детальний канонічний перелік, code evidence, owners і deadline packets ведуться у [prototype gap register](prototype-gap-register.md). Таблиця нижче зберігає початкові висновки screen-map review.
+
 | ID | Розбіжність прототипу | Цільове рішення |
 |---|---|---|
 | GAP-01 | Recommendations — placeholder | Реалізувати повний `SCR-03D` за §7.8 |

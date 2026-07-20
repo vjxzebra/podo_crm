@@ -177,8 +177,8 @@ Compose-профілі:
 - [ ] погодити [ERD і життєві цикли](docs/architecture/domain-model.md) appointment, visit, payment, cash shift, stock movement — проєкт підготовлено, очікує погодження;
 - [x] підготувати [реєстр і проєкти ADR-001—ADR-006](docs/architecture/decisions/README.md) щодо кімнат, графіків, повернень, фото, backup і способів оплати;
 - [ ] погодити ADR-001—ADR-006; до статусу `Accepted` залежні migrations не створювати;
-- розбити роботу на вертикальні task packets;
-- позначити прототипні заглушки й невідповідності.
+- [x] розбити роботу на [вертикальні task packets](docs/planning/task-packets.md) з контрактами, залежностями, ownership і acceptance evidence;
+- [x] позначити прототипні заглушки й невідповідності в [канонічному gap register](docs/requirements/prototype-gap-register.md).
 
 **Gate:** кожен критерій специфікації має фічу, API-контракт, UI-стан і майбутній тест; відкриті рішення мають власника та deadline.
 
