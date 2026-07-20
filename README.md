@@ -62,3 +62,5 @@ Readiness повертає `200`, лише коли PostgreSQL, Redis і MinIO �
 відповідь містить `X-Request-ID`, а application logs пишуться як JSON.
 
 Session authentication використовує `podoria_sessionid` (`HttpOnly`, `SameSite=Lax`; `Secure` за замовчуванням поза `DEBUG`) та окремий CSRF cookie для `X-CSRFToken` на login/logout і інших unsafe requests.
+
+Password lifecycle з TP-202 додає примусовий first-login для тимчасових паролів, зміну власного пароля з перевіркою поточного, enumeration-safe reset request та admin-only чергу відновлення. Тимчасовий пароль за замовчуванням діє 24 години (`TEMPORARY_PASSWORD_TTL_HOURS`); його встановлення відкликає всі сесії працівника, а зміна власного пароля зберігає лише поточну сесію.

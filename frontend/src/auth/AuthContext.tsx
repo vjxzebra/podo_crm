@@ -17,9 +17,33 @@ interface LoginInput {
   readonly password: string;
 }
 
+interface PasswordPairInput {
+  readonly newPassword: string;
+  readonly newPasswordConfirmation: string;
+}
+
+interface ChangePasswordInput extends PasswordPairInput {
+  readonly currentPassword: string;
+}
+
+export class AuthApiError extends Error {
+  readonly fields: Readonly<Record<string, readonly string[]>>;
+  readonly code: string;
+
+  constructor(message: string, code = "api_error", fields: Record<string, string[]> = {}) {
+    super(message);
+    this.name = "AuthApiError";
+    this.code = code;
+    this.fields = fields;
+  }
+}
+
 interface AuthContextValue {
   readonly state: AuthState;
   readonly login: (input: LoginInput) => Promise<void>;
+  readonly completeFirstLogin: (input: PasswordPairInput) => Promise<void>;
+  readonly changePassword: (input: ChangePasswordInput) => Promise<void>;
+  readonly requestPasswordReset: (email: string) => Promise<string>;
   readonly logout: () => Promise<void>;
   readonly retry: () => Promise<void>;
 }
@@ -36,7 +60,7 @@ function csrfToken(): string | undefined {
   return value === undefined ? undefined : decodeURIComponent(value.slice(prefix.length));
 }
 
-function csrfHeaders(): HeadersInit {
+export function csrfHeaders(): HeadersInit {
   const token = csrfToken();
   return token === undefined ? {} : { "X-CSRFToken": token };
 }
@@ -90,6 +114,70 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     setState({ status: "authenticated", session: data });
   }, []);
 
+  const completeFirstLogin = useCallback(
+    async ({ newPassword, newPasswordConfirmation }: PasswordPairInput) => {
+      const result = await apiClient
+        .POST("/api/v1/auth/first-login-password", {
+          body: {
+            new_password: newPassword,
+            new_password_confirmation: newPasswordConfirmation,
+          },
+          headers: csrfHeaders(),
+        })
+        .catch(() => null);
+      if (result === null) {
+        throw new AuthApiError("Немає зв’язку із сервером. Спробуйте ще раз.", "network_error");
+      }
+      const { data, error } = result;
+      if (data === undefined) {
+        throw new AuthApiError(error.message, error.code, error.fields);
+      }
+      setState({ status: "authenticated", session: data });
+    },
+    [],
+  );
+
+  const changePassword = useCallback(
+    async ({ currentPassword, newPassword, newPasswordConfirmation }: ChangePasswordInput) => {
+      const result = await apiClient
+        .POST("/api/v1/auth/change-password", {
+          body: {
+            current_password: currentPassword,
+            new_password: newPassword,
+            new_password_confirmation: newPasswordConfirmation,
+          },
+          headers: csrfHeaders(),
+        })
+        .catch(() => null);
+      if (result === null) {
+        throw new AuthApiError("Немає зв’язку із сервером. Спробуйте ще раз.", "network_error");
+      }
+      const { data, error } = result;
+      if (data === undefined) {
+        throw new AuthApiError(error.message, error.code, error.fields);
+      }
+      setState({ status: "authenticated", session: data });
+    },
+    [],
+  );
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const result = await apiClient
+      .POST("/api/v1/password-reset-requests", {
+        body: { email },
+        headers: csrfHeaders(),
+      })
+      .catch(() => null);
+    if (result === null) {
+      throw new AuthApiError("Немає зв’язку із сервером. Спробуйте ще раз.", "network_error");
+    }
+    const { data, error } = result;
+    if (data === undefined) {
+      throw new AuthApiError(error.message, error.code, error.fields);
+    }
+    return data.message;
+  }, []);
+
   const logout = useCallback(async () => {
     const result = await apiClient
       .POST("/api/v1/auth/logout", {
@@ -107,8 +195,24 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ state, login, logout, retry }),
-    [state, login, logout, retry],
+    () => ({
+      state,
+      login,
+      completeFirstLogin,
+      changePassword,
+      requestPasswordReset,
+      logout,
+      retry,
+    }),
+    [
+      state,
+      login,
+      completeFirstLogin,
+      changePassword,
+      requestPasswordReset,
+      logout,
+      retry,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

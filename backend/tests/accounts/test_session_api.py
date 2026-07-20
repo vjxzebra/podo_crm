@@ -54,6 +54,9 @@ def test_login_and_session_return_server_role_scope(role):
             "role": role,
         },
         "route_ids": list(ROLE_ROUTE_IDS[role]),
+        "must_change_password": False,
+        "temporary_password_expires_at": None,
+        "temporary_password_expired": False,
     }
     session_cookie = login_response.cookies[settings.SESSION_COOKIE_NAME]
     assert session_cookie["httponly"] is True

@@ -99,6 +99,7 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
+TEMPORARY_PASSWORD_TTL_HOURS = int(os.getenv("TEMPORARY_PASSWORD_TTL_HOURS", "24"))
 
 SESSION_COOKIE_NAME = "podoria_sessionid"
 SESSION_COOKIE_HTTPONLY = True

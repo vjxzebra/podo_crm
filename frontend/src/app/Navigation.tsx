@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink } from "react-router";
 
 import { roleLabels, useAuth } from "../auth/AuthContext";
+import { ChangePasswordDialog } from "../auth/PasswordLifecycle";
 import { Icon } from "./Icon";
 import { routesForIds, type AppRouteDefinition } from "./routes";
 
@@ -40,6 +41,7 @@ function initials(displayName: string): string {
 export function DesktopNavigation() {
   const { state, logout } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   if (state.status !== "authenticated") {
@@ -108,13 +110,25 @@ export function DesktopNavigation() {
           {isProfileOpen ? (
             <div className="profile-popover" role="menu">
               <span>{user.email}</span>
-              <button disabled={isLoggingOut} onClick={() => void signOut()} role="menuitem" type="button">
+              <button
+                className="profile-action"
+                onClick={() => {
+                  setIsProfileOpen(false);
+                  setIsPasswordOpen(true);
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Змінити пароль
+              </button>
+              <button className="profile-action profile-action--danger" disabled={isLoggingOut} onClick={() => void signOut()} role="menuitem" type="button">
                 {isLoggingOut ? "Виходимо…" : "Вийти"}
               </button>
               {logoutError === null ? null : <p className="profile-logout-error" role="alert">{logoutError}</p>}
             </div>
           ) : null}
         </div>
+        {isPasswordOpen ? <ChangePasswordDialog onClose={() => { setIsPasswordOpen(false); }} /> : null}
       </div>
     </aside>
   );
@@ -123,6 +137,7 @@ export function DesktopNavigation() {
 export function MobileNavigation() {
   const { state, logout } = useAuth();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -216,6 +231,16 @@ export function MobileNavigation() {
             <nav className="mobile-more__grid" aria-label="Додаткові розділи">
               {moreMenuRoutes.map((route) => <RouteLink key={route.id} route={route} onNavigate={closeMore} />)}
             </nav>
+            <button
+              className="mobile-password-action"
+              onClick={() => {
+                setIsMoreOpen(false);
+                setIsPasswordOpen(true);
+              }}
+              type="button"
+            >
+              Змінити пароль
+            </button>
             <button className="mobile-logout" disabled={isLoggingOut} onClick={() => void signOut()} type="button">
               {isLoggingOut ? "Виходимо…" : "Вийти із системи"}
             </button>
@@ -223,6 +248,7 @@ export function MobileNavigation() {
           </section>
         </div>
       ) : null}
+      {isPasswordOpen ? <ChangePasswordDialog onClose={() => { setIsPasswordOpen(false); }} /> : null}
     </>
   );
 }

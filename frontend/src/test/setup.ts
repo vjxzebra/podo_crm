@@ -19,8 +19,12 @@ export const adminSession = {
     "analytics",
     "notifications",
     "settings",
+    "password-resets",
     "contracts",
   ],
+  must_change_password: false,
+  temporary_password_expires_at: null,
+  temporary_password_expired: false,
 } as const;
 
 export const receptionSession = {
@@ -31,6 +35,22 @@ export const receptionSession = {
     role: "reception",
   },
   route_ids: ["overview", "calendar", "patients", "work-items", "finance", "notifications"],
+  must_change_password: false,
+  temporary_password_expires_at: null,
+  temporary_password_expired: false,
+} as const;
+
+export const forcedPasswordSession = {
+  user: {
+    id: 3,
+    email: "olena@example.test",
+    display_name: "Олена Мельник",
+    role: "podologist",
+  },
+  route_ids: [],
+  must_change_password: true,
+  temporary_password_expires_at: "2026-07-21T12:00:00+03:00",
+  temporary_password_expired: false,
 } as const;
 
 export const anonymousProblem = {

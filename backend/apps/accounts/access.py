@@ -70,6 +70,7 @@ ROLE_ROUTE_IDS: dict[str, tuple[str, ...]] = {
         "analytics",
         "notifications",
         "settings",
+        "password-resets",
         "contracts",
     ),
 }

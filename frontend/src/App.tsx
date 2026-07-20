@@ -7,8 +7,13 @@ import { routeRegistry, type AppRouteDefinition } from "./app/routes";
 import { SystemState, type SystemStateKind } from "./app/SystemState";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
+import { FirstLoginPage } from "./auth/PasswordLifecycle";
+import { PasswordResetRequestsPage } from "./auth/PasswordResetRequestsPage";
 
 function pageForRoute(route: AppRouteDefinition) {
+  if (route.id === "password-resets") {
+    return <PasswordResetRequestsPage />;
+  }
   if (route.surface === "overview") {
     return <OverviewPage />;
   }
@@ -36,6 +41,7 @@ export function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/first-login" element={<FirstLoginPage />} />
         <Route
           element={
             <AuthBoundary>

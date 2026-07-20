@@ -13,6 +13,9 @@ export function AuthBoundary({ children }: AuthBoundaryProps) {
   const location = useLocation();
 
   if (state.status === "authenticated") {
+    if (state.session.must_change_password) {
+      return <Navigate replace to="/first-login" />;
+    }
     return <div data-auth-boundary="authenticated">{children}</div>;
   }
 

@@ -121,6 +121,17 @@ export const routeRegistry = [
     requiresSession: true,
   },
   {
+    id: "password-resets",
+    path: "/password-resets",
+    label: "Запити доступу",
+    shortLabel: "Доступ",
+    description: "Черга запитів на відновлення пароля",
+    icon: "lock",
+    group: "utility",
+    surface: "module",
+    requiresSession: true,
+  },
+  {
     id: "contracts",
     path: "/contracts",
     label: "API contract lab",
