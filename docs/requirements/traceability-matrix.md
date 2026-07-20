@@ -5,6 +5,7 @@
 - Джерело вимог: [`SPECIFICATION.md`](../../SPECIFICATION.md), розділ 21
 - Візуальне джерело: [`design/index.html`](../../design/index.html)
 - Пов’язана UI-карта: [`screen-state-access-map.md`](screen-state-access-map.md)
+- Пов’язана доменна модель: [`domain-model.md`](../architecture/domain-model.md)
 
 ## Призначення
 

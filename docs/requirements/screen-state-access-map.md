@@ -5,6 +5,7 @@
 - Функціональне джерело: [`SPECIFICATION.md`](../../SPECIFICATION.md)
 - Візуальне джерело: [`design/index.html`](../../design/index.html)
 - Пов’язана матриця: [`traceability-matrix.md`](traceability-matrix.md)
+- Пов’язана доменна модель: [`domain-model.md`](../architecture/domain-model.md)
 
 ## 1. Призначення і правила
 

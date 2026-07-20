@@ -174,7 +174,7 @@ Compose-профілі:
 
 - [x] створити [traceability matrix](docs/requirements/traceability-matrix.md) для 23 критеріїв готовності;
 - [x] скласти [карту екранів, станів, модалок і доступів](docs/requirements/screen-state-access-map.md) трьох ролей;
-- погодити ERD і життєві цикли appointment, visit, payment, cash shift, stock movement;
+- [ ] погодити [ERD і життєві цикли](docs/architecture/domain-model.md) appointment, visit, payment, cash shift, stock movement — проєкт підготовлено, очікує погодження;
 - зафіксувати ADR щодо кімнат, графіків, повернень, фото й політики зберігання;
 - розбити роботу на вертикальні task packets;
 - позначити прототипні заглушки й невідповідності.
