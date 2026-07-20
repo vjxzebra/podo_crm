@@ -24,7 +24,14 @@
 - acceptance evidence містить backend test, frontend/component test і Playwright для user-visible critical path;
 - scope поза рядком `Не входить` потребує нового packet, а не прихованого розширення поточного PR.
 
-Статуси: `planned`, `ready`, `in_progress`, `review`, `done`, `blocked`. У цьому документі всі packet початково `planned`; ADR-залежні packet не можуть стати `ready`, доки ADR не має статусу `Accepted`.
+Статуси: `planned`, `ready`, `in_progress`, `review`, `done`, `blocked`. ADR-залежні packet не можуть стати `ready`, доки ADR не має статусу `Accepted`.
+
+| Packet | Поточний стан | Evidence / наступна дія |
+|---|---|---|
+| TP-101 | `done` | Compose config; 5 backend smoke tests; full stack healthy; live/readiness/proxy integration smoke |
+| TP-102 | `ready` | Наступний: quality/contract pipeline, OpenAPI client і CI/test profile |
+| TP-103 | `planned` | Починається після контрактів TP-102 |
+| TP-201—TP-904 | `planned` | Відкриваються за dependency graph |
 
 ## 3. Володіння модулями
 
@@ -157,4 +164,4 @@
 
 ## 6. Порядок найближчого запуску
 
-Після погодження ERD та ADR інтегратор переводить у `ready` тільки TP-101, TP-102 і TP-103. Етап 2 починається після зеленого Stage 1 gate; TP-201 і TP-207 відкривають більшість наступних доменів. Inventory TP-501—503 може йти паралельно з TP-301—404 після завершення базового RBAC/audit.
+ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101 завершено. Наступний packet — TP-102, після нього TP-103. Етап 2 починається після зеленого Stage 1 gate; TP-201 і TP-207 відкривають більшість наступних доменів. Inventory TP-501—503 може йти паралельно з TP-301—404 після завершення базового RBAC/audit.

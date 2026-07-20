@@ -1,7 +1,8 @@
 # ERD і життєві цикли Podoria CRM
 
 - Версія: `0.1`
-- Статус: `proposed` — підготовлено для погодження
+- Статус: `accepted`
+- Дата погодження: 2026-07-20
 - Джерело вимог: [`SPECIFICATION.md`](../../SPECIFICATION.md)
 - Архітектурний план: [`DEVELOPMENT_PLAN.md`](../../DEVELOPMENT_PLAN.md)
 - UI/data scopes: [`screen-state-access-map.md`](../requirements/screen-state-access-map.md)
@@ -353,7 +354,7 @@ ERD показує концептуальні cardinalities. У фізичній
 - Деактивована послуга не пропонується для нового appointment/visit line, але залишається у history.
 - `AppointmentStatusConfig.code` незмінний і seed-иться вісьмома system codes; label/color/manual-role flags можна змінювати.
 - `ClinicBreak` має бути всередині workday, `end > start`, без overlap із іншими breaks цього дня.
-- `Room` є conditional entity до ADR-001. Якщо rooms лишаються текстовою міткою, таблиця видаляється, а історичний `room_label_snapshot` зберігається в appointment.
+- За прийнятим ADR-001 `Room` є окремим довідником однієї локації; новий appointment має active room FK, а історія зберігає `room_label_snapshot`.
 
 ### 4.2. Patient
 
@@ -381,7 +382,7 @@ WHERE (status <> 'canceled');
 
 - Для constraint потрібне розширення `btree_gist`.
 - `no_show` і `completed` лишаються блокуючими для історичного time range; лише `canceled` звільняє slot.
-- Якщо ADR-001 підтвердить room occupancy, додається другий exclusion constraint для `room_id`/`time_range` з тим самим predicate.
+- За прийнятим ADR-001 обов’язковий другий exclusion constraint для `room_id`/`time_range` з тим самим predicate.
 - Після переходу в `in_progress` patient, specialist, room, primary service і time range не редагуються; корекція потребує admin service та audit.
 - `version` використовується для optimistic concurrency під час edit/reschedule/status transition.
 
@@ -408,7 +409,7 @@ WHERE (status <> 'canceled');
 - `kind`: `PAYMENT`, `REFUND`, `DEPOSIT`, `WITHDRAWAL`.
 - `PAYMENT` потребує payment method; `REFUND` наслідує method початкової payment; `DEPOSIT/WITHDRAWAL` не мають patient і payment method.
 - `Payment`, `Refund`, `CashAdjustment` — typed one-to-one extensions ledger entry; ledger entry не редагується/не видаляється.
-- Safe default для ADR-003: один full `Refund` на один `Payment`, amount дорівнює initial payment. Частковий refund потребує іншої cardinality й суми refund ledger.
+- За прийнятим ADR-003 дозволений один full `Refund` на один `Payment`; amount дорівнює initial payment. Часткового refund у MVP немає.
 - Withdraw і cash refund не можуть перевищити доступну фізичну готівку поточної shift.
 - `idempotency_key` unique у межах operation type/actor або глобально, залежно від фінального API contract.
 
@@ -689,9 +690,9 @@ Locking rules:
 | Visit photo | draft photo deletable; completed-photo retention/deletion governed by ADR-004 |
 | Audit event | no update/delete through application role |
 
-## 13. ADR-залежності й запропоновані defaults
+## 13. Прийняті ADR-рішення
 
-| ADR | Вплив на модель | Запропонований default до рішення |
+| ADR | Вплив на модель | Прийняте рішення |
 |---|---|---|
 | [ADR-001 Rooms](decisions/0001-rooms-and-occupancy.md) | `Room` table, appointment FK, room exclusion | One location, multiple active rooms, room occupancy constraint |
 | [ADR-002 Schedule](decisions/0002-clinic-wide-schedule.md) | Чи має workday FK на specialist | Only clinic-wide workdays/breaks, без individual schedules |
@@ -700,7 +701,7 @@ Locking rules:
 | [ADR-005 Backup](decisions/0005-backup-and-restore-policy.md) | Не змінює business ERD; впливає на operational runbook | Daily off-host PostgreSQL + MinIO backup; RPO 24h / RTO 4h |
 | [ADR-006 Payment methods](decisions/0006-payment-methods.md) | enum/check constraint and analytics grouping | `CASH`, `CARD`, `TRANSFER` |
 
-Модель навмисно не маскує ці рішення. До прийняття ADR migration, що залежить від конкретного choice, не створюється.
+ADR-001—ADR-006 прийняті 2026-07-20. Залежні migrations мають реалізовувати саме зафіксовані рішення; зміна будь-якого з них потребує нового ADR.
 
 ## 14. Перевірки моделі до реалізації
 

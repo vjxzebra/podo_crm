@@ -227,8 +227,8 @@ Prototype preview references retained only for visual QA:
 | GAP-06 | Loading, API error, conflict, offline і unsaved states майже не представлені | ST-01—ST-16 обов’язкові в task packets і component tests |
 | GAP-07 | Settings profile у дизайні не гарантує всі phone/email/address поля | `SCR-09` реалізує повний набір §17.1 |
 | GAP-08 | Кількість/набір статусів у prototype може відрізнятися | Джерело правди — 8 system statuses §6.9; delete заборонено |
-| GAP-09 | Текст прототипу натякає на індивідуальні графіки | MVP має лише загальний clinic schedule за §17.4; очікує ADR-002 |
-| GAP-10 | Rooms показані як повноцінний ресурс, але правило конфлікту не погоджене | UI зберігає room label; booking constraint залежить від ADR-001 |
+| GAP-09 | Текст прототипу натякає на індивідуальні графіки | ADR-002 accepted: MVP має лише загальний clinic schedule за §17.4 |
+| GAP-10 | Rooms показані як повноцінний ресурс, але prototype не перевіряє конфлікт | ADR-001 accepted: room catalog, label snapshot і booking constraint обов’язкові |
 | GAP-11 | Suppliers tab є placeholder, окремий supplier module не вимагається | У MVP supplier — атрибут receipt/lot; окремий screen виключити без нового scope |
 | GAP-12 | Запит на відновлення є на login, але admin queue не показана | Додати admin work queue/deep link у team/security task packet |
 | GAP-13 | Prototype password modal змішує own change та admin reset | Розділити API/forms: own change з current password; admin temporary password з force-change flag |

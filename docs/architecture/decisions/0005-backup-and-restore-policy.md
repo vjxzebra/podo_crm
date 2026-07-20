@@ -1,7 +1,8 @@
 # ADR-005: Backup і відновлення
 
-- Статус: `Proposed`
+- Статус: `Accepted`
 - Дата створення: 2026-07-20
+- Дата погодження: 2026-07-20
 - Власник рішення: Tech lead / operations owner
 - Цільова дата рішення: 2026-07-22
 - Залежні етапи: 1, 9
@@ -10,7 +11,7 @@
 
 PostgreSQL і MinIO містять взаємопов’язані business та medical records. Зберігання backup на тому самому production host не захищає від втрати хоста або помилки оператора. Redis і Celery queues не є джерелом business truth.
 
-## Запропоноване рішення
+## Рішення
 
 - Щодня створюється зашифрований PostgreSQL backup і versioned backup приватного MinIO bucket у сховищі поза production host.
 - Цільовий `RPO ≤ 24 години`, `RTO ≤ 4 години` для відновлення сервісу на підготовленій інфраструктурі.

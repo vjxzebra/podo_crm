@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podoria CRM</title>
+    <style>
+      :root { color: #24352f; background: #f4f7f5; font-family: system-ui, sans-serif; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; }
+      main { width: min(520px, calc(100% - 48px)); padding: 36px; border: 1px solid #d9e2de; border-radius: 20px; background: white; box-shadow: 0 20px 60px rgb(28 48 40 / 10%); }
+      span { color: #65877c; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+      h1 { margin: 10px 0; font-size: 32px; }
+      p { margin: 0; color: #66756f; line-height: 1.6; }
+      a { display: inline-block; margin-top: 20px; color: #4e776a; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span>Podoria CRM · TP-101</span>
+      <h1>Платформа працює</h1>
+      <p>Frontend shell буде підключено в TP-103. Backend, PostgreSQL, Redis, Celery та приватне object storage уже доступні через Docker Compose.</p>
+      <a href="/health/ready">Перевірити готовність backend</a>
+    </main>
+  </body>
+</html>

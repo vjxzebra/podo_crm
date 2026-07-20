@@ -40,7 +40,7 @@ Redis не є сховищем бізнес-даних. У PostgreSQL залиш
 Порядок пріоритету під час реалізації:
 
 1. `SPECIFICATION.md` — функціональні вимоги й обмеження.
-2. Погоджені ADR у `docs/adr/` — уточнені рішення для суперечливих місць.
+2. Погоджені ADR у `docs/architecture/decisions/` — уточнені рішення для суперечливих місць.
 3. `design/index.html` і CSS — візуальна система, компонування та адаптивність.
 4. `design/assets/app.js` — лише демонстрація сценаріїв, не готова бізнес-логіка.
 
@@ -174,9 +174,9 @@ Compose-профілі:
 
 - [x] створити [traceability matrix](docs/requirements/traceability-matrix.md) для 23 критеріїв готовності;
 - [x] скласти [карту екранів, станів, модалок і доступів](docs/requirements/screen-state-access-map.md) трьох ролей;
-- [ ] погодити [ERD і життєві цикли](docs/architecture/domain-model.md) appointment, visit, payment, cash shift, stock movement — проєкт підготовлено, очікує погодження;
+- [x] погодити [ERD і життєві цикли](docs/architecture/domain-model.md) appointment, visit, payment, cash shift, stock movement — погоджено 2026-07-20;
 - [x] підготувати [реєстр і проєкти ADR-001—ADR-006](docs/architecture/decisions/README.md) щодо кімнат, графіків, повернень, фото, backup і способів оплати;
-- [ ] погодити ADR-001—ADR-006; до статусу `Accepted` залежні migrations не створювати;
+- [x] погодити ADR-001—ADR-006 — запропоновані defaults прийнято 2026-07-20;
 - [x] розбити роботу на [вертикальні task packets](docs/planning/task-packets.md) з контрактами, залежностями, ownership і acceptance evidence;
 - [x] позначити прототипні заглушки й невідповідності в [канонічному gap register](docs/requirements/prototype-gap-register.md).
 
@@ -201,6 +201,8 @@ Compose-профілі:
 - desktop/tablet/mobile layout без бізнес-даних.
 
 **Gate:** новий клон запускається однією Docker-командою; lint, migrations, unit smoke та production build проходять у test profile.
+
+**Стан:** TP-101 завершено 2026-07-20 — Compose runtime, Django health/readiness, PostgreSQL, Redis, Celery worker/beat, private MinIO bootstrap, Nginx proxy, JSON logs і request ID перевірені integration smoke. Наступний packet — TP-102.
 
 ### Етап 2. Ідентифікація, RBAC, команда й довідники — 1–1.5 тижня
 
@@ -387,7 +389,7 @@ flowchart LR
 5. **Резервні копії:** [ADR-005](docs/architecture/decisions/0005-backup-and-restore-policy.md) — off-host backup, retention, RPO/RTO і restore drill.
 6. **Способи оплати:** [ADR-006](docs/architecture/decisions/0006-payment-methods.md) — `CASH`, `CARD`, `TRANSFER`.
 
-Усі шість ADR мають статус `Proposed`. Їхні defaults можна використовувати для документації та task packets, але залежні migrations дозволені лише після `Accepted`.
+Усі шість ADR мають статус `Accepted` від 2026-07-20. Залежні migrations повинні відповідати прийнятим рішенням; зміна контракту потребує нового ADR.
 
 ## 10. Найбільші ризики
 
