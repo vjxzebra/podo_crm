@@ -202,7 +202,7 @@ Compose-профілі:
 
 **Gate:** новий клон запускається однією Docker-командою; lint, migrations, unit smoke та production build проходять у test profile.
 
-**Стан:** TP-101 завершено 2026-07-20 — Compose runtime, Django health/readiness, PostgreSQL, Redis, Celery worker/beat, private MinIO bootstrap, Nginx proxy, JSON logs і request ID перевірені integration smoke. Наступний packet — TP-102.
+**Стан:** TP-101 і TP-102 завершено 2026-07-20 — Compose runtime, health/readiness, OpenAPI snapshot, shared error envelope, generated TypeScript client, backend/frontend quality gates та Docker CI test profile реалізовані. Наступний packet — TP-103.
 
 ### Етап 2. Ідентифікація, RBAC, команда й довідники — 1–1.5 тижня
 

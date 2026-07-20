@@ -29,8 +29,8 @@
 | Packet | Поточний стан | Evidence / наступна дія |
 |---|---|---|
 | TP-101 | `done` | Compose config; 5 backend smoke tests; full stack healthy; live/readiness/proxy integration smoke |
-| TP-102 | `ready` | Наступний: quality/contract pipeline, OpenAPI client і CI/test profile |
-| TP-103 | `planned` | Починається після контрактів TP-102 |
+| TP-102 | `done` | OpenAPI/error contract; generated client; backend/frontend quality gates; Docker CI test profile |
+| TP-103 | `ready` | Наступний: responsive React shell і design tokens |
 | TP-201—TP-904 | `planned` | Відкриваються за dependency graph |
 
 ## 3. Володіння модулями
@@ -164,4 +164,4 @@
 
 ## 6. Порядок найближчого запуску
 
-ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101 завершено. Наступний packet — TP-102, після нього TP-103. Етап 2 починається після зеленого Stage 1 gate; TP-201 і TP-207 відкривають більшість наступних доменів. Inventory TP-501—503 може йти паралельно з TP-301—404 після завершення базового RBAC/audit.
+ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-102 завершено. Наступний packet — TP-103. Етап 2 починається після зеленого Stage 1 gate; TP-201 і TP-207 відкривають більшість наступних доменів. Inventory TP-501—503 може йти паралельно з TP-301—404 після завершення базового RBAC/audit.

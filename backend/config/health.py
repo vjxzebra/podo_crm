@@ -4,9 +4,11 @@ from urllib.request import urlopen
 
 from django.conf import settings
 from django.db import connections
-from django.http import JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_GET
 from redis import Redis
+
+from config.middleware import get_request_id
 
 logger = logging.getLogger("podoria.health")
 
@@ -40,12 +42,12 @@ DEPENDENCY_CHECKS: dict[str, Callable[[], None]] = {
 
 
 @require_GET
-def liveness(_request):
+def liveness(_request: HttpRequest) -> JsonResponse:
     return JsonResponse({"status": "ok", "service": "backend"})
 
 
 @require_GET
-def readiness(request):
+def readiness(request: HttpRequest) -> JsonResponse:
     checks: dict[str, str] = {}
 
     for name, check in DEPENDENCY_CHECKS.items():
@@ -55,7 +57,7 @@ def readiness(request):
             checks[name] = "unavailable"
             logger.warning(
                 "dependency check failed",
-                extra={"dependency": name, "request_id": request.request_id},
+                extra={"dependency": name, "request_id": get_request_id(request)},
                 exc_info=True,
             )
         else:

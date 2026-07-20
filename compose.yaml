@@ -32,6 +32,22 @@ services:
       retries: 20
     restart: unless-stopped
 
+  test-postgres:
+    profiles: ["test"]
+    image: postgres:17.10-alpine
+    environment:
+      POSTGRES_DB: podoria_test
+      POSTGRES_USER: podoria_test
+      POSTGRES_PASSWORD: podoria_test_password
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U podoria_test -d podoria_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    restart: "no"
+
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
     command: ["server", "/data", "--console-address", ":9001"]
@@ -124,17 +140,61 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  web:
+  backend-test:
+    profiles: ["test"]
+    image: podoria-crm-backend-test
     build:
-      context: ./frontend
+      context: ./backend
+    command: ["sh", "/app/scripts/check.sh"]
+    environment:
+      <<: *backend-environment
+      DJANGO_DEBUG: "0"
+      POSTGRES_DB: podoria_test
+      POSTGRES_USER: podoria_test
+      POSTGRES_PASSWORD: podoria_test_password
+      POSTGRES_HOST: test-postgres
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    image: podoria-crm-web
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: runtime
     expose:
       - "80"
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
       interval: 10s
       timeout: 3s
       retries: 10
     restart: unless-stopped
+
+  frontend-test:
+    profiles: ["test"]
+    image: podoria-crm-frontend-test
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: source
+    command: ["npm", "run", "check"]
+    restart: "no"
+
+  frontend-tools:
+    profiles: ["tools"]
+    image: podoria-crm-frontend-tools
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: source
+    command: ["npm", "run", "generate:api"]
+    volumes:
+      - ./frontend/src:/app/src
+      - ./backend/openapi:/app/openapi:ro
+    restart: "no"
 
   proxy:
     image: nginx:1.28.3-alpine

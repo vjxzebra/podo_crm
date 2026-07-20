@@ -1,0 +1,140 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Podoria CRM API",
+        "version": "1.0.0",
+        "description": "Versioned API contract for Podoria CRM."
+    },
+    "paths": {
+        "/api/v1/contract/fixture": {
+            "get": {
+                "operationId": "contract_fixture_retrieve",
+                "summary": "Return the technical success or error contract fixture",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "outcome",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "error",
+                                "success"
+                            ],
+                            "default": "success"
+                        }
+                    }
+                ],
+                "tags": [
+                    "platform"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ContractFixture"
+                                },
+                                "examples": {
+                                    "Success": {
+                                        "value": {
+                                            "status": "ok",
+                                            "message": "API contract is available.",
+                                            "correlation_id": "tp102-example"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                },
+                                "examples": {
+                                    "Error": {
+                                        "value": {
+                                            "code": "contract_fixture_error",
+                                            "message": "Requested the error contract fixture.",
+                                            "fields": {
+                                                "outcome": [
+                                                    "Use success to receive a successful response."
+                                                ]
+                                            },
+                                            "correlation_id": "tp102-example"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ContractFixture": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/StatusEnum"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "correlation_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "correlation_id",
+                    "message",
+                    "status"
+                ]
+            },
+            "ErrorEnvelope": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "fields": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "correlation_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "correlation_id",
+                    "fields",
+                    "message"
+                ]
+            },
+            "StatusEnum": {
+                "enum": [
+                    "ok"
+                ],
+                "type": "string",
+                "description": "* `ok` - ok"
+            }
+        }
+    }
+}
