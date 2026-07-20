@@ -172,8 +172,8 @@ Compose-профілі:
 
 **Мета:** перетворити специфікацію і прототип на однозначний контракт.
 
-- створити traceability matrix для 23 критеріїв готовності;
-- скласти карту екранів, станів, модалок і доступів трьох ролей;
+- [x] створити [traceability matrix](docs/requirements/traceability-matrix.md) для 23 критеріїв готовності;
+- [x] скласти [карту екранів, станів, модалок і доступів](docs/requirements/screen-state-access-map.md) трьох ролей;
 - погодити ERD і життєві цикли appointment, visit, payment, cash shift, stock movement;
 - зафіксувати ADR щодо кімнат, графіків, повернень, фото й політики зберігання;
 - розбити роботу на вертикальні task packets;
