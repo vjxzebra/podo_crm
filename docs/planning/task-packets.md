@@ -30,8 +30,9 @@
 |---|---|---|
 | TP-101 | `done` | Compose config; 5 backend smoke tests; full stack healthy; live/readiness/proxy integration smoke |
 | TP-102 | `done` | OpenAPI/error contract; generated client; backend/frontend quality gates; Docker CI test profile |
-| TP-103 | `ready` | Наступний: responsive React shell і design tokens |
-| TP-201—TP-904 | `planned` | Відкриваються за dependency graph |
+| TP-103 | `done` | Route/auth contracts; 14 component/a11y tests; responsive screenshots 1440×900, 768×1024, 390×844 |
+| TP-201 | `ready` | Наступний: login/logout/session і централізований RBAC |
+| TP-202—TP-904 | `planned` | Відкриваються за dependency graph |
 
 ## 3. Володіння модулями
 

@@ -202,7 +202,7 @@ Compose-профілі:
 
 **Gate:** новий клон запускається однією Docker-командою; lint, migrations, unit smoke та production build проходять у test profile.
 
-**Стан:** TP-101 і TP-102 завершено 2026-07-20 — Compose runtime, health/readiness, OpenAPI snapshot, shared error envelope, generated TypeScript client, backend/frontend quality gates та Docker CI test profile реалізовані. Наступний packet — TP-103.
+**Стан:** TP-101—TP-103 завершено 2026-07-20 — Compose runtime, health/readiness, OpenAPI snapshot, shared error envelope, generated TypeScript client, Docker quality gates, responsive route shell, design tokens, auth-boundary interface, system states і viewport evidence реалізовані. Gate етапу 1 закрито; наступний packet — TP-201.
 
 ### Етап 2. Ідентифікація, RBAC, команда й довідники — 1–1.5 тижня
 
