@@ -6,6 +6,157 @@
         "description": "Versioned API contract for Podoria CRM."
     },
     "paths": {
+        "/api/v1/appointment-status-configs": {
+            "get": {
+                "operationId": "appointment_status_config_list",
+                "summary": "List the eight protected appointment status configurations",
+                "tags": [
+                    "clinic settings"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AppointmentStatusConfigList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/appointment-status-configs/{code}": {
+            "patch": {
+                "operationId": "appointment_status_config_update",
+                "summary": "Update a status label, color and manual role flags without changing its code",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "code",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "clinic settings"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedAppointmentStatusConfigUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedAppointmentStatusConfigUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedAppointmentStatusConfigUpdateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AppointmentStatusConfig"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/audit-events": {
             "get": {
                 "operationId": "audit_event_list",
@@ -60,6 +211,7 @@
                                 "team",
                                 "settings",
                                 "patients",
+                                "work_items",
                                 "scheduling",
                                 "medical",
                                 "visits",
@@ -70,7 +222,7 @@
                             "type": "string",
                             "minLength": 1
                         },
-                        "description": "* `accounts` - accounts\n* `team` - team\n* `settings` - settings\n* `patients` - patients\n* `scheduling` - scheduling\n* `medical` - medical\n* `visits` - visits\n* `billing` - billing\n* `cash` - cash\n* `inventory` - inventory"
+                        "description": "* `accounts` - accounts\n* `team` - team\n* `settings` - settings\n* `patients` - patients\n* `work_items` - work_items\n* `scheduling` - scheduling\n* `medical` - medical\n* `visits` - visits\n* `billing` - billing\n* `cash` - cash\n* `inventory` - inventory"
                     }
                 ],
                 "tags": [
@@ -717,6 +869,136 @@
                 }
             }
         },
+        "/api/v1/clinic-workdays": {
+            "get": {
+                "operationId": "clinic_workday_list",
+                "summary": "Return the single clinic-wide weekly schedule in Europe/Kyiv",
+                "tags": [
+                    "clinic settings"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ClinicWorkdayList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "clinic_workday_update",
+                "summary": "Atomically replace work hours and non-overlapping breaks for all seven days",
+                "tags": [
+                    "clinic settings"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClinicScheduleUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClinicScheduleUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClinicScheduleUpdateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ClinicWorkdayList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/contract/fixture": {
             "get": {
                 "operationId": "contract_fixture_retrieve",
@@ -877,6 +1159,316 @@
                         "description": ""
                     },
                     "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/patients": {
+            "get": {
+                "operationId": "patient_list",
+                "summary": "Search the role-scoped patient directory with cursor pagination",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "cursor",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 120
+                        }
+                    }
+                ],
+                "tags": [
+                    "patients"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PatientListResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "patient_create",
+                "summary": "Create a patient and return role-safe possible phone duplicates",
+                "tags": [
+                    "patients"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatientCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatientCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatientCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PatientCreateResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/patients/{patient_id}": {
+            "get": {
+                "operationId": "patient_retrieve",
+                "summary": "Retrieve a role-scoped patient card projection",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "patient_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "patients"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PatientDetailResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "patient_update",
+                "summary": "Update a patient through the actor's safe role projection",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "patient_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "patients"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPatientUpdateRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPatientUpdateRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedPatientUpdateRequestRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PatientDetailResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2016,10 +2608,352 @@
                     }
                 }
             }
+        },
+        "/api/v1/work-items": {
+            "get": {
+                "operationId": "work_item_list",
+                "summary": "List role-scoped internal work items",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "scope",
+                        "schema": {
+                            "enum": [
+                                "own",
+                                "all"
+                            ],
+                            "type": "string",
+                            "default": "own",
+                            "minLength": 1
+                        },
+                        "description": "* `own` - own\n* `all` - all"
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 120
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "enum": [
+                                "open",
+                                "completed",
+                                "all"
+                            ],
+                            "type": "string",
+                            "default": "open",
+                            "minLength": 1
+                        },
+                        "description": "* `open` - open\n* `completed` - completed\n* `all` - all"
+                    }
+                ],
+                "tags": [
+                    "work-items"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkItemListResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "work_item_create",
+                "summary": "Create an internal work item",
+                "tags": [
+                    "work-items"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkItemCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkItemCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkItemCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/work-items/{work_item_id}": {
+            "patch": {
+                "operationId": "work_item_update",
+                "summary": "Edit, complete, or reopen a role-scoped internal work item",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "work_item_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "work-items"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedWorkItemUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedWorkItemUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedWorkItemUpdateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkItem"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
         }
     },
     "components": {
         "schemas": {
+            "AppointmentStatusConfig": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "label": {
+                        "type": "string",
+                        "maxLength": 80
+                    },
+                    "color": {
+                        "type": "string",
+                        "maxLength": 7
+                    },
+                    "manual_admin": {
+                        "type": "boolean"
+                    },
+                    "manual_reception": {
+                        "type": "boolean"
+                    },
+                    "manual_podologist": {
+                        "type": "boolean"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "code",
+                    "color",
+                    "label",
+                    "updated_at"
+                ]
+            },
+            "AppointmentStatusConfigList": {
+                "type": "object",
+                "properties": {
+                    "statuses": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AppointmentStatusConfig"
+                        }
+                    }
+                },
+                "required": [
+                    "statuses"
+                ]
+            },
             "AuditActor": {
                 "type": "object",
                 "properties": {
@@ -2262,6 +3196,46 @@
                     "new_password_confirmation"
                 ]
             },
+            "ClinicBreak": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "format": "time"
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "format": "time"
+                    }
+                },
+                "required": [
+                    "end_time",
+                    "id",
+                    "start_time"
+                ]
+            },
+            "ClinicBreakWriteRequest": {
+                "type": "object",
+                "properties": {
+                    "start_time": {
+                        "type": "string",
+                        "format": "time"
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "format": "time"
+                    }
+                },
+                "required": [
+                    "end_time",
+                    "start_time"
+                ]
+            },
             "ClinicLogoUploadRequest": {
                 "type": "object",
                 "properties": {
@@ -2343,6 +3317,122 @@
                     "updated_at"
                 ]
             },
+            "ClinicScheduleUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "workdays": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ClinicWorkdayWriteRequest"
+                        }
+                    }
+                },
+                "required": [
+                    "workdays"
+                ]
+            },
+            "ClinicWorkday": {
+                "type": "object",
+                "properties": {
+                    "weekday": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0
+                    },
+                    "is_working": {
+                        "type": "boolean"
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "breaks": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ClinicBreak"
+                        }
+                    },
+                    "version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "breaks",
+                    "end_time",
+                    "start_time",
+                    "updated_at",
+                    "weekday"
+                ]
+            },
+            "ClinicWorkdayList": {
+                "type": "object",
+                "properties": {
+                    "timezone": {
+                        "type": "string"
+                    },
+                    "workdays": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ClinicWorkday"
+                        }
+                    }
+                },
+                "required": [
+                    "timezone",
+                    "workdays"
+                ]
+            },
+            "ClinicWorkdayWriteRequest": {
+                "type": "object",
+                "properties": {
+                    "weekday": {
+                        "type": "integer",
+                        "maximum": 6,
+                        "minimum": 0
+                    },
+                    "is_working": {
+                        "type": "boolean"
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "breaks": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ClinicBreakWriteRequest"
+                        }
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "is_working",
+                    "version",
+                    "weekday"
+                ]
+            },
             "ContractFixture": {
                 "type": "object",
                 "properties": {
@@ -2361,6 +3451,14 @@
                     "message",
                     "status"
                 ]
+            },
+            "EffectiveScopeEnum": {
+                "enum": [
+                    "own",
+                    "all"
+                ],
+                "type": "string",
+                "description": "* `own` - own\n* `all` - all"
             },
             "ErrorEnvelope": {
                 "type": "object",
@@ -2391,6 +3489,16 @@
                     "message"
                 ]
             },
+            "KindEnum": {
+                "enum": [
+                    "callback",
+                    "confirm_appointment",
+                    "manual_message",
+                    "other"
+                ],
+                "type": "string",
+                "description": "* `callback` - Перетелефонувати\n* `confirm_appointment` - Підтвердити запис\n* `manual_message` - Написати пацієнту вручну\n* `other` - Інша внутрішня справа"
+            },
             "LoginRequestRequest": {
                 "type": "object",
                 "properties": {
@@ -2408,6 +3516,150 @@
                 "required": [
                     "email",
                     "password"
+                ]
+            },
+            "MedicalPatientDetail": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "public_number": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "birth_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "primary_podologist": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PodologistSummary"
+                            }
+                        ],
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "appointment_summary": {
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "state_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "age": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "service_started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "projection": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "upcoming_appointment": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PatientAppointmentSummary"
+                            }
+                        ],
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "visit_history": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PatientVisitHistoryItem"
+                        },
+                        "readOnly": true
+                    },
+                    "medical_profile": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PatientMedicalProfile"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "photo_archive": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PatientPhotoVisitMetadata"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "age",
+                    "appointment_summary",
+                    "created_at",
+                    "display_name",
+                    "first_name",
+                    "id",
+                    "last_name",
+                    "medical_profile",
+                    "phone",
+                    "photo_archive",
+                    "primary_podologist",
+                    "projection",
+                    "public_number",
+                    "service_started_at",
+                    "state_label",
+                    "upcoming_appointment",
+                    "updated_at",
+                    "visit_history"
                 ]
             },
             "PasswordPairRequest": {
@@ -2512,6 +3764,34 @@
                     "role"
                 ]
             },
+            "PatchedAppointmentStatusConfigUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                    },
+                    "color": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 7
+                    },
+                    "manual_admin": {
+                        "type": "boolean"
+                    },
+                    "manual_reception": {
+                        "type": "boolean"
+                    },
+                    "manual_podologist": {
+                        "type": "boolean"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                }
+            },
             "PatchedClinicProfileUpdateRequest": {
                 "type": "object",
                 "properties": {
@@ -2543,6 +3823,111 @@
                     "version": {
                         "type": "integer",
                         "minimum": 1
+                    }
+                }
+            },
+            "PatchedMedicalPatientUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "first_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "phone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 32
+                    },
+                    "birth_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "note": {
+                        "type": "string",
+                        "maxLength": 2000
+                    },
+                    "primary_podologist_id": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "medical_profile": {
+                        "$ref": "#/components/schemas/PatientMedicalProfileUpdateRequest"
+                    }
+                }
+            },
+            "PatchedPatientUpdateRequestRequest": {
+                "oneOf": [
+                    {
+                        "$ref": "#/components/schemas/PatchedReceptionPatientUpdateRequest"
+                    },
+                    {
+                        "$ref": "#/components/schemas/PatchedMedicalPatientUpdateRequest"
+                    }
+                ]
+            },
+            "PatchedReceptionPatientUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "first_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "phone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 32
+                    },
+                    "birth_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "note": {
+                        "type": "string",
+                        "maxLength": 2000
+                    },
+                    "primary_podologist_id": {
+                        "type": "integer",
+                        "nullable": true
                     }
                 }
             },
@@ -2629,6 +4014,623 @@
                         "type": "boolean"
                     }
                 }
+            },
+            "PatchedWorkItemUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/KindEnum"
+                    },
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "due_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "assignee_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "patient_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "comment": {
+                        "type": "string",
+                        "maxLength": 4000
+                    },
+                    "is_important": {
+                        "type": "boolean"
+                    },
+                    "is_completed": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "version"
+                ]
+            },
+            "Patient": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "public_number": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "birth_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "primary_podologist": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PodologistSummary"
+                            }
+                        ],
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "appointment_summary": {
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "state_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "appointment_summary",
+                    "created_at",
+                    "display_name",
+                    "first_name",
+                    "id",
+                    "last_name",
+                    "phone",
+                    "primary_podologist",
+                    "public_number",
+                    "state_label",
+                    "updated_at"
+                ]
+            },
+            "PatientAppointmentSummary": {
+                "type": "object",
+                "properties": {
+                    "starts_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "service": {
+                        "type": "string"
+                    },
+                    "specialist": {
+                        "type": "string"
+                    },
+                    "room": {
+                        "type": "string"
+                    },
+                    "cost_minor": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "cost_minor",
+                    "room",
+                    "service",
+                    "specialist",
+                    "starts_at",
+                    "status"
+                ]
+            },
+            "PatientCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "first_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "phone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 32
+                    },
+                    "birth_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "note": {
+                        "type": "string",
+                        "maxLength": 2000
+                    },
+                    "primary_podologist_id": {
+                        "type": "integer",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "first_name",
+                    "last_name",
+                    "phone"
+                ]
+            },
+            "PatientCreateResponse": {
+                "type": "object",
+                "properties": {
+                    "patient": {
+                        "$ref": "#/components/schemas/Patient"
+                    },
+                    "duplicate_warning": {
+                        "type": "boolean"
+                    },
+                    "possible_duplicates": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PatientListItem"
+                        }
+                    }
+                },
+                "required": [
+                    "duplicate_warning",
+                    "patient",
+                    "possible_duplicates"
+                ]
+            },
+            "PatientDetailResponse": {
+                "oneOf": [
+                    {
+                        "$ref": "#/components/schemas/ReceptionPatientDetail"
+                    },
+                    {
+                        "$ref": "#/components/schemas/MedicalPatientDetail"
+                    }
+                ]
+            },
+            "PatientListItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "public_number": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "birth_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "primary_podologist": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PodologistSummary"
+                            }
+                        ],
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "appointment_summary": {
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "state_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "appointment_summary",
+                    "created_at",
+                    "display_name",
+                    "first_name",
+                    "id",
+                    "last_name",
+                    "phone",
+                    "primary_podologist",
+                    "public_number",
+                    "state_label"
+                ]
+            },
+            "PatientListResponse": {
+                "type": "object",
+                "properties": {
+                    "patients": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PatientListItem"
+                        }
+                    },
+                    "next_cursor": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "next_cursor",
+                    "patients"
+                ]
+            },
+            "PatientMedicalProfile": {
+                "type": "object",
+                "properties": {
+                    "allergies": {},
+                    "chronic_conditions": {},
+                    "notes": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "updated_at"
+                ]
+            },
+            "PatientMedicalProfileUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "allergies": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                        },
+                        "maxItems": 50
+                    },
+                    "chronic_conditions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                        },
+                        "maxItems": 50
+                    },
+                    "notes": {
+                        "type": "string",
+                        "maxLength": 4000
+                    }
+                }
+            },
+            "PatientPhotoVisitMetadata": {
+                "type": "object",
+                "properties": {
+                    "visit_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "occurred_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "caption": {
+                        "type": "string"
+                    },
+                    "before_count": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "after_count": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "after_count",
+                    "before_count",
+                    "caption",
+                    "occurred_at",
+                    "visit_id"
+                ]
+            },
+            "PatientVisitHistoryItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "occurred_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "services": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "specialist": {
+                        "type": "string"
+                    },
+                    "summary": {
+                        "type": "string"
+                    },
+                    "cost_minor": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "has_photos": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "cost_minor",
+                    "has_photos",
+                    "id",
+                    "occurred_at",
+                    "services",
+                    "specialist",
+                    "status",
+                    "summary"
+                ]
+            },
+            "PodologistSummary": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "id"
+                ]
+            },
+            "ReceptionPatientDetail": {
+                "type": "object",
+                "description": "Safe contact/administrative projection with no medical keys.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "public_number": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "birth_date": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "primary_podologist": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PodologistSummary"
+                            }
+                        ],
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "appointment_summary": {
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "state_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "age": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "service_started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "projection": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "upcoming_appointment": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PatientAppointmentSummary"
+                            }
+                        ],
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "visit_history": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PatientVisitHistoryItem"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "age",
+                    "appointment_summary",
+                    "created_at",
+                    "display_name",
+                    "first_name",
+                    "id",
+                    "last_name",
+                    "phone",
+                    "primary_podologist",
+                    "projection",
+                    "public_number",
+                    "service_started_at",
+                    "state_label",
+                    "upcoming_appointment",
+                    "updated_at",
+                    "visit_history"
+                ]
             },
             "RoleEnum": {
                 "enum": [
@@ -3047,6 +5049,257 @@
                     "must_change_password",
                     "temporary_password_expires_at",
                     "user_id"
+                ]
+            },
+            "WorkItem": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/KindEnum"
+                    },
+                    "kind_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "due_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "assignee": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkItemAssignee"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "patient": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkItemPatient"
+                            }
+                        ],
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "comment": {
+                        "type": "string"
+                    },
+                    "is_important": {
+                        "type": "boolean"
+                    },
+                    "is_completed": {
+                        "type": "boolean"
+                    },
+                    "is_overdue": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "completed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "completed_by": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkItemAssignee"
+                            }
+                        ],
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "created_by": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkItemAssignee"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "assignee",
+                    "completed_by",
+                    "created_at",
+                    "created_by",
+                    "due_at",
+                    "id",
+                    "is_overdue",
+                    "kind",
+                    "kind_label",
+                    "patient",
+                    "title",
+                    "updated_at"
+                ]
+            },
+            "WorkItemAssignee": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "role": {
+                        "$ref": "#/components/schemas/RoleEnum"
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "id",
+                    "role"
+                ]
+            },
+            "WorkItemCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "$ref": "#/components/schemas/KindEnum"
+                    },
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "due_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "assignee_id": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "patient_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "comment": {
+                        "type": "string",
+                        "maxLength": 4000
+                    },
+                    "is_important": {
+                        "type": "boolean",
+                        "default": false
+                    }
+                },
+                "required": [
+                    "assignee_id",
+                    "due_at",
+                    "kind",
+                    "title"
+                ]
+            },
+            "WorkItemListResponse": {
+                "type": "object",
+                "properties": {
+                    "work_items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WorkItem"
+                        }
+                    },
+                    "summary": {
+                        "$ref": "#/components/schemas/WorkItemSummary"
+                    },
+                    "assignees": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WorkItemAssignee"
+                        }
+                    },
+                    "effective_scope": {
+                        "$ref": "#/components/schemas/EffectiveScopeEnum"
+                    }
+                },
+                "required": [
+                    "assignees",
+                    "effective_scope",
+                    "summary",
+                    "work_items"
+                ]
+            },
+            "WorkItemPatient": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "public_number": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "id",
+                    "phone",
+                    "public_number"
+                ]
+            },
+            "WorkItemSummary": {
+                "type": "object",
+                "properties": {
+                    "open": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "completed": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "overdue": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "important": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "completed",
+                    "important",
+                    "open",
+                    "overdue"
                 ]
             }
         },

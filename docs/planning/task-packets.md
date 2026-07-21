@@ -36,9 +36,12 @@
 | TP-203 | `done` | Admin team list/create/edit/reactivate/deactivate/temp password; fixed roles; session revocation; concurrent last-admin guard; audit; responsive evidence |
 | TP-204 | `done` | Singleton clinic profile; private validated logo; one-location room catalog; optimistic conflicts; audit/RBAC; responsive Edge evidence |
 | TP-205 | `done` | Service CRUD without delete; unique code/domain constraints; admin catalog/palette/conflicts; active picker projection; audit/RBAC; responsive Edge evidence |
-| TP-206 | `planned` | Наступний: system status configs і clinic-wide work schedule |
+| TP-206 | `done` | 8 protected status configs; atomic 7-day clinic schedule/breaks; optimistic conflicts; audit/RBAC; responsive UI |
 | TP-207 | `done` | UUID event registry; same-transaction service; recursive secret redaction; model/queryset + PostgreSQL append-only guards; admin list/detail API |
-| TP-301—TP-904 | `planned` | Наступні domain packets використовують TP-207 service; повний audit UI та event coverage registry закриває TP-803 |
+| TP-301 | `done` | Normalized-phone patient model; scoped live search; cursor pagination; duplicate warning; atomic audit; responsive list/create UI |
+| TP-302 | `done` | Role-safe patient card/edit; reception-safe та medical projections; scoped IDOR; atomic edit audit; responsive overview/history/photo shells |
+| TP-303 | `done` | Scoped internal work items; linked patient/assignee validation; versioned complete/reopen; atomic audit; responsive list/create/callback UI |
+| TP-401—TP-904 | `planned` | Наступний TP-401 calendar/free-slot query; domain packets використовують TP-207 audit service |
 
 ## 3. Володіння модулями
 
@@ -171,4 +174,4 @@
 
 ## 6. Порядок найближчого запуску
 
-ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201—TP-205 і TP-207 завершено. Наступним слід вести TP-206 system status configs і clinic-wide schedule, використовуючи готові RBAC, audit та settings UI conventions. Після TP-206 етап довідників закрито; inventory TP-501—503 може йти паралельно з TP-301—404.
+ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201—TP-207 і TP-301—TP-303 завершено. Етапи auth/RBAC/довідників та пацієнтів/внутрішніх справ закрито. Наступним послідовним packet слід вести TP-401 day/week calendar і free-slot query; inventory TP-501—503 може йти паралельно з TP-401—404.

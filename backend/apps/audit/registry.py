@@ -6,6 +6,7 @@ class AuditSection(StrEnum):
     TEAM = "team"
     SETTINGS = "settings"
     PATIENTS = "patients"
+    WORK_ITEMS = "work_items"
     SCHEDULING = "scheduling"
     MEDICAL = "medical"
     VISITS = "visits"
@@ -36,10 +37,17 @@ class AuditAction(StrEnum):
     SERVICE_UPDATED = "settings.service_updated"
     SERVICE_DEACTIVATED = "settings.service_deactivated"
     SERVICE_REACTIVATED = "settings.service_reactivated"
+    APPOINTMENT_STATUS_CONFIG_UPDATED = "settings.appointment_status_config_updated"
+    CLINIC_SCHEDULE_UPDATED = "settings.clinic_schedule_updated"
 
     PATIENT_CREATED = "patients.patient_created"
     PATIENT_UPDATED = "patients.patient_updated"
     MEDICAL_RECORD_UPDATED = "medical.record_updated"
+
+    WORK_ITEM_CREATED = "work_items.work_item_created"
+    WORK_ITEM_UPDATED = "work_items.work_item_updated"
+    WORK_ITEM_COMPLETED = "work_items.work_item_completed"
+    WORK_ITEM_REOPENED = "work_items.work_item_reopened"
 
     APPOINTMENT_CREATED = "scheduling.appointment_created"
     APPOINTMENT_UPDATED = "scheduling.appointment_updated"
@@ -81,9 +89,15 @@ EVENT_SECTIONS: dict[str, AuditSection] = {
     AuditAction.SERVICE_UPDATED: AuditSection.SETTINGS,
     AuditAction.SERVICE_DEACTIVATED: AuditSection.SETTINGS,
     AuditAction.SERVICE_REACTIVATED: AuditSection.SETTINGS,
+    AuditAction.APPOINTMENT_STATUS_CONFIG_UPDATED: AuditSection.SETTINGS,
+    AuditAction.CLINIC_SCHEDULE_UPDATED: AuditSection.SETTINGS,
     AuditAction.PATIENT_CREATED: AuditSection.PATIENTS,
     AuditAction.PATIENT_UPDATED: AuditSection.PATIENTS,
     AuditAction.MEDICAL_RECORD_UPDATED: AuditSection.MEDICAL,
+    AuditAction.WORK_ITEM_CREATED: AuditSection.WORK_ITEMS,
+    AuditAction.WORK_ITEM_UPDATED: AuditSection.WORK_ITEMS,
+    AuditAction.WORK_ITEM_COMPLETED: AuditSection.WORK_ITEMS,
+    AuditAction.WORK_ITEM_REOPENED: AuditSection.WORK_ITEMS,
     AuditAction.APPOINTMENT_CREATED: AuditSection.SCHEDULING,
     AuditAction.APPOINTMENT_UPDATED: AuditSection.SCHEDULING,
     AuditAction.APPOINTMENT_RESCHEDULED: AuditSection.SCHEDULING,

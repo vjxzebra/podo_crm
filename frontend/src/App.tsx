@@ -9,8 +9,11 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
 import { FirstLoginPage } from "./auth/PasswordLifecycle";
 import { PasswordResetRequestsPage } from "./auth/PasswordResetRequestsPage";
+import { PatientsPage } from "./patients/PatientsPage";
+import { PatientDetailPage } from "./patients/PatientDetailPage";
 import { SettingsPage } from "./settings/SettingsPage";
 import { TeamPage } from "./team/TeamPage";
+import { WorkItemsPage } from "./work-items/WorkItemsPage";
 
 function pageForRoute(route: AppRouteDefinition) {
   if (route.id === "password-resets") {
@@ -21,6 +24,12 @@ function pageForRoute(route: AppRouteDefinition) {
   }
   if (route.id === "settings") {
     return <SettingsPage />;
+  }
+  if (route.id === "patients") {
+    return <PatientsPage />;
+  }
+  if (route.id === "work-items") {
+    return <WorkItemsPage />;
   }
   if (route.surface === "overview") {
     return <OverviewPage />;
@@ -44,6 +53,17 @@ function RoleSafePage({ route }: { readonly route: AppRouteDefinition }) {
   return pageForRoute(route);
 }
 
+function PatientDetailRoute() {
+  const { state } = useAuth();
+  if (state.status !== "authenticated") {
+    return null;
+  }
+  if (!state.session.route_ids.includes("patients")) {
+    return <Navigate replace to="/?notice=forbidden" />;
+  }
+  return <PatientDetailPage />;
+}
+
 export function App() {
   return (
     <AuthProvider>
@@ -60,6 +80,7 @@ export function App() {
           {routeRegistry.map((route) => (
             <Route key={route.id} path={route.path} element={<RoleSafePage route={route} />} />
           ))}
+          <Route path="/patients/:patientId/:tab?" element={<PatientDetailRoute />} />
           {stateRoutes.map((stateKind) => (
             <Route key={stateKind} path={`/previews/${stateKind}`} element={<SystemState kind={stateKind} />} />
           ))}

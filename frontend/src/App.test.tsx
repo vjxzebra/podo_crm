@@ -11,8 +11,16 @@ import {
   clinicProfile,
   clinicRoom,
   clinicService,
+  clinicStatuses,
+  clinicWorkdays,
   jsonResponse,
+  medicalPatientDetailFixture,
+  patientFixture,
+  podologistSession,
   receptionSession,
+  receptionPatientDetailFixture,
+  workItemFixture,
+  workItemListFixture,
 } from "./test/setup";
 
 function renderApp(path = "/") {
@@ -65,6 +73,343 @@ describe("authenticated application shell", () => {
       expect(Object.keys(route)).not.toContain("permissions");
       expect(Object.keys(route)).not.toContain("allowedRoles");
     }
+  });
+});
+
+describe("TP-301 patient directory", () => {
+  it("renders the safe patient directory and role scope", async () => {
+    renderApp("/patients");
+
+    expect(await screen.findByRole("heading", { name: "Каталог пацієнтів" })).toBeInTheDocument();
+    expect(await screen.findByText("Марія Бондар")).toBeInTheDocument();
+    expect(screen.getByText("P-C49D72C2689D")).toBeInTheDocument();
+    expect(screen.getByText("Усі пацієнти кабінету")).toBeInTheDocument();
+    expect(screen.getByText("Записів ще немає")).toBeInTheDocument();
+    expect(screen.queryByText(/медичн/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the own-patient scope for a podologist session", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(podologistSession))
+      .mockResolvedValueOnce(jsonResponse({ patients: [patientFixture], next_cursor: null }));
+    renderApp("/patients");
+
+    expect(await screen.findByText("Лише мої пацієнти")).toBeInTheDocument();
+    expect(screen.getByText("Доступ: Подолог")).toBeInTheDocument();
+  });
+
+  it("updates live search results and offers inline create for an empty result", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse({ patients: [patientFixture], next_cursor: null }))
+      .mockResolvedValueOnce(jsonResponse({ patients: [], next_cursor: null }));
+    renderApp("/patients");
+    await screen.findByText("Марія Бондар");
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Пошук пацієнтів" }), {
+      target: { value: "Невідома людина" },
+    });
+
+    expect(await screen.findByRole("heading", { name: "Збігів не знайдено" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Створити пацієнта" })).toBeInTheDocument();
+    const searchRequest = fetchMock.mock.calls.at(-1)?.[0];
+    expect(searchRequest).toBeInstanceOf(Request);
+    expect((searchRequest as Request).url).toContain("search=%D0%9D%D0%B5%D0%B2%D1%96%D0%B4%D0%BE%D0%BC%D0%B0");
+  });
+
+  it("guards unsaved create fields before closing", async () => {
+    renderApp("/patients");
+    await screen.findByText("Марія Бондар");
+    fireEvent.click(screen.getByRole("button", { name: "Додати пацієнта" }));
+    fireEvent.change(screen.getByLabelText("Ім’я"), { target: { value: "Олена" } });
+    fireEvent.click(screen.getByRole("button", { name: "Закрити форму пацієнта" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Відкинути введені дані?");
+    fireEvent.click(screen.getByRole("button", { name: "Продовжити" }));
+    expect(screen.getByRole("heading", { name: "Новий пацієнт" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Олена")).toBeInTheDocument();
+  });
+
+  it("warns about a duplicate phone and still creates the patient", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const createdPatient = {
+      ...patientFixture,
+      id: "97fcff39-a069-48f7-99f2-d9e3a45a7f8e",
+      public_number: "P-97FCFF39A069",
+      first_name: "Марина",
+      last_name: "Коваль",
+      display_name: "Марина Коваль",
+      note: "",
+      updated_at: "2026-07-21T12:05:00+03:00",
+    } as const;
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse({ patients: [patientFixture], next_cursor: null }))
+      .mockResolvedValueOnce(jsonResponse({ patients: [patientFixture], next_cursor: null }))
+      .mockResolvedValueOnce(jsonResponse({
+        patient: createdPatient,
+        duplicate_warning: true,
+        possible_duplicates: [patientFixture],
+      }, 201))
+      .mockResolvedValueOnce(jsonResponse({ patients: [createdPatient, patientFixture], next_cursor: null }));
+    renderApp("/patients");
+    await screen.findByText("Марія Бондар");
+    fireEvent.click(screen.getByRole("button", { name: "Додати пацієнта" }));
+    fireEvent.change(screen.getByLabelText("Ім’я"), { target: { value: "Марина" } });
+    fireEvent.change(screen.getByLabelText("Прізвище"), { target: { value: "Коваль" } });
+    fireEvent.change(screen.getByLabelText("Телефон"), { target: { value: "0671234567" } });
+
+    expect(await screen.findByText("Можливий дублікат телефону")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Створити пацієнта" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("можливий дублікат телефону");
+    expect(await screen.findByText("Марина Коваль")).toBeInTheDocument();
+    const createRequest = fetchMock.mock.calls.find(([input]) => input instanceof Request && input.method === "POST")?.[0];
+    expect(createRequest).toBeInstanceOf(Request);
+    expect(await (createRequest as Request).clone().json()).toMatchObject({
+      first_name: "Марина",
+      last_name: "Коваль",
+      phone: "0671234567",
+    });
+  });
+
+  it("appends the next cursor page without replacing current results", async () => {
+    const secondPatient = {
+      ...patientFixture,
+      id: "a5dacb1f-bcab-4785-83e9-9ce6af32e52f",
+      public_number: "P-A5DACB1FBCAB",
+      first_name: "Ірина",
+      last_name: "Савчук",
+      display_name: "Ірина Савчук",
+      phone: "+380 50 222 33 44",
+    } as const;
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse({ patients: [patientFixture], next_cursor: "next-page" }))
+      .mockResolvedValueOnce(jsonResponse({ patients: [secondPatient], next_cursor: null }));
+    renderApp("/patients");
+    await screen.findByText("Марія Бондар");
+
+    fireEvent.click(screen.getByRole("button", { name: "Показати ще" }));
+
+    expect(await screen.findByText("Ірина Савчук")).toBeInTheDocument();
+    expect(screen.getByText("Марія Бондар")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Показати ще" })).not.toBeInTheDocument();
+  });
+});
+
+describe("TP-302 patient card and role projections", () => {
+  const detailPath = `/patients/${patientFixture.id}/overview`;
+
+  it("opens a directory row and renders the medical overview shells", async () => {
+    renderApp("/patients");
+    await screen.findByText("Марія Бондар");
+
+    fireEvent.click(screen.getByRole("link", { name: "Відкрити картку Марія Бондар" }));
+
+    expect(await screen.findByRole("heading", { name: "Марія Бондар", level: 1 })).toBeInTheDocument();
+    expect(screen.getByText("Латекс")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Історія візитів" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Фото до / після" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Історія візитів" }));
+    expect(screen.getByRole("heading", { name: "Історія візитів порожня" })).toBeInTheDocument();
+  });
+
+  it("renders the reception-safe projection without medical or photo content", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(receptionSession))
+      .mockResolvedValueOnce(jsonResponse(receptionPatientDetailFixture));
+    renderApp(detailPath);
+
+    expect(await screen.findByRole("heading", { name: "Марія Бондар", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Медичні блоки мають обмежений доступ" })).toBeInTheDocument();
+    expect(screen.queryByText("Латекс")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Фото до / після" })).not.toBeInTheDocument();
+  });
+
+  it("updates safe and medical fields through the typed PATCH contract", async () => {
+    document.cookie = "podoria_csrftoken=test-csrf; path=/";
+    const updated = {
+      ...medicalPatientDetailFixture,
+      phone: "+380 50 111 22 33",
+      medical_profile: {
+        ...medicalPatientDetailFixture.medical_profile,
+        allergies: ["Латекс", "Йод"],
+      },
+    } as const;
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(medicalPatientDetailFixture))
+      .mockResolvedValueOnce(jsonResponse(updated));
+    renderApp(detailPath);
+    await screen.findByRole("heading", { name: "Марія Бондар", level: 1 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Редагувати" }));
+    fireEvent.change(screen.getByLabelText("Телефон"), { target: { value: "050 111 22 33" } });
+    fireEvent.change(screen.getByLabelText("Алергії"), { target: { value: "Латекс, Йод" } });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти зміни" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("зафіксовано в журналі дій");
+    expect(screen.getByText("Латекс, Йод")).toBeInTheDocument();
+    const patchRequest = fetchMock.mock.calls.find(([input]) => input instanceof Request && input.method === "PATCH")?.[0];
+    expect(patchRequest).toBeInstanceOf(Request);
+    expect((patchRequest as Request).headers.get("X-CSRFToken")).toBe("test-csrf");
+    expect(await (patchRequest as Request).clone().json()).toMatchObject({
+      phone: "050 111 22 33",
+      medical_profile: { allergies: ["Латекс", "Йод"] },
+    });
+    document.cookie = "podoria_csrftoken=; max-age=0; path=/";
+  });
+
+  it("guards unsaved patient edits before closing", async () => {
+    renderApp(detailPath);
+    await screen.findByRole("heading", { name: "Марія Бондар", level: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Редагувати" }));
+    fireEvent.change(screen.getByLabelText("Адміністративна нотатка"), { target: { value: "Незбережена зміна" } });
+    fireEvent.click(screen.getByRole("button", { name: "Закрити редагування" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Є незбережені зміни");
+    fireEvent.click(screen.getByRole("button", { name: "Продовжити" }));
+    expect(screen.getByDisplayValue("Незбережена зміна")).toBeInTheDocument();
+  });
+
+  it("shows the same safe not-found state for an inaccessible patient id", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(podologistSession))
+      .mockResolvedValueOnce(jsonResponse({
+        code: "not_found",
+        message: "Ресурс не знайдено.",
+        fields: {},
+        correlation_id: "test-request",
+      }, 404));
+    renderApp("/patients/00000000-0000-4000-8000-000000000999/overview");
+
+    expect(await screen.findByRole("heading", { name: "Картку пацієнта не знайдено" })).toBeInTheDocument();
+    expect(screen.getByText(/не існує або недоступний/)).toBeInTheDocument();
+  });
+});
+
+describe("TP-303 internal work items", () => {
+  it("renders the live work-item summary and safe linked-patient projection", async () => {
+    renderApp("/work-items");
+
+    expect(await screen.findByRole("heading", { name: "Внутрішні справи" })).toBeInTheDocument();
+    expect(await screen.findByText("Уточнити самопочуття після візиту")).toBeInTheDocument();
+    expect(screen.getByText("Відповідальний: Тест Адміністратор")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Марія Бондар/ })).toHaveAttribute(
+      "href",
+      `/patients/${patientFixture.id}/overview`,
+    );
+    expect(screen.getByRole("button", { name: "Усі команди" })).toBeInTheDocument();
+  });
+
+  it("requests all-team scope for an administrator", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(workItemListFixture))
+      .mockResolvedValueOnce(jsonResponse({ ...workItemListFixture, effective_scope: "all" }));
+    renderApp("/work-items");
+    await screen.findByText("Уточнити самопочуття після візиту");
+
+    fireEvent.click(screen.getByRole("button", { name: "Усі команди" }));
+
+    await waitFor(() => {
+      const request = fetchMock.mock.calls.at(-1)?.[0];
+      expect(request).toBeInstanceOf(Request);
+      expect((request as Request).url).toContain("scope=all");
+    });
+  });
+
+  it("locks a podologist to own scope even if the server normalizes it", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(podologistSession))
+      .mockResolvedValueOnce(jsonResponse(workItemListFixture));
+    renderApp("/work-items");
+
+    expect(await screen.findByText("Лише мої справи")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Усі команди" })).not.toBeInTheDocument();
+  });
+
+  it("creates an internal work item with CSRF protection", async () => {
+    document.cookie = "podoria_csrftoken=test-csrf; path=/";
+    const fetchMock = vi.mocked(fetch);
+    const created = { ...workItemFixture, kind: "other", kind_label: "Інша справа", title: "Підготувати документи" } as const;
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(workItemListFixture))
+      .mockResolvedValueOnce(jsonResponse(created, 201))
+      .mockResolvedValueOnce(jsonResponse({ ...workItemListFixture, work_items: [created] }));
+    renderApp("/work-items");
+    await screen.findByText("Уточнити самопочуття після візиту");
+    fireEvent.click(screen.getByRole("button", { name: "Нова справа" }));
+    const dialog = screen.getByRole("dialog", { name: "Нова справа" });
+    fireEvent.change(within(dialog).getByLabelText("Назва"), { target: { value: "Підготувати документи" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Створити справу" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Підготувати документи");
+    const createRequest = fetchMock.mock.calls.find(([input]) => input instanceof Request && input.method === "POST")?.[0];
+    expect(createRequest).toBeInstanceOf(Request);
+    expect((createRequest as Request).headers.get("X-CSRFToken")).toBe("test-csrf");
+    expect(await (createRequest as Request).clone().json()).toMatchObject({
+      title: "Підготувати документи",
+      assignee_id: 1,
+      kind: "other",
+      patient_id: null,
+    });
+    document.cookie = "podoria_csrftoken=; max-age=0; path=/";
+  });
+
+  it("completes a work item explicitly with its current version", async () => {
+    document.cookie = "podoria_csrftoken=test-csrf; path=/";
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(workItemListFixture))
+      .mockResolvedValueOnce(jsonResponse({
+        ...workItemFixture,
+        is_completed: true,
+        completed_at: "2026-07-21T13:00:00+03:00",
+        completed_by: workItemFixture.assignee,
+        version: 2,
+      }));
+    renderApp("/work-items");
+    await screen.findByText("Уточнити самопочуття після візиту");
+
+    fireEvent.click(screen.getByRole("button", { name: /Позначити виконаною/ }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("виконано");
+    const patchRequest = fetchMock.mock.calls.find(([input]) => input instanceof Request && input.method === "PATCH")?.[0];
+    expect(patchRequest).toBeInstanceOf(Request);
+    expect((patchRequest as Request).headers.get("X-CSRFToken")).toBe("test-csrf");
+    expect(await (patchRequest as Request).clone().json()).toEqual({ version: 1, is_completed: true });
+    document.cookie = "podoria_csrftoken=; max-age=0; path=/";
+  });
+
+  it("creates a callback from the patient card without triggering a call", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const callback = { ...workItemFixture, title: "Перетелефонувати: Марія Бондар" } as const;
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(medicalPatientDetailFixture))
+      .mockResolvedValueOnce(jsonResponse(workItemListFixture))
+      .mockResolvedValueOnce(jsonResponse(callback, 201));
+    renderApp(`/patients/${patientFixture.id}/overview`);
+    await screen.findByRole("heading", { name: "Марія Бондар", level: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Перетелефонувати" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Нова справа" });
+    expect(within(dialog).getByText(`${patientFixture.public_number} · ${patientFixture.phone}`)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Створити справу" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Автоматичний дзвінок не виконувався");
+    const createRequest = fetchMock.mock.calls.find(([input]) => input instanceof Request && input.method === "POST")?.[0];
+    expect(await (createRequest as Request).clone().json()).toMatchObject({
+      kind: "callback",
+      patient_id: patientFixture.id,
+    });
   });
 });
 
@@ -420,6 +765,7 @@ describe("session boundary and role-safe routes", () => {
     renderApp("/settings");
 
     await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    await within(screen.getByTestId("settings-rooms-tab")).findByText("1 активних");
     fireEvent.click(screen.getByTestId("settings-services-tab"));
     expect(await screen.findByRole("heading", { name: "Послуги кабінету" })).toBeInTheDocument();
     expect(await screen.findByText("Первинна консультація")).toBeInTheDocument();
@@ -462,6 +808,7 @@ describe("session boundary and role-safe routes", () => {
     renderApp("/settings");
 
     await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    await within(screen.getByTestId("settings-rooms-tab")).findByText("1 активних");
     fireEvent.click(screen.getByTestId("settings-services-tab"));
     await screen.findByText("Первинна консультація");
     fireEvent.click(screen.getByRole("button", { name: "Редагувати Первинна консультація" }));
@@ -471,5 +818,109 @@ describe("session boundary and role-safe routes", () => {
     expect(screen.getByRole("heading", { name: "Редагувати послугу" })).toBeInTheDocument();
     expect(screen.getByText("Укажіть інший унікальний код послуги.")).toBeInTheDocument();
     expect(screen.getByDisplayValue("CONSULT")).toBeInTheDocument();
+  });
+
+  it("edits one of eight protected status configs without exposing the system code", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const arrived = clinicStatuses.find((item) => item.code === "ARRIVED");
+    if (arrived === undefined) throw new Error("ARRIVED fixture is missing");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [clinicRoom] }))
+      .mockResolvedValueOnce(jsonResponse({ statuses: clinicStatuses }))
+      .mockResolvedValueOnce(jsonResponse({
+        ...arrived,
+        label: "У клініці",
+        manual_reception: false,
+        version: 2,
+      }));
+    renderApp("/settings");
+
+    await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    fireEvent.click(screen.getByTestId("settings-statuses-tab"));
+    expect(await screen.findByRole("heading", { name: "Системні статуси" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Налаштувати / })).toHaveLength(8);
+    fireEvent.click(screen.getByRole("button", { name: "Налаштувати Пацієнт прийшов" }));
+    expect(screen.getByText("Системний код · ARRIVED")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Код статусу")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Зрозуміла назва"), { target: { value: "У клініці" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Рецепція/ }));
+    expect(screen.getByRole("status")).toHaveTextContent("Є незбережені зміни");
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти статус" }));
+
+    expect(await screen.findByText("Статус «У клініці» збережено.")).toBeInTheDocument();
+    const updateRequest = fetchMock.mock.calls.at(-1)?.[0];
+    expect(updateRequest).toBeInstanceOf(Request);
+    const body: unknown = await (updateRequest as Request).clone().json();
+    expect(body).toMatchObject({ label: "У клініці", manual_reception: false, version: 1 });
+    expect(body).not.toHaveProperty("code");
+  });
+
+  it("saves one clinic-wide seven-day schedule and retains server validation", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const updatedWorkdays = clinicWorkdays.map((item) => item.weekday === 0 ? {
+      ...item,
+      start_time: "08:30",
+      version: 2,
+    } : { ...item, version: 2 });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [clinicRoom] }))
+      .mockResolvedValueOnce(jsonResponse({ timezone: "Europe/Kyiv", workdays: clinicWorkdays }))
+      .mockResolvedValueOnce(jsonResponse({ timezone: "Europe/Kyiv", workdays: updatedWorkdays }));
+    renderApp("/settings");
+
+    await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    fireEvent.click(screen.getByTestId("settings-schedule-tab"));
+    expect(await screen.findByRole("heading", { name: "Робочий час клініки" })).toBeInTheDocument();
+    expect(screen.getByText("Europe/Kyiv")).toBeInTheDocument();
+    expect(screen.queryByText(/індивідуальний графік/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Понеділок початок"), { target: { value: "08:30" } });
+    expect(screen.getByText("Є незбережені зміни")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти графік" }));
+
+    expect(await screen.findByText("Єдиний графік клініки збережено.")).toBeInTheDocument();
+    const updateRequest = fetchMock.mock.calls.at(-1)?.[0];
+    expect(updateRequest).toBeInstanceOf(Request);
+    const body: unknown = await (updateRequest as Request).clone().json();
+    expect(body).toMatchObject({
+      workdays: [
+        { weekday: 0, start_time: "08:30", version: 1 },
+        { weekday: 1 },
+        { weekday: 2 },
+        { weekday: 3 },
+        { weekday: 4 },
+        { weekday: 5 },
+        { weekday: 6 },
+      ],
+    });
+    expect(JSON.stringify(body)).not.toMatch(/specialist|holiday|vacation/);
+  });
+
+  it("keeps an overlapping-break validation error on the schedule form", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [clinicRoom] }))
+      .mockResolvedValueOnce(jsonResponse({ timezone: "Europe/Kyiv", workdays: clinicWorkdays }))
+      .mockResolvedValueOnce(jsonResponse({
+        ...anonymousProblem,
+        code: "validation_error",
+        message: "Дані запиту не пройшли перевірку.",
+        fields: { "workdays.0.non_field_errors": ["Перерви не можуть накладатися одна на одну."] },
+      }, 422));
+    renderApp("/settings");
+
+    await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    fireEvent.click(screen.getByTestId("settings-schedule-tab"));
+    await screen.findByRole("heading", { name: "Робочий час клініки" });
+    fireEvent.change(screen.getByLabelText("Понеділок початок"), { target: { value: "08:30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти графік" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Перерви не можуть накладатися");
+    expect(screen.getByDisplayValue("08:30")).toBeInTheDocument();
   });
 });

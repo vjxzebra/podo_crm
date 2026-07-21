@@ -9,7 +9,14 @@ from apps.accounts.models import User
 from apps.audit.registry import AuditAction
 from apps.audit.services import record_audit_event
 from apps.clinic import storage
-from apps.clinic.models import ClinicProfile, Room, Service
+from apps.clinic.models import (
+    AppointmentStatusConfig,
+    ClinicBreak,
+    ClinicProfile,
+    ClinicWorkday,
+    Room,
+    Service,
+)
 from config.api.exceptions import ApiProblem
 
 ALLOWED_LOGO_TYPES = {
@@ -49,6 +56,35 @@ def service_snapshot(service: Service) -> dict[str, Any]:
         "color": service.color,
         "is_active": service.is_active,
         "version": service.version,
+    }
+
+
+def status_config_snapshot(config: AppointmentStatusConfig) -> dict[str, Any]:
+    return {
+        "code": config.code,
+        "label": config.label,
+        "color": config.color,
+        "manual_admin": config.manual_admin,
+        "manual_reception": config.manual_reception,
+        "manual_podologist": config.manual_podologist,
+        "version": config.version,
+    }
+
+
+def workday_snapshot(workday: ClinicWorkday) -> dict[str, Any]:
+    return {
+        "weekday": workday.weekday,
+        "is_working": workday.is_working,
+        "start_time": workday.start_time.strftime("%H:%M") if workday.start_time else None,
+        "end_time": workday.end_time.strftime("%H:%M") if workday.end_time else None,
+        "breaks": [
+            {
+                "start_time": item.start_time.strftime("%H:%M"),
+                "end_time": item.end_time.strftime("%H:%M"),
+            }
+            for item in workday.breaks.all()
+        ],
+        "version": workday.version,
     }
 
 
@@ -308,3 +344,98 @@ def update_service(
         description=description,
     )
     return service
+
+
+@transaction.atomic
+def update_status_config(
+    *, actor: User, code: str, correlation_id: str, changes: dict[str, Any]
+) -> AppointmentStatusConfig:
+    config = AppointmentStatusConfig.objects.select_for_update().get(pk=code)
+    expected_version = changes.pop("version")
+    _check_version(
+        actual=config.version,
+        expected=expected_version,
+        resource="Налаштування статусу",
+    )
+    before = status_config_snapshot(config)
+    for field in (
+        "label",
+        "color",
+        "manual_admin",
+        "manual_reception",
+        "manual_podologist",
+    ):
+        if field in changes:
+            setattr(config, field, changes[field])
+    config.version += 1
+    config.save()
+    record_audit_event(
+        actor=actor,
+        action=AuditAction.APPOINTMENT_STATUS_CONFIG_UPDATED,
+        object_type="appointment_status_config",
+        object_id=config.code,
+        object_label=f"{config.code} · {config.label}",
+        correlation_id=correlation_id,
+        before=before,
+        after=status_config_snapshot(config),
+        description="Оновлено системне налаштування статусу запису.",
+    )
+    return config
+
+
+@transaction.atomic
+def update_clinic_schedule(
+    *, actor: User, correlation_id: str, workdays: list[dict[str, Any]]
+) -> list[ClinicWorkday]:
+    locked = list(
+        ClinicWorkday.objects.select_for_update().prefetch_related("breaks").order_by("weekday")
+    )
+    if len(locked) != 7:
+        raise ApiProblem(
+            code="clinic_schedule_incomplete",
+            message="Тижневий графік пошкоджено: очікується сім днів.",
+            status_code=409,
+        )
+    current_by_weekday = {item.weekday: item for item in locked}
+    for item in workdays:
+        current = current_by_weekday[item["weekday"]]
+        _check_version(
+            actual=current.version,
+            expected=item["version"],
+            resource="Графік клініки",
+        )
+    before = [workday_snapshot(item) for item in locked]
+    for item in workdays:
+        workday = current_by_weekday[item["weekday"]]
+        workday.is_working = item["is_working"]
+        workday.start_time = item.get("start_time")
+        workday.end_time = item.get("end_time")
+        workday.version += 1
+        workday.save()
+        workday.breaks.all().delete()
+        ClinicBreak.objects.bulk_create(
+            [
+                ClinicBreak(
+                    workday=workday,
+                    start_time=break_item["start_time"],
+                    end_time=break_item["end_time"],
+                )
+                for break_item in item.get("breaks", [])
+            ]
+        )
+    refreshed = list(ClinicWorkday.objects.prefetch_related("breaks").order_by("weekday"))
+    record_audit_event(
+        actor=actor,
+        action=AuditAction.CLINIC_SCHEDULE_UPDATED,
+        object_type="clinic_schedule",
+        object_id="clinic",
+        object_label="Тижневий графік клініки",
+        correlation_id=correlation_id,
+        before={"timezone": "Europe/Kyiv", "workdays": before},
+        after={
+            "timezone": "Europe/Kyiv",
+            "workdays": [workday_snapshot(item) for item in refreshed],
+        },
+        description="Оновлено єдиний тижневий графік клініки.",
+    )
+    return refreshed

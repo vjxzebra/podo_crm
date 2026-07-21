@@ -169,5 +169,8 @@ export function routesForIds(routeIds: readonly string[]): readonly AppRouteDefi
 }
 
 export function findRouteByPath(pathname: string): AppRouteDefinition | undefined {
+  if (pathname.startsWith("/patients/")) {
+    return routeRegistry.find((route) => route.id === "patients");
+  }
   return routeRegistry.find((route) => route.path === pathname);
 }

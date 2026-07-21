@@ -4,13 +4,15 @@ import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { csrfHeaders } from "../auth/AuthContext";
+import { ScheduleSettings } from "./ScheduleSettings";
 import { ServiceEditorDialog, type ServiceEditor } from "./ServiceEditorDialog";
+import { StatusSettings } from "./StatusSettings";
 
 type ClinicProfile = components["schemas"]["ClinicProfile"];
 type Room = components["schemas"]["Room"];
 type Service = components["schemas"]["Service"];
 type FieldErrors = Readonly<Record<string, readonly string[]>>;
-type SettingsSection = "profile" | "rooms" | "services";
+type SettingsSection = "profile" | "rooms" | "services" | "statuses" | "schedule";
 type RoomEditor = { readonly mode: "create" } | { readonly mode: "edit"; readonly room: Room };
 type ServiceStatus = "all" | "active" | "inactive";
 
@@ -273,7 +275,7 @@ export function SettingsPage() {
   return (
     <>
       <header className="page-heading settings-heading">
-        <div><p className="eyebrow">Керування · TP-204–205</p><h1>Налаштування кабінету</h1><p>Одна локація без філій: профіль, кімнати та каталог послуг для записів і візитів.</p></div>
+        <div><p className="eyebrow">Керування · TP-204–206</p><h1>Налаштування кабінету</h1><p>Одна локація без філій: профіль, довідники, системні статуси та спільний робочий час.</p></div>
         <span className="admin-only-badge"><Icon name="lock" />Тільки адміністратор</span>
       </header>
 
@@ -284,6 +286,8 @@ export function SettingsPage() {
         <button className={section === "profile" ? "active" : undefined} data-testid="settings-profile-tab" onClick={() => { setSection("profile"); setSuccess(null); }} type="button"><Icon name="overview" /><span><strong>Профіль кабінету</strong><small>Логотип і контакти</small></span></button>
         <button className={section === "rooms" ? "active" : undefined} data-testid="settings-rooms-tab" onClick={() => { setSection("rooms"); setSuccess(null); }} type="button"><Icon name="calendar" /><span><strong>Кімнати</strong><small>{activeRoomCount} активних</small></span></button>
         <button className={section === "services" ? "active" : undefined} data-testid="settings-services-tab" onClick={() => { setSection("services"); setSuccess(null); if (services === null) void loadServices(); }} type="button"><Icon name="finance" /><span><strong>Послуги</strong><small>{services === null ? "Каталог" : <>{activeServiceCount} активних</>}</small></span></button>
+        <button className={section === "statuses" ? "active" : undefined} data-testid="settings-statuses-tab" onClick={() => { setSection("statuses"); setSuccess(null); }} type="button"><Icon name="tasks" /><span><strong>Статуси</strong><small>8 системних</small></span></button>
+        <button className={section === "schedule" ? "active" : undefined} data-testid="settings-schedule-tab" onClick={() => { setSection("schedule"); setSuccess(null); }} type="button"><Icon name="calendar" /><span><strong>Робочий час</strong><small>Спільний графік</small></span></button>
       </nav>
 
       {isLoading ? <section className="panel settings-state"><span className="spinner" /><p>Завантажуємо налаштування…</p></section> : null}
@@ -349,6 +353,9 @@ export function SettingsPage() {
           ) : null}
         </section>
       ) : null}
+
+      {!isLoading && section === "statuses" ? <StatusSettings /> : null}
+      {!isLoading && section === "schedule" ? <ScheduleSettings /> : null}
 
       {editor === null ? null : <RoomEditorDialog editor={editor} onClose={() => { setEditor(null); }} onSaved={replaceRoom} />}
       {serviceEditor === null ? null : <ServiceEditorDialog editor={serviceEditor} onClose={() => { setServiceEditor(null); }} onSaved={replaceService} />}

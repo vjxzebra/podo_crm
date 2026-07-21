@@ -218,7 +218,7 @@ Compose-профілі:
 
 **Gate:** UI і API негативно перевірені для кожної ролі; заборонений прямий URL повертає 403/API error і безпечний UI redirect; ресепшн не бачить admin endpoints.
 
-**Стан:** TP-201—TP-205 і TP-207 завершено 2026-07-21 — email login/logout, server session, CSRF/cookie policy, три фіксовані ролі, role-safe navigation, password lifecycle, append-only audit foundation, team lifecycle, singleton clinic profile, private logo lifecycle, room catalog і service catalog реалізовані. Admin керує контактами однієї локації, кімнатами й послугами; optimistic version захищає від lost updates, довідники не видаляються, усі mutation атомарно пишуть audit. Неадмінські ролі читають лише активну service picker projection. Наступний пакет — TP-206 system statuses і clinic-wide work schedule.
+**Стан:** TP-201—TP-207 завершено 2026-07-21 — email login/logout, server session, CSRF/cookie policy, три фіксовані ролі, role-safe navigation, password lifecycle, append-only audit foundation, team lifecycle, singleton clinic profile, private logo lifecycle, room/service catalogs, вісім захищених системних статусів і єдиний clinic-wide тижневий графік із перервами реалізовані. Optimistic version захищає від lost updates; критичні mutation атомарно пишуть audit. PostgreSQL trigger забороняє зміну/видалення system status codes, а schedule validation відхиляє вихід перерв за день та overlap. Етап довідників закрито; етап пацієнтів розпочато TP-301.
 
 ### Етап 3. Пацієнти й внутрішні справи — 1–1.5 тижня
 
@@ -232,6 +232,8 @@ Compose-профілі:
 - audit events для patient/workitem mutations.
 
 **Gate:** подолог не може знайти чужого пацієнта ні через список, ні через ID; ресепшн не отримує медичних полів; duplicate-phone path перевірений e2e.
+
+**Стан:** TP-301—TP-303 завершено 2026-07-21 — patient list/live search/create, role-safe patient card/edit і внутрішні справи реалізовані наскрізно. `GET/POST /work-items` та versioned `PATCH /work-items/{id}` застосовують own/all scope до query, не розкривають чужі задачі подологу, перевіряють patient relationship і пишуть same-transaction audit для create/update/complete/reopen. Responsive `/work-items` має live summary, пошук, scope/status filters, create й explicit complete/reopen; дія «Перетелефонувати» відкриває справу з locked patient context і не виконує автоматичного дзвінка. Етап 3 закрито; appointment-linked relationship, реальні visit/photo projections і recommendations лишаються scheduling/visit packets.
 
 ### Етап 4. Календар і записи — 1.5–2 тижні
 

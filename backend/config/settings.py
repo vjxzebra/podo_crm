@@ -36,6 +36,8 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.audit",
     "apps.clinic",
+    "apps.patients",
+    "apps.work_items",
 ]
 
 MIDDLEWARE = [
@@ -130,6 +132,10 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "config.api.schema.require_work_item_update_version",
+    ],
 }
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")

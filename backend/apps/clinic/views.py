@@ -15,11 +15,17 @@ from rest_framework.views import APIView
 from apps.accounts.models import User
 from apps.accounts.permissions import IsAdmin
 from apps.clinic import storage
-from apps.clinic.models import Room, Service
+from apps.clinic.models import AppointmentStatusConfig, ClinicWorkday, Room, Service
 from apps.clinic.serializers import (
+    AppointmentStatusConfigListSerializer,
+    AppointmentStatusConfigSerializer,
+    AppointmentStatusConfigUpdateSerializer,
     ClinicLogoUploadSerializer,
     ClinicProfileSerializer,
     ClinicProfileUpdateSerializer,
+    ClinicScheduleUpdateSerializer,
+    ClinicWorkdayListSerializer,
+    ClinicWorkdaySerializer,
     RoomCreateSerializer,
     RoomListSerializer,
     RoomSerializer,
@@ -37,8 +43,10 @@ from apps.clinic.services import (
     get_clinic_profile,
     update_clinic_logo,
     update_clinic_profile,
+    update_clinic_schedule,
     update_room,
     update_service,
+    update_status_config,
 )
 from config.api.exceptions import ApiProblem
 from config.api.serializers import ErrorEnvelopeSerializer
@@ -368,3 +376,108 @@ def _service_code_conflict() -> ApiProblem:
         status_code=status.HTTP_409_CONFLICT,
         fields={"code": ["Укажіть інший унікальний код послуги."]},
     )
+
+
+class AppointmentStatusConfigListView(APIView):
+    permission_classes = [IsAdmin]
+
+    @extend_schema(
+        operation_id="appointment_status_config_list",
+        summary="List the eight protected appointment status configurations",
+        responses={
+            status.HTTP_200_OK: AppointmentStatusConfigListSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+        },
+        tags=["clinic settings"],
+    )
+    def get(self, request: Request) -> Response:
+        return Response(
+            {
+                "statuses": AppointmentStatusConfigSerializer(
+                    AppointmentStatusConfig.objects.all(), many=True
+                ).data
+            }
+        )
+
+
+class AppointmentStatusConfigDetailView(APIView):
+    permission_classes = [IsAdmin]
+
+    @extend_schema(
+        operation_id="appointment_status_config_update",
+        summary="Update a status label, color and manual role flags without changing its code",
+        request=AppointmentStatusConfigUpdateSerializer,
+        responses={
+            status.HTTP_200_OK: AppointmentStatusConfigSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_404_NOT_FOUND: ErrorEnvelopeSerializer,
+            status.HTTP_409_CONFLICT: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["clinic settings"],
+    )
+    def patch(self, request: Request, code: str) -> Response:
+        normalized_code = code.upper()
+        get_object_or_404(AppointmentStatusConfig, pk=normalized_code)
+        serializer = AppointmentStatusConfigUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        config = update_status_config(
+            actor=_actor(request),
+            code=normalized_code,
+            correlation_id=get_request_id(request),
+            changes=dict(serializer.validated_data),
+        )
+        return Response(AppointmentStatusConfigSerializer(config).data)
+
+
+class ClinicWorkdayListUpdateView(APIView):
+    permission_classes = [IsAdmin]
+
+    @extend_schema(
+        operation_id="clinic_workday_list",
+        summary="Return the single clinic-wide weekly schedule in Europe/Kyiv",
+        responses={
+            status.HTTP_200_OK: ClinicWorkdayListSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+        },
+        tags=["clinic settings"],
+    )
+    def get(self, request: Request) -> Response:
+        workdays = ClinicWorkday.objects.prefetch_related("breaks").all()
+        return Response(
+            {
+                "timezone": "Europe/Kyiv",
+                "workdays": ClinicWorkdaySerializer(workdays, many=True).data,
+            }
+        )
+
+    @extend_schema(
+        operation_id="clinic_workday_update",
+        summary="Atomically replace work hours and non-overlapping breaks for all seven days",
+        request=ClinicScheduleUpdateSerializer,
+        responses={
+            status.HTTP_200_OK: ClinicWorkdayListSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_409_CONFLICT: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["clinic settings"],
+    )
+    def put(self, request: Request) -> Response:
+        serializer = ClinicScheduleUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        workdays = update_clinic_schedule(
+            actor=_actor(request),
+            correlation_id=get_request_id(request),
+            workdays=serializer.validated_data["workdays"],
+        )
+        return Response(
+            {
+                "timezone": "Europe/Kyiv",
+                "workdays": ClinicWorkdaySerializer(workdays, many=True).data,
+            }
+        )

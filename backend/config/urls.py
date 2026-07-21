@@ -13,6 +13,8 @@ urlpatterns = [
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.audit.urls")),
     path("api/v1/", include("apps.clinic.urls")),
+    path("api/v1/", include("apps.patients.urls")),
+    path("api/v1/", include("apps.work_items.urls")),
     path(
         "api/v1/contract/fixture",
         ContractFixtureView.as_view(),

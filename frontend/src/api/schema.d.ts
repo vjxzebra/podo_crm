@@ -1,5 +1,39 @@
 // Generated from backend/openapi/schema.json. Do not edit by hand.
 export interface paths {
+    "/api/v1/appointment-status-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the eight protected appointment status configurations */
+        get: operations["appointment_status_config_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointment-status-configs/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a status label, color and manual role flags without changing its code */
+        patch: operations["appointment_status_config_update"];
+        trace?: never;
+    };
     "/api/v1/audit-events": {
         parameters: {
             query?: never;
@@ -138,6 +172,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clinic-workdays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return the single clinic-wide weekly schedule in Europe/Kyiv */
+        get: operations["clinic_workday_list"];
+        /** Atomically replace work hours and non-overlapping breaks for all seven days */
+        put: operations["clinic_workday_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/contract/fixture": {
         parameters: {
             query?: never;
@@ -171,6 +223,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the role-scoped patient directory with cursor pagination */
+        get: operations["patient_list"];
+        put?: never;
+        /** Create a patient and return role-safe possible phone duplicates */
+        post: operations["patient_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patient_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve a role-scoped patient card projection */
+        get: operations["patient_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a patient through the actor's safe role projection */
+        patch: operations["patient_update"];
         trace?: never;
     };
     "/api/v1/rooms": {
@@ -331,10 +419,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/work-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List role-scoped internal work items */
+        get: operations["work_item_list"];
+        put?: never;
+        /** Create an internal work item */
+        post: operations["work_item_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-items/{work_item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit, complete, or reopen a role-scoped internal work item */
+        patch: operations["work_item_update"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AppointmentStatusConfig: {
+            readonly code: string;
+            color: string;
+            label: string;
+            manual_admin?: boolean;
+            manual_podologist?: boolean;
+            manual_reception?: boolean;
+            /** Format: date-time */
+            readonly updated_at: string;
+            version?: number;
+        };
+        AppointmentStatusConfigList: {
+            statuses: components["schemas"]["AppointmentStatusConfig"][];
+        };
         AuditActor: {
             display_name: string;
             email: string;
@@ -390,6 +527,20 @@ export interface components {
             new_password: string;
             new_password_confirmation: string;
         };
+        ClinicBreak: {
+            /** Format: time */
+            end_time: string;
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: time */
+            start_time: string;
+        };
+        ClinicBreakWriteRequest: {
+            /** Format: time */
+            end_time: string;
+            /** Format: time */
+            start_time: string;
+        };
         ClinicLogoUploadRequest: {
             /** Format: binary */
             logo: string;
@@ -410,11 +561,46 @@ export interface components {
             readonly updated_at: string;
             version?: number;
         };
+        ClinicScheduleUpdateRequest: {
+            workdays: components["schemas"]["ClinicWorkdayWriteRequest"][];
+        };
+        ClinicWorkday: {
+            breaks: components["schemas"]["ClinicBreak"][];
+            /** Format: time */
+            end_time: string | null;
+            is_working?: boolean;
+            /** Format: time */
+            start_time: string | null;
+            /** Format: date-time */
+            readonly updated_at: string;
+            version?: number;
+            weekday: number;
+        };
+        ClinicWorkdayList: {
+            timezone: string;
+            workdays: components["schemas"]["ClinicWorkday"][];
+        };
+        ClinicWorkdayWriteRequest: {
+            breaks?: components["schemas"]["ClinicBreakWriteRequest"][];
+            /** Format: time */
+            end_time?: string | null;
+            is_working: boolean;
+            /** Format: time */
+            start_time?: string | null;
+            version: number;
+            weekday: number;
+        };
         ContractFixture: {
             correlation_id: string;
             message: string;
             status: components["schemas"]["StatusEnum"];
         };
+        /**
+         * @description * `own` - own
+         *     * `all` - all
+         * @enum {string}
+         */
+        EffectiveScopeEnum: "own" | "all";
         ErrorEnvelope: {
             code: string;
             correlation_id: string;
@@ -423,9 +609,45 @@ export interface components {
             };
             message: string;
         };
+        /**
+         * @description * `callback` - Перетелефонувати
+         *     * `confirm_appointment` - Підтвердити запис
+         *     * `manual_message` - Написати пацієнту вручну
+         *     * `other` - Інша внутрішня справа
+         * @enum {string}
+         */
+        KindEnum: "callback" | "confirm_appointment" | "manual_message" | "other";
         LoginRequestRequest: {
             email: string;
             password: string;
+        };
+        MedicalPatientDetail: {
+            readonly age: number | null;
+            readonly appointment_summary: unknown;
+            /** Format: date */
+            birth_date?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly display_name: string;
+            email?: string;
+            first_name: string;
+            /** Format: uuid */
+            readonly id: string;
+            last_name: string;
+            readonly medical_profile: components["schemas"]["PatientMedicalProfile"];
+            note?: string;
+            phone: string;
+            readonly photo_archive: components["schemas"]["PatientPhotoVisitMetadata"][];
+            readonly primary_podologist: components["schemas"]["PodologistSummary"] | null;
+            readonly projection: string;
+            readonly public_number: string;
+            /** Format: date-time */
+            readonly service_started_at: string;
+            readonly state_label: string;
+            readonly upcoming_appointment: components["schemas"]["PatientAppointmentSummary"] | null;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly visit_history: components["schemas"]["PatientVisitHistoryItem"][];
         };
         PasswordPairRequest: {
             new_password: string;
@@ -454,6 +676,14 @@ export interface components {
             id: number;
             role: components["schemas"]["RoleEnum"];
         };
+        PatchedAppointmentStatusConfigUpdateRequest: {
+            color?: string;
+            label?: string;
+            manual_admin?: boolean;
+            manual_podologist?: boolean;
+            manual_reception?: boolean;
+            version?: number;
+        };
         PatchedClinicProfileUpdateRequest: {
             address?: string;
             description?: string;
@@ -462,6 +692,28 @@ export interface components {
             name?: string;
             phone?: string;
             version?: number;
+        };
+        PatchedMedicalPatientUpdateRequest: {
+            /** Format: date */
+            birth_date?: string | null;
+            email?: string;
+            first_name?: string;
+            last_name?: string;
+            medical_profile?: components["schemas"]["PatientMedicalProfileUpdateRequest"];
+            note?: string;
+            phone?: string;
+            primary_podologist_id?: number | null;
+        };
+        PatchedPatientUpdateRequestRequest: components["schemas"]["PatchedReceptionPatientUpdateRequest"] | components["schemas"]["PatchedMedicalPatientUpdateRequest"];
+        PatchedReceptionPatientUpdateRequest: {
+            /** Format: date */
+            birth_date?: string | null;
+            email?: string;
+            first_name?: string;
+            last_name?: string;
+            note?: string;
+            phone?: string;
+            primary_podologist_id?: number | null;
         };
         PatchedRoomUpdateRequest: {
             is_active?: boolean;
@@ -485,6 +737,149 @@ export interface components {
             last_name?: string;
             phone?: string;
             role?: components["schemas"]["RoleEnum"];
+        };
+        PatchedWorkItemUpdateRequest: {
+            assignee_id?: number;
+            comment?: string;
+            /** Format: date-time */
+            due_at?: string;
+            is_completed?: boolean;
+            is_important?: boolean;
+            kind?: components["schemas"]["KindEnum"];
+            /** Format: uuid */
+            patient_id?: string | null;
+            title?: string;
+            version: number;
+        };
+        Patient: {
+            readonly appointment_summary: unknown;
+            /** Format: date */
+            birth_date?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly display_name: string;
+            email?: string;
+            first_name: string;
+            /** Format: uuid */
+            readonly id: string;
+            last_name: string;
+            note?: string;
+            phone: string;
+            readonly primary_podologist: components["schemas"]["PodologistSummary"] | null;
+            readonly public_number: string;
+            readonly state_label: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        PatientAppointmentSummary: {
+            cost_minor: number;
+            room: string;
+            service: string;
+            specialist: string;
+            /** Format: date-time */
+            starts_at: string;
+            status: string;
+        };
+        PatientCreateRequest: {
+            /** Format: date */
+            birth_date?: string | null;
+            email?: string;
+            first_name: string;
+            last_name: string;
+            note?: string;
+            phone: string;
+            primary_podologist_id?: number | null;
+        };
+        PatientCreateResponse: {
+            duplicate_warning: boolean;
+            patient: components["schemas"]["Patient"];
+            possible_duplicates: components["schemas"]["PatientListItem"][];
+        };
+        PatientDetailResponse: components["schemas"]["ReceptionPatientDetail"] | components["schemas"]["MedicalPatientDetail"];
+        PatientListItem: {
+            readonly appointment_summary: unknown;
+            /** Format: date */
+            birth_date?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly display_name: string;
+            email?: string;
+            first_name: string;
+            /** Format: uuid */
+            readonly id: string;
+            last_name: string;
+            phone: string;
+            readonly primary_podologist: components["schemas"]["PodologistSummary"] | null;
+            readonly public_number: string;
+            readonly state_label: string;
+        };
+        PatientListResponse: {
+            next_cursor: string | null;
+            patients: components["schemas"]["PatientListItem"][];
+        };
+        PatientMedicalProfile: {
+            allergies?: unknown;
+            chronic_conditions?: unknown;
+            notes?: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        PatientMedicalProfileUpdateRequest: {
+            allergies?: string[];
+            chronic_conditions?: string[];
+            notes?: string;
+        };
+        PatientPhotoVisitMetadata: {
+            after_count: number;
+            before_count: number;
+            caption: string;
+            /** Format: date-time */
+            occurred_at: string;
+            /** Format: uuid */
+            visit_id: string;
+        };
+        PatientVisitHistoryItem: {
+            cost_minor: number;
+            has_photos: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurred_at: string;
+            services: string[];
+            specialist: string;
+            status: string;
+            summary: string;
+        };
+        PodologistSummary: {
+            readonly display_name: string;
+            readonly id: number;
+        };
+        /** @description Safe contact/administrative projection with no medical keys. */
+        ReceptionPatientDetail: {
+            readonly age: number | null;
+            readonly appointment_summary: unknown;
+            /** Format: date */
+            birth_date?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly display_name: string;
+            email?: string;
+            first_name: string;
+            /** Format: uuid */
+            readonly id: string;
+            last_name: string;
+            note?: string;
+            phone: string;
+            readonly primary_podologist: components["schemas"]["PodologistSummary"] | null;
+            readonly projection: string;
+            readonly public_number: string;
+            /** Format: date-time */
+            readonly service_started_at: string;
+            readonly state_label: string;
+            readonly upcoming_appointment: components["schemas"]["PatientAppointmentSummary"] | null;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly visit_history: components["schemas"]["PatientVisitHistoryItem"][];
         };
         /**
          * @description * `podologist` - Подолог
@@ -604,6 +999,66 @@ export interface components {
             temporary_password_expires_at: string;
             user_id: number;
         };
+        WorkItem: {
+            readonly assignee: components["schemas"]["WorkItemAssignee"];
+            comment?: string;
+            /** Format: date-time */
+            completed_at?: string | null;
+            readonly completed_by: components["schemas"]["WorkItemAssignee"] | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly created_by: components["schemas"]["WorkItemAssignee"];
+            /** Format: date-time */
+            due_at: string;
+            /** Format: uuid */
+            readonly id: string;
+            is_completed?: boolean;
+            is_important?: boolean;
+            readonly is_overdue: boolean;
+            kind: components["schemas"]["KindEnum"];
+            readonly kind_label: string;
+            readonly patient: components["schemas"]["WorkItemPatient"] | null;
+            title: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            version?: number;
+        };
+        WorkItemAssignee: {
+            readonly display_name: string;
+            readonly id: number;
+            role: components["schemas"]["RoleEnum"];
+        };
+        WorkItemCreateRequest: {
+            assignee_id: number;
+            comment?: string;
+            /** Format: date-time */
+            due_at: string;
+            /** @default false */
+            is_important: boolean;
+            kind: components["schemas"]["KindEnum"];
+            /** Format: uuid */
+            patient_id?: string | null;
+            title: string;
+        };
+        WorkItemListResponse: {
+            assignees: components["schemas"]["WorkItemAssignee"][];
+            effective_scope: components["schemas"]["EffectiveScopeEnum"];
+            summary: components["schemas"]["WorkItemSummary"];
+            work_items: components["schemas"]["WorkItem"][];
+        };
+        WorkItemPatient: {
+            readonly display_name: string;
+            /** Format: uuid */
+            readonly id: string;
+            phone: string;
+            readonly public_number: string;
+        };
+        WorkItemSummary: {
+            completed: number;
+            important: number;
+            open: number;
+            overdue: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -613,6 +1068,108 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    appointment_status_config_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentStatusConfigList"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    appointment_status_config_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedAppointmentStatusConfigUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedAppointmentStatusConfigUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedAppointmentStatusConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentStatusConfig"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     audit_event_list: {
         parameters: {
             query?: {
@@ -626,6 +1183,7 @@ export interface operations {
                  *     * `team` - team
                  *     * `settings` - settings
                  *     * `patients` - patients
+                 *     * `work_items` - work_items
                  *     * `scheduling` - scheduling
                  *     * `medical` - medical
                  *     * `visits` - visits
@@ -633,7 +1191,7 @@ export interface operations {
                  *     * `cash` - cash
                  *     * `inventory` - inventory
                  */
-                section?: "accounts" | "team" | "settings" | "patients" | "scheduling" | "medical" | "visits" | "billing" | "cash" | "inventory";
+                section?: "accounts" | "team" | "settings" | "patients" | "work_items" | "scheduling" | "medical" | "visits" | "billing" | "cash" | "inventory";
             };
             header?: never;
             path?: never;
@@ -1091,6 +1649,98 @@ export interface operations {
             };
         };
     };
+    clinic_workday_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicWorkdayList"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    clinic_workday_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicScheduleUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ClinicScheduleUpdateRequest"];
+                "multipart/form-data": components["schemas"]["ClinicScheduleUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicWorkdayList"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     contract_fixture_retrieve: {
         parameters: {
             query?: {
@@ -1179,6 +1829,205 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    patient_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientListResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    patient_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatientCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatientCreateRequest"];
+                "multipart/form-data": components["schemas"]["PatientCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCreateResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    patient_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDetailResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    patient_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPatientUpdateRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPatientUpdateRequestRequest"];
+                "multipart/form-data": components["schemas"]["PatchedPatientUpdateRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDetailResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1888,6 +2737,186 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemporaryPasswordResult"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    work_item_list: {
+        parameters: {
+            query?: {
+                /**
+                 * @description * `own` - own
+                 *     * `all` - all
+                 */
+                scope?: "own" | "all";
+                search?: string;
+                /**
+                 * @description * `open` - open
+                 *     * `completed` - completed
+                 *     * `all` - all
+                 */
+                status?: "open" | "completed" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemListResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    work_item_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkItemCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WorkItemCreateRequest"];
+                "multipart/form-data": components["schemas"]["WorkItemCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    work_item_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchedWorkItemUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedWorkItemUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedWorkItemUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
                 };
             };
             401: {

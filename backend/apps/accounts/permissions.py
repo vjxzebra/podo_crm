@@ -17,6 +17,14 @@ class HasMedicalAccess(HasScope):
     required_scope = AccessScope.MEDICAL
 
 
+class HasPatientAccess(HasScope):
+    required_scope = AccessScope.PATIENT_SAFE
+
+
+class HasWorkItemAccess(HasScope):
+    required_scope = AccessScope.WORK_ITEMS
+
+
 class HasFinanceAccess(HasScope):
     required_scope = AccessScope.FINANCE
 

@@ -8,6 +8,7 @@ import {
   type ContractSuccess,
   type ErrorEnvelope,
 } from "../contractFixtures";
+import { OverviewWorkItems } from "../work-items/OverviewWorkItems";
 import { Icon } from "./Icon";
 import type { AppRouteDefinition } from "./routes";
 
@@ -161,24 +162,7 @@ export function OverviewPage() {
             </Link>
           </section>
 
-          <section className="panel tasks-card" aria-labelledby="tasks-heading">
-            <header className="panel__heading">
-              <div>
-                <p className="eyebrow">Справи</p>
-                <h2 id="tasks-heading">2 із 4 виконано</h2>
-              </div>
-              <Link className="icon-button" to="/work-items" aria-label="Відкрити справи">
-                <Icon name="chevron" />
-              </Link>
-            </header>
-            <div className="progress" aria-label="Виконано 50 відсотків" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={50}>
-              <span />
-            </div>
-            <ul className="task-list">
-              <li><span className="task-check task-check--done">✓</span><span><strong>Підтвердити запис</strong><small>до 10:30</small></span></li>
-              <li><span className="task-check" /><span><strong>Передзвонити пацієнту</strong><small>до 14:00</small></span></li>
-            </ul>
-          </section>
+          <OverviewWorkItems />
         </div>
       </div>
     </>
