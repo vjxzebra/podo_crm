@@ -37,6 +37,7 @@
 | Cash shift | `CashShift` | cash ledger entries | one open shift per employee, ledger-derived totals, close reconciliation, no reopen |
 | Inventory | `InventoryOperation` | stock movements | posted movements immutable, non-negative lot balance, one unit per material, idempotent posting |
 | Workitems | `WorkItem` | — | allowed assignee/patient scope, explicit completion |
+| Notifications | `Notification` | — | recipient ownership, stable event-key deduplication, safe local deep link, idempotent unread state |
 | Audit | `AuditEvent` | — | append-only, redacted before/after, same-transaction recording |
 
 ## 3. Концептуальна ERD
@@ -282,6 +283,21 @@ erDiagram
     datetime completed_at
   }
 
+  NOTIFICATION {
+    uuid id PK
+    uuid recipient_id FK
+    string event_key
+    string kind
+    string title
+    string message
+    string tone
+    bool is_important
+    string deep_link
+    datetime occurred_at
+    datetime created_at
+    datetime read_at
+  }
+
   AUDIT_EVENT {
     uuid id PK
     uuid actor_id FK
@@ -338,6 +354,7 @@ erDiagram
 
   PATIENT o|--o{ WORK_ITEM : concerns
   USER ||--o{ WORK_ITEM : assigned
+  USER ||--o{ NOTIFICATION : receives
   USER ||--o{ AUDIT_EVENT : acts
 ```
 
@@ -350,6 +367,8 @@ ERD показує концептуальні cardinalities. У фізичній
 - `User.role` — enum `ADMIN`, `RECEPTION`, `PODOLOGIST`; довільних ролей або permission matrix у MVP немає.
 - Деактивація `User` блокує login, але не змінює historical foreign keys.
 - Не можна деактивувати або позбавити ролі останнього активного admin.
+- Invalid login обмежується Redis fixed-window counters за keyed email digest і trusted-proxy IP; account existence не впливає на error message.
+- Authenticated server session має internal issued/last-seen timestamps, 30m idle та 12h absolute lifetime; expiry flush-ить session і не залишає protected UI mounted.
 - `Service.code` унікальний; `price_minor >= 0`; `duration_minutes > 0`.
 - Деактивована послуга не пропонується для нового appointment/visit line, але залишається у history.
 - `AppointmentStatusConfig.code` незмінний і seed-иться вісьмома system codes; label/color/manual-role flags можна змінювати.
@@ -405,6 +424,12 @@ WHERE (status <> 'canceled');
 - UI-ознака «Оплачено» походить із `Receivable`, а не додається дев’ятим appointment status.
 - `Payment.receivable_id` unique блокує подвійну оплату на DB-рівні.
 - Payment amount не надходить як довільне поле UI: service копіює `Receivable.amount_minor`.
+- TP-702 finance projection є paid+unpaid union з одним стабільним рядком на
+  `Receivable`; nullable nested Payment відрізняє obligation від проведеної
+  операції без дублювання двох рядків.
+- Receivable з нульовою сумою auto-settle-иться у `PAID` під час finish без
+  Payment або ledger entry і не потрапляє до unpaid picker. Це зберігає
+  ledger invariant `amount_minor > 0`.
 - `CashLedgerEntry.amount_minor > 0`; напрямок визначає `kind`, а не знак у полі.
 - `kind`: `PAYMENT`, `REFUND`, `DEPOSIT`, `WITHDRAWAL`.
 - `PAYMENT` потребує payment method; `REFUND` наслідує method початкової payment; `DEPOSIT/WITHDRAWAL` не мають patient і payment method.
@@ -449,6 +474,26 @@ WHERE status = 'open';
 - Зберігає actor, role snapshot, action, object reference, redacted before/after, result, request/correlation ID і UTC timestamp.
 - Паролі, password hashes, session IDs, signed photo URLs та інші secrets не потрапляють у before/after.
 - Таблиця append-only; application DB role не має звичайного update/delete path.
+- Реєстр action metadata є повним відносно `AuditAction`; незареєстрована дія не записується й не може отримати випадковий UI label/section.
+- Admin read model сортує події від найновіших, підтримує search, actor, section, точну календарну дату `Europe/Kyiv` та стабільний cursor. Inverted date range відхиляється як `422`.
+- Reload-stable detail отримується за точним UUID незалежно від поточної сторінки списку та повертає лише redacted snapshots. Object links формуються тільки для allowlisted типів; edit/delete/export contract відсутній.
+
+### 4.9. Global search read model
+
+- Search не має окремої persisted aggregate: він читає canonical Patient, Appointment, Payment/Receivable/Ledger і Material rows та повертає лише stable IDs/routes.
+- Actor role/object scope застосовується до кожного domain selector до match, ranking, limit і serialization; заборонені handlers та rows не повинні виконуватися або гідратуватися.
+- Ranking стабільний: exact identifier/code/normalized phone → identifier prefix → name prefix → substring.
+- PostgreSQL `pg_trgm` і вісім targeted GIN indexes прискорюють дозволені search projections; клінічні notes, user credentials/flags, supplier та purchase-cost fields не входять у read model.
+- Deep links використовують patient route або appointment/payment/material query parameter; detail selector повторно застосовує власний domain scope після navigation/reload.
+
+### 4.10. Notification
+
+- `Notification` належить рівно одному recipient; list/count/read/read-all selectors завжди починаються з `recipient=actor`, тому чужий UUID не розкривається й повертає `404`.
+- `(recipient_id, event_key)` є database unique constraint і service-level `get_or_create` key. Повторний або concurrent domain/Celery dispatch створює не більше одного рядка для recipient.
+- Event payload зберігає лише presentation-safe `kind`, title/message, tone, importance, timestamps і stable local deep link; clinical notes, credentials, signed URLs та довільні source snapshots не копіюються.
+- `deep_link` має починатися з одного `/`, а service додатково відхиляє scheme/netloc/fragment/control characters/backslash і routes, недоступні ролі recipient; fallback — `/`.
+- `read_at` є nullable server state; перше read фіксує timestamp не раніше `created_at`, повторне read не змінює результат. Видалення recipient із notification history захищене `PROTECT`.
+- Immediate arrival/cancel, payment-ready і password-reset events dispatch-яться через `transaction.on_commit()`. Щохвилинний beat task створює upcoming-appointment та overdue-work-item reminders із детермінованими event keys.
 
 ## 5. Життєвий цикл Appointment
 
@@ -565,7 +610,8 @@ stateDiagram-v2
   state "Оплачено" as PAID
   state "Повністю повернено" as REFUNDED
 
-  [*] --> OPEN: finish_visit
+  [*] --> OPEN: finish_visit, amount > 0
+  [*] --> PAID: finish_visit, amount = 0
   OPEN --> PAID: payment posted
   PAID --> REFUNDED: full refund posted
   REFUNDED --> [*]
@@ -573,10 +619,15 @@ stateDiagram-v2
 
 | Transition | Guards | Writes in one transaction |
 |---|---|---|
+| `[*]` → `PAID` | completed visit, server-derived amount is zero | zero-value receivable + visit completion audit; no Payment/ledger/open-shift requirement |
 | `OPEN` → `PAID` | completed visit, open actor shift, no existing payment, method allowed, idempotency key | payment ledger entry + Payment + receivable status + audit |
 | `PAID` → `REFUNDED` | original payment exists, no previous full refund, open actor shift, reason, sufficient cash for cash refund | negative-effect refund ledger entry + Refund link + receivable status + audit |
 
-Payment amount always equals receivable amount. Partial payment state, split tender and installment balance do not exist in MVP.
+Posted Payment amount always equals the positive receivable amount. Zero-value
+receivables are already settled at finish. Partial payment state, split tender
+and installment balance do not exist in MVP. Exact TP-702 endpoint and
+nullability rules are frozen in
+[TP-702 finance contract](tp-702-finance-contract.md).
 
 ## 8. Життєвий цикл CashShift
 

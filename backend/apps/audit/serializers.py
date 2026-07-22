@@ -100,3 +100,12 @@ class AuditEventFilterSerializer(serializers.Serializer):
     date_from = serializers.DateTimeField(required=False)
     date_to = serializers.DateTimeField(required=False)
     cursor = serializers.UUIDField(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        date_from = attrs.get("date_from")
+        date_to = attrs.get("date_to")
+        if date_from is not None and date_to is not None and date_from > date_to:
+            raise serializers.ValidationError(
+                {"date_to": ["Кінцева дата не може бути раніше початкової."]}
+            )
+        return attrs

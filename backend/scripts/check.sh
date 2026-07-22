@@ -3,7 +3,7 @@ set -eu
 
 ruff check .
 ruff format --check .
-mypy
+mypy --no-sqlite-cache
 python manage.py check
 python manage.py migrate --noinput
 python manage.py migrate --check

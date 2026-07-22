@@ -1,0 +1,65 @@
+from django.urls import path
+
+from apps.inventory.views import (
+    InventoryOperationDetailView,
+    ManualWriteoffCreateView,
+    MaterialDetailView,
+    MaterialListCreateView,
+    MaterialLotListView,
+    MovementListView,
+    ReceiptCreateView,
+    StocktakeDetailView,
+    StocktakeListCreateView,
+    StocktakePostView,
+    StocktakePreviewView,
+)
+
+urlpatterns = [
+    path("inventory/materials", MaterialListCreateView.as_view(), name="inventory-material-list"),
+    path(
+        "inventory/materials/<uuid:material_id>",
+        MaterialDetailView.as_view(),
+        name="inventory-material-detail",
+    ),
+    path(
+        "inventory/materials/<uuid:material_id>/lots",
+        MaterialLotListView.as_view(),
+        name="inventory-material-lot-list",
+    ),
+    path("inventory/receipts", ReceiptCreateView.as_view(), name="inventory-receipt-create"),
+    path(
+        "inventory/write-offs",
+        ManualWriteoffCreateView.as_view(),
+        name="inventory-manual-writeoff-create",
+    ),
+    path(
+        "inventory/stocktakes/preview",
+        StocktakePreviewView.as_view(),
+        name="inventory-stocktake-preview",
+    ),
+    path(
+        "inventory/stocktakes",
+        StocktakeListCreateView.as_view(),
+        name="inventory-stocktake-create",
+    ),
+    path(
+        "inventory/stocktakes/<uuid:stocktake_id>",
+        StocktakeDetailView.as_view(),
+        name="inventory-stocktake-detail",
+    ),
+    path(
+        "inventory/stocktakes/<uuid:stocktake_id>/post",
+        StocktakePostView.as_view(),
+        name="inventory-stocktake-post",
+    ),
+    path(
+        "inventory/movements",
+        MovementListView.as_view(),
+        name="inventory-movement-list",
+    ),
+    path(
+        "inventory/operations/<uuid:operation_id>",
+        InventoryOperationDetailView.as_view(),
+        name="inventory-operation-detail",
+    ),
+]

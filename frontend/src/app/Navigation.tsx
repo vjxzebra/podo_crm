@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link, NavLink } from "react-router";
 
 import { roleLabels, useAuth } from "../auth/AuthContext";
 import { ChangePasswordDialog } from "../auth/PasswordLifecycle";
 import { Icon } from "./Icon";
 import { routesForIds, type AppRouteDefinition } from "./routes";
+import { useModalLifecycle } from "./useModalLifecycle";
 
 interface RouteLinkProps {
   readonly route: AppRouteDefinition;
@@ -94,6 +95,7 @@ export function DesktopNavigation() {
           <button
             aria-expanded={isProfileOpen}
             aria-haspopup="menu"
+            aria-label={`Відкрити меню профілю: ${user.display_name}`}
             className="profile-mini"
             onClick={() => {
               setIsProfileOpen((current) => !current);
@@ -134,7 +136,7 @@ export function DesktopNavigation() {
   );
 }
 
-export function MobileNavigation() {
+export function MobileNavigation({ onSearchOpen }: { readonly onSearchOpen: (trigger: HTMLElement | null) => void }) {
   const { state, logout } = useAuth();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isPasswordOpen, setIsPasswordOpen] = useState(false);
@@ -142,23 +144,18 @@ export function MobileNavigation() {
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const moreDialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!isMoreOpen) {
-      return;
-    }
-    closeButtonRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsMoreOpen(false);
-        moreButtonRef.current?.focus();
-      }
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [isMoreOpen]);
+  const closeMore = () => {
+    setIsMoreOpen(false);
+    window.setTimeout(() => { moreButtonRef.current?.focus(); }, 0);
+  };
+  useModalLifecycle({
+    dialogRef: moreDialogRef,
+    initialFocusRef: closeButtonRef,
+    isOpen: isMoreOpen,
+    onEscape: closeMore,
+  });
 
   if (state.status !== "authenticated") {
     return null;
@@ -168,10 +165,6 @@ export function MobileNavigation() {
   const primaryRoutes = routes.filter((route) => route.group === "primary");
   const moreMenuRoutes = routes.filter((route) => route.group !== "primary" || route.id === "work-items");
   const user = state.session.user;
-  const closeMore = () => {
-    setIsMoreOpen(false);
-    moreButtonRef.current?.focus();
-  };
 
   const signOut = async () => {
     setLogoutError(null);
@@ -209,7 +202,7 @@ export function MobileNavigation() {
       </nav>
 
       {isMoreOpen ? (
-        <div className="mobile-more" role="dialog" aria-modal="true" aria-labelledby="mobile-more-title">
+        <div className="mobile-more" ref={moreDialogRef} role="dialog" aria-modal="true" aria-labelledby="mobile-more-title">
           <button className="mobile-more__scrim" onClick={closeMore} type="button" aria-label="Закрити меню" />
           <section className="mobile-more__sheet">
             <div className="mobile-more__handle" aria-hidden="true" />
@@ -223,11 +216,19 @@ export function MobileNavigation() {
                 <Icon name="close" />
               </button>
             </header>
-            <Link aria-label="Глобальний пошук" className="mobile-search-action" onClick={closeMore} to="/previews/empty">
+            <button
+              aria-label="Глобальний пошук"
+              className="mobile-search-action"
+              onClick={() => {
+                setIsMoreOpen(false);
+                onSearchOpen(moreButtonRef.current);
+              }}
+              type="button"
+            >
               <span className="nav-item__icon"><Icon name="search" /></span>
-              <span><strong>Глобальний пошук</strong><small>Пошук пацієнтів і записів</small></span>
+              <span><strong>Глобальний пошук</strong><small>Пацієнти, записи та дозволені категорії</small></span>
               <Icon name="chevron" />
-            </Link>
+            </button>
             <nav className="mobile-more__grid" aria-label="Додаткові розділи">
               {moreMenuRoutes.map((route) => <RouteLink key={route.id} route={route} onNavigate={closeMore} />)}
             </nav>

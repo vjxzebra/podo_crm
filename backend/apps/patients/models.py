@@ -2,7 +2,9 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex, OpClass
 from django.db import models
+from django.db.models.functions import Upper
 
 from apps.patients.normalization import normalize_phone
 
@@ -40,6 +42,15 @@ class Patient(models.Model):
 
     class Meta:
         ordering = ("-created_at", "-id")
+        indexes = [
+            GinIndex(
+                OpClass(Upper("first_name"), name="gin_trgm_ops"),
+                OpClass(Upper("last_name"), name="gin_trgm_ops"),
+                OpClass(Upper("public_number"), name="gin_trgm_ops"),
+                OpClass(Upper("normalized_phone"), name="gin_trgm_ops"),
+                name="patients_global_search_gin",
+            )
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=~models.Q(public_number=""),

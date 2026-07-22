@@ -1,0 +1,1247 @@
+{
+  "generated_at": "2026-07-22T22:44:41.438Z",
+  "browser": "Microsoft Edge via Playwright",
+  "base_url": "http://127.0.0.1:8088",
+  "roles": {
+    "podologist": [
+      {
+        "viewport": "desktop",
+        "session": {
+          "role": "podologist",
+          "route_ids": [
+            "overview",
+            "calendar",
+            "patients",
+            "work-items",
+            "notifications"
+          ]
+        },
+        "routes": [
+          {
+            "route_id": "overview",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "calendar",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "patients",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "work-items",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "notifications",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          }
+        ],
+        "forbidden": [
+          {
+            "requested": "/finance",
+            "redirected_to": "/"
+          },
+          {
+            "requested": "/inventory",
+            "redirected_to": "/"
+          },
+          {
+            "requested": "/analytics",
+            "redirected_to": "/"
+          },
+          {
+            "requested": "/team",
+            "redirected_to": "/"
+          },
+          {
+            "requested": "/audit",
+            "redirected_to": "/"
+          },
+          {
+            "requested": "/settings",
+            "redirected_to": "/"
+          }
+        ]
+      },
+      {
+        "viewport": "tablet",
+        "session": {
+          "role": "podologist",
+          "route_ids": [
+            "overview",
+            "calendar",
+            "patients",
+            "work-items",
+            "notifications"
+          ]
+        },
+        "routes": [
+          {
+            "route_id": "overview",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "calendar",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "patients",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "work-items",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "notifications",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          }
+        ],
+        "forbidden": []
+      },
+      {
+        "viewport": "phone",
+        "session": {
+          "role": "podologist",
+          "route_ids": [
+            "overview",
+            "calendar",
+            "patients",
+            "work-items",
+            "notifications"
+          ]
+        },
+        "routes": [
+          {
+            "route_id": "overview",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "calendar",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "patients",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "work-items",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "notifications",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          }
+        ],
+        "forbidden": []
+      }
+    ],
+    "reception": [
+      {
+        "viewport": "desktop",
+        "session": {
+          "role": "reception",
+          "route_ids": [
+            "overview",
+            "calendar",
+            "patients",
+            "work-items",
+            "finance",
+            "notifications"
+          ]
+        },
+        "routes": [
+          {
+            "route_id": "overview",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "calendar",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "patients",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "work-items",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance-shifts",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "notifications",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          }
+        ],
+        "forbidden": [
+          {
+            "requested": "/inventory",
+            "redirected_to": "/"
+          },
+          {
+            "requested": "/analytics",
+            "redirected_to": "/"
+          },
+          {
+            "requested": "/team",
+            "redirected_to": "/"
+          },
+          {
+            "requested": "/audit",
+            "redirected_to": "/"
+          },
+          {
+            "requested": "/settings",
+            "redirected_to": "/"
+          }
+        ]
+      },
+      {
+        "viewport": "tablet",
+        "session": {
+          "role": "reception",
+          "route_ids": [
+            "overview",
+            "calendar",
+            "patients",
+            "work-items",
+            "finance",
+            "notifications"
+          ]
+        },
+        "routes": [
+          {
+            "route_id": "overview",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "calendar",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "patients",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "work-items",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance-shifts",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "notifications",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          }
+        ],
+        "forbidden": []
+      },
+      {
+        "viewport": "phone",
+        "session": {
+          "role": "reception",
+          "route_ids": [
+            "overview",
+            "calendar",
+            "patients",
+            "work-items",
+            "finance",
+            "notifications"
+          ]
+        },
+        "routes": [
+          {
+            "route_id": "overview",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "calendar",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "patients",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "work-items",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance-shifts",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "notifications",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          }
+        ],
+        "forbidden": []
+      }
+    ],
+    "admin": [
+      {
+        "viewport": "desktop",
+        "session": {
+          "role": "admin",
+          "route_ids": [
+            "overview",
+            "calendar",
+            "patients",
+            "work-items",
+            "finance",
+            "inventory",
+            "analytics",
+            "notifications",
+            "team",
+            "audit",
+            "settings",
+            "password-resets",
+            "contracts"
+          ]
+        },
+        "routes": [
+          {
+            "route_id": "overview",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "calendar",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "patients",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "work-items",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance-shifts",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "inventory",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "analytics",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "notifications",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "team",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": [
+                {
+                  "label": "Оновити список",
+                  "width": 42,
+                  "height": 42
+                }
+              ]
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "audit",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "settings",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "password-resets",
+            "metrics": {
+              "client_width": 1440,
+              "scroll_width": 1440,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          }
+        ],
+        "forbidden": []
+      },
+      {
+        "viewport": "tablet",
+        "session": {
+          "role": "admin",
+          "route_ids": [
+            "overview",
+            "calendar",
+            "patients",
+            "work-items",
+            "finance",
+            "inventory",
+            "analytics",
+            "notifications",
+            "team",
+            "audit",
+            "settings",
+            "password-resets",
+            "contracts"
+          ]
+        },
+        "routes": [
+          {
+            "route_id": "overview",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "calendar",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "patients",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "work-items",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance-shifts",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "inventory",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "analytics",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "notifications",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "team",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": [
+                {
+                  "label": "Оновити список",
+                  "width": 42,
+                  "height": 42
+                }
+              ]
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "audit",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "settings",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "password-resets",
+            "metrics": {
+              "client_width": 1024,
+              "scroll_width": 1024,
+              "sidebar_display": "flex",
+              "mobile_navigation_display": "none",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          }
+        ],
+        "forbidden": []
+      },
+      {
+        "viewport": "phone",
+        "session": {
+          "role": "admin",
+          "route_ids": [
+            "overview",
+            "calendar",
+            "patients",
+            "work-items",
+            "finance",
+            "inventory",
+            "analytics",
+            "notifications",
+            "team",
+            "audit",
+            "settings",
+            "password-resets",
+            "contracts"
+          ]
+        },
+        "routes": [
+          {
+            "route_id": "overview",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "calendar",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "patients",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "work-items",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "finance-shifts",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "inventory",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "analytics",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "notifications",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "team",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "audit",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "settings",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          },
+          {
+            "route_id": "password-resets",
+            "metrics": {
+              "client_width": 390,
+              "scroll_width": 390,
+              "sidebar_display": "none",
+              "mobile_navigation_display": "grid",
+              "undersized_touch_targets": []
+            },
+            "axe_violations": [],
+            "browser_errors": []
+          }
+        ],
+        "forbidden": []
+      }
+    ]
+  },
+  "keyboard": [
+    {
+      "role": "podologist",
+      "skip_text": "До основного вмісту",
+      "skip_target": "main-content",
+      "opened": {
+        "focused": true,
+        "body_overflow": "hidden"
+      },
+      "closed": {
+        "trigger_focused": true,
+        "body_overflow": ""
+      }
+    },
+    {
+      "role": "reception",
+      "skip_text": "До основного вмісту",
+      "skip_target": "main-content",
+      "opened": {
+        "focused": true,
+        "body_overflow": "hidden"
+      },
+      "closed": {
+        "trigger_focused": true,
+        "body_overflow": ""
+      }
+    },
+    {
+      "role": "admin",
+      "skip_text": "До основного вмісту",
+      "skip_target": "main-content",
+      "opened": {
+        "focused": true,
+        "body_overflow": "hidden"
+      },
+      "closed": {
+        "trigger_focused": true,
+        "body_overflow": ""
+      }
+    }
+  ],
+  "mobile_more": [
+    {
+      "role": "podologist",
+      "links": [
+        "Справи",
+        "Сповіщення"
+      ],
+      "opened": {
+        "active_label": "Закрити додаткове меню",
+        "body_overflow": "hidden"
+      },
+      "closed": {
+        "trigger_focused": true,
+        "body_overflow": ""
+      }
+    },
+    {
+      "role": "reception",
+      "links": [
+        "Справи",
+        "Фінанси",
+        "Сповіщення"
+      ],
+      "opened": {
+        "active_label": "Закрити додаткове меню",
+        "body_overflow": "hidden"
+      },
+      "closed": {
+        "trigger_focused": true,
+        "body_overflow": ""
+      }
+    },
+    {
+      "role": "admin",
+      "links": [
+        "Справи",
+        "Фінанси",
+        "Склад",
+        "Аналітика",
+        "Журнал дій",
+        "Сповіщення",
+        "Команда",
+        "Налаштування",
+        "Запити доступу",
+        "API contract lab"
+      ],
+      "opened": {
+        "active_label": "Закрити додаткове меню",
+        "body_overflow": "hidden"
+      },
+      "closed": {
+        "trigger_focused": true,
+        "body_overflow": ""
+      }
+    }
+  ],
+  "summary": {
+    "roles": 3,
+    "viewports": 3,
+    "route_checks": 75,
+    "forbidden_redirect_checks": 11,
+    "serious_or_critical_axe_violations": 0,
+    "browser_warnings_or_errors": 0
+  }
+}

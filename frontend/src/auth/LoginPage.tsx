@@ -8,6 +8,7 @@ import { AuthApiError, useAuth } from "./AuthContext";
 
 interface LoginLocationState {
   readonly from?: string;
+  readonly reason?: "expired";
 }
 
 export function LoginPage() {
@@ -18,6 +19,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionNoticeDismissed, setSessionNoticeDismissed] = useState(false);
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
@@ -41,7 +43,9 @@ export function LoginPage() {
     };
   }, [isResetOpen, isResetSubmitting]);
 
-  const requestedPath = (location.state as LoginLocationState | null)?.from;
+  const locationState = location.state as LoginLocationState | null;
+  const requestedPath = locationState?.from;
+  const showSessionExpired = locationState?.reason === "expired" && !sessionNoticeDismissed;
 
   if (state.status === "checking") {
     return (
@@ -73,6 +77,7 @@ export function LoginPage() {
 
   const submit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
+    setSessionNoticeDismissed(true);
     setError(null);
     setIsSubmitting(true);
     try {
@@ -129,6 +134,13 @@ export function LoginPage() {
           <p className="eyebrow">Робочий простір</p>
           <h2>Вхід до кабінету</h2>
           <p className="login-card__intro">Використайте email і пароль вашого облікового запису.</p>
+
+          {showSessionExpired ? (
+            <div className="form-message form-message--warning" role="status">
+              <Icon name="lock" />
+              <span>Сесію завершено. Увійдіть знову, щоб продовжити роботу.</span>
+            </div>
+          ) : null}
 
           {error === null ? null : (
             <div className="form-message form-message--error" role="alert">

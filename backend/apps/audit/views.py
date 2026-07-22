@@ -64,6 +64,7 @@ class AuditEventListView(APIView):
             status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
             status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
             status.HTTP_404_NOT_FOUND: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
         },
         tags=["audit"],
     )

@@ -20,7 +20,7 @@ export function AuthBoundary({ children }: AuthBoundaryProps) {
   }
 
   if (state.status === "anonymous") {
-    return <Navigate replace state={{ from: location.pathname }} to="/login" />;
+    return <Navigate replace state={{ from: location.pathname, reason: state.reason }} to="/login" />;
   }
 
   return (

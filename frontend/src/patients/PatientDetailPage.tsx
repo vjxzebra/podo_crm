@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { apiClient } from "../api/client";
@@ -6,12 +6,15 @@ import type { components } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { csrfHeaders } from "../auth/AuthContext";
 import { WorkItemCreateDialog } from "../work-items/WorkItemCreateDialog";
+import { PatientPhotoArchiveTab } from "./PatientPhotoArchiveTab";
+import { PatientRecommendationsTab } from "./PatientRecommendationsTab";
+import { formatPatientVisitDate, PatientVisitHistoryTab } from "./PatientVisitHistoryTab";
 
 type PatientDetail = components["schemas"]["PatientDetailResponse"];
 type MedicalPatientDetail = components["schemas"]["MedicalPatientDetail"];
 type MedicalUpdate = components["schemas"]["PatchedMedicalPatientUpdateRequest"];
 type FieldErrors = Record<string, readonly string[]>;
-type PatientTab = "overview" | "visits" | "photos";
+type PatientTab = "overview" | "visits" | "photos" | "recommendations";
 
 interface EditFormState {
   readonly firstName: string;
@@ -210,7 +213,7 @@ function OverviewTab({ patient }: { readonly patient: PatientDetail }) {
     <div className="patient-detail-grid">
       <section className="surface patient-next-visit" aria-labelledby="next-visit-title">
         <header><div><p className="eyebrow">Найближчий запис</p><h2 id="next-visit-title">Записів ще немає</h2></div><span className="patient-state">Новий пацієнт</span></header>
-        <div className="patient-shell-empty"><Icon name="calendar" /><div><strong>Календар підключиться у TP-401</strong><p>Картка вже готова бути locked-контекстом для нового запису.</p></div></div>
+        <div className="patient-shell-empty"><Icon name="calendar" /><div><strong>Новий запис можна створити з цієї картки</strong><p>Пацієнт буде зафіксований у формі й недоступний для заміни.</p></div></div>
       </section>
       {medicalPatient ? (
         <section className="surface patient-medical-summary" aria-labelledby="medical-summary-title">
@@ -228,26 +231,22 @@ function OverviewTab({ patient }: { readonly patient: PatientDetail }) {
         </section>
       )}
       <section className="surface patient-history-preview" aria-labelledby="history-preview-title">
-        <header><div><p className="eyebrow">Коротка історія</p><h2 id="history-preview-title">Візитів ще немає</h2></div></header>
-        <div className="patient-shell-empty"><Icon name="empty" /><div><strong>Історія з’явиться після завершення прийому</strong><p>Role-safe visit projection буде підключена у TP-601/TP-605.</p></div></div>
+        <header><div><p className="eyebrow">Коротка історія</p><h2 id="history-preview-title">{patient.visit_history.length === 0 ? "Візитів ще немає" : "Останні завершені візити"}</h2></div></header>
+        {patient.visit_history.length === 0 ? (
+          <div className="patient-shell-empty"><Icon name="empty" /><div><strong>Історія з’явиться після завершення прийому</strong><p>Сервер поверне лише дозволені для вашої ролі дані візиту.</p></div></div>
+        ) : (
+          <div className="patient-history-preview__list">
+            {patient.visit_history.map((visit) => (
+              <article key={visit.id}>
+                <time dateTime={visit.occurred_at}>{formatPatientVisitDate(visit.occurred_at)}</time>
+                <strong>{visit.services.map((service) => service.service_name).join(" · ")}</strong>
+                <span>{visit.specialist.display_name} · {visit.status_label}</span>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     </div>
-  );
-}
-
-function HistoryTab() {
-  return (
-    <section className="surface patient-tab-shell" aria-labelledby="patient-history-title">
-      <div className="patient-shell-empty patient-shell-empty--large"><Icon name="calendar" /><div><h2 id="patient-history-title">Історія візитів порожня</h2><p>Тут хронологічно відображатимуться дата, статус, послуги, спеціаліст, вартість і безпечний для ролі підсумок.</p></div></div>
-    </section>
-  );
-}
-
-function PhotosTab() {
-  return (
-    <section className="surface patient-tab-shell" aria-labelledby="patient-photos-title">
-      <div className="patient-shell-empty patient-shell-empty--large"><Icon name="empty" /><div><h2 id="patient-photos-title">Архів фото порожній</h2><p>Фото «до / після» будуть згруповані за відвідуваннями після підключення приватного lifecycle у TP-603.</p></div></div>
-    </section>
   );
 }
 
@@ -261,15 +260,27 @@ export function PatientDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isCreatingCallback, setIsCreatingCallback] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const patientRequestSequence = useRef(0);
 
   const loadPatient = useCallback(async () => {
+    const requestSequence = patientRequestSequence.current + 1;
+    patientRequestSequence.current = requestSequence;
     setIsLoading(true);
+    setPatient(null);
     setError(null);
     setNotFound(false);
+    setIsEditing(false);
+    setIsCreatingCallback(false);
+    setSuccess(null);
     const result = await apiClient.GET("/api/v1/patients/{patient_id}", {
       params: { path: { patient_id: patientId } },
-    });
+    }).catch(() => null);
+    if (requestSequence !== patientRequestSequence.current) return;
     setIsLoading(false);
+    if (result === null) {
+      setError("Немає зв’язку із сервером. Спробуйте завантажити картку ще раз.");
+      return;
+    }
     if (result.error) {
       setNotFound(result.response.status === 404);
       setError(result.error.message);
@@ -280,9 +291,10 @@ export function PatientDetailPage() {
 
   useEffect(() => {
     void loadPatient();
+    return () => { patientRequestSequence.current += 1; };
   }, [loadPatient]);
 
-  if (isLoading) {
+  if (isLoading || (patient !== null && patient.id !== patientId)) {
     return <section aria-busy="true" className="surface patient-detail-loading"><span /><span /><span /></section>;
   }
   if (patient === null) {
@@ -297,10 +309,10 @@ export function PatientDetailPage() {
   }
 
   const medical = isMedicalPatient(patient);
-  const allowedTabs: readonly PatientTab[] = medical ? ["overview", "visits", "photos"] : ["overview", "visits"];
+  const allowedTabs: readonly PatientTab[] = medical ? ["overview", "visits", "photos", "recommendations"] : ["overview", "visits"];
   const tab = allowedTabs.includes(requestedTab as PatientTab) ? requestedTab as PatientTab : "overview";
   const tabItems: readonly { readonly id: PatientTab; readonly label: string }[] = medical
-    ? [{ id: "overview", label: "Огляд" }, { id: "visits", label: "Історія візитів" }, { id: "photos", label: "Фото до / після" }]
+    ? [{ id: "overview", label: "Огляд" }, { id: "visits", label: "Історія візитів" }, { id: "photos", label: "Фото до / після" }, { id: "recommendations", label: "Рекомендації" }]
     : [{ id: "overview", label: "Огляд" }, { id: "visits", label: "Історія візитів" }];
 
   return (
@@ -322,8 +334,9 @@ export function PatientDetailPage() {
         {tabItems.map((item) => <button aria-current={tab === item.id ? "page" : undefined} className={tab === item.id ? "active" : ""} key={item.id} onClick={() => { void navigate(`/patients/${patient.id}/${item.id}`); }} type="button">{item.label}</button>)}
       </nav>
       {tab === "overview" ? <OverviewTab patient={patient} /> : null}
-      {tab === "visits" ? <HistoryTab /> : null}
-      {tab === "photos" && medical ? <PhotosTab /> : null}
+      {tab === "visits" ? <PatientVisitHistoryTab patientId={patient.id} /> : null}
+      {tab === "photos" && medical ? <PatientPhotoArchiveTab patientId={patient.id} /> : null}
+      {tab === "recommendations" && medical ? <PatientRecommendationsTab patientId={patient.id} /> : null}
       {isEditing ? <PatientEditDialog patient={patient} onClose={() => { setIsEditing(false); }} onSaved={(updated) => { setPatient(updated); setIsEditing(false); setSuccess("Зміни картки пацієнта збережено й зафіксовано в журналі дій."); }} /> : null}
       {isCreatingCallback ? <WorkItemCreateDialog initialKind="callback" onClose={() => { setIsCreatingCallback(false); }} onSaved={(item) => { setIsCreatingCallback(false); setSuccess(`Справу «${item.title}» створено. Автоматичний дзвінок не виконувався.`); }} presetPatient={{ id: patient.id, public_number: patient.public_number, display_name: patient.display_name, phone: patient.phone }} /> : null}
     </>

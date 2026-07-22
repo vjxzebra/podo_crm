@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type SyntheticEvent } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
@@ -42,7 +42,7 @@ function fieldMessage(errors: FieldErrors, field: string): string | null {
   return errors[field]?.[0] ?? null;
 }
 
-function PatientCreateDialog({
+export function PatientCreateDialog({
   onClose,
   onSaved,
 }: {
@@ -200,14 +200,26 @@ function PatientCreateDialog({
 
 export function PatientsPage() {
   const { state } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [patients, setPatients] = useState<readonly Patient[]>([]);
   const [search, setSearch] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const isCreating = searchParams.get("compose") === "patient";
+
+  const openCreate = () => {
+    const next = new URLSearchParams(searchParams);
+    next.set("compose", "patient");
+    setSearchParams(next);
+  };
+  const closeCreate = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("compose");
+    setSearchParams(next, { replace: true });
+  };
 
   const loadPatients = useCallback(async (
     query: string,
@@ -258,7 +270,7 @@ export function PatientsPage() {
           <h1>Каталог пацієнтів</h1>
           <p>Пошук за ім’ям, прізвищем, телефоном або внутрішнім номером.</p>
         </div>
-        <button className="button button--primary" onClick={() => { setIsCreating(true); }} type="button"><Icon name="plus" />Додати пацієнта</button>
+        <button className="button button--primary" onClick={openCreate} type="button"><Icon name="plus" />Додати пацієнта</button>
       </header>
 
       {success === null ? null : <div className="form-message form-message--success" role="status"><Icon name="patients" /><span>{success}</span></div>}
@@ -288,7 +300,7 @@ export function PatientsPage() {
             <span className="patient-empty__icon"><Icon name={search ? "search" : "patients"} /></span>
             <h2>{search ? "Збігів не знайдено" : "Пацієнтів ще немає"}</h2>
             <p>{search ? `За запитом «${search}» немає доступних пацієнтів.` : "Створіть першу картку пацієнта для цього каталогу."}</p>
-            <button className="button button--primary" onClick={() => { setIsCreating(true); }} type="button"><Icon name="plus" />Створити пацієнта</button>
+            <button className="button button--primary" onClick={openCreate} type="button"><Icon name="plus" />Створити пацієнта</button>
           </div>
         ) : null}
 
@@ -300,7 +312,7 @@ export function PatientsPage() {
                 <div className="patient-identity"><span className="avatar avatar--lilac" aria-hidden="true">{initials(patient.display_name)}</span><span><strong>{patient.display_name}</strong><small>{patient.public_number}</small></span></div>
                 <div className="patient-contact" data-label="Контакт"><strong>{patient.phone}</strong><small>{patient.email === undefined || patient.email === "" ? "Email не вказано" : patient.email}</small></div>
                 <div className="patient-owner" data-label="Відповідальний"><strong>{patient.primary_podologist?.display_name ?? "Не призначено"}</strong><small>{patient.primary_podologist ? "Основний подолог" : "Можна призначити пізніше"}</small></div>
-                <div className="patient-appointment" data-label="Запис"><strong>Записів ще немає</strong><small>Календар підключиться у TP-401</small></div>
+                <div className="patient-appointment" data-label="Запис"><strong>Записів ще немає</strong><small>Створіть запис із картки пацієнта або календаря</small></div>
                 <span className="patient-state">{patient.state_label}</span>
               </Link>
             ))}
@@ -310,8 +322,8 @@ export function PatientsPage() {
         {nextCursor === null ? null : <div className="patient-pagination"><span>Завантажено {patients.length} записів</span><button className="button button--secondary" disabled={isLoadingMore} onClick={() => void loadPatients(search, nextCursor, true)} type="button">{isLoadingMore ? "Завантажуємо…" : "Показати ще"}</button></div>}
       </section>
 
-      {isCreating ? <PatientCreateDialog onClose={() => { setIsCreating(false); }} onSaved={(patient, duplicateWarning) => {
-        setIsCreating(false);
+      {isCreating ? <PatientCreateDialog onClose={closeCreate} onSaved={(patient, duplicateWarning) => {
+        closeCreate();
         setSearch("");
         setSuccess(duplicateWarning ? `${patient.display_name} створено. Система позначила можливий дублікат телефону.` : `${patient.display_name} додано до каталогу.`);
         void loadPatients("", null, false);

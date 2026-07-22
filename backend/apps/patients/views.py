@@ -127,7 +127,7 @@ def _serialize_detail(patient: Patient, user: User) -> dict[str, object]:
         if _is_medical_role(user)
         else ReceptionPatientDetailSerializer
     )
-    return dict(serializer_class(patient).data)
+    return dict(serializer_class(patient, context={"actor": user}).data)
 
 
 PATIENT_DETAIL_RESPONSE = PolymorphicProxySerializer(

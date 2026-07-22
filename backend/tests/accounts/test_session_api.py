@@ -54,6 +54,7 @@ def test_login_and_session_return_server_role_scope(role):
             "role": role,
         },
         "route_ids": list(ROLE_ROUTE_IDS[role]),
+        "notification_unread_count": 0,
         "must_change_password": False,
         "temporary_password_expires_at": None,
         "temporary_password_expired": False,

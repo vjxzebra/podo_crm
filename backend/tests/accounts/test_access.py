@@ -75,6 +75,9 @@ def test_route_matrix_keeps_medical_and_financial_modules_separated():
     assert "inventory" not in ROLE_ROUTE_IDS[UserRole.PODOLOGIST]
     assert "inventory" not in ROLE_ROUTE_IDS[UserRole.RECEPTION]
     assert "settings" not in ROLE_ROUTE_IDS[UserRole.RECEPTION]
+    assert "audit" in ROLE_ROUTE_IDS[UserRole.ADMIN]
+    assert "audit" not in ROLE_ROUTE_IDS[UserRole.RECEPTION]
+    assert "audit" not in ROLE_ROUTE_IDS[UserRole.PODOLOGIST]
     assert set(ROLE_ROUTE_IDS[UserRole.PODOLOGIST]) < set(ROLE_ROUTE_IDS[UserRole.ADMIN])
     assert set(ROLE_ROUTE_IDS[UserRole.RECEPTION]) < set(ROLE_ROUTE_IDS[UserRole.ADMIN])
 

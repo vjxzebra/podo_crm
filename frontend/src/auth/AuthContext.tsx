@@ -2,13 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
+import { SESSION_EXPIRED_EVENT } from "./sessionEvents";
 
 export type SessionData = components["schemas"]["Session"];
 export type UserRole = components["schemas"]["RoleEnum"];
 
 type AuthState =
   | { readonly status: "checking" }
-  | { readonly status: "anonymous" }
+  | { readonly status: "anonymous"; readonly reason?: "expired" }
   | { readonly status: "authenticated"; readonly session: SessionData }
   | { readonly status: "error" };
 
@@ -67,11 +68,13 @@ export function csrfHeaders(): HeadersInit {
 
 async function retrieveSession(): Promise<AuthState> {
   try {
-    const { data, response } = await apiClient.GET("/api/v1/session");
+    const { data, error, response } = await apiClient.GET("/api/v1/session");
     if (data !== undefined) {
       return { status: "authenticated", session: data };
     }
-    return response.status === 401 ? { status: "anonymous" } : { status: "error" };
+    return response.status === 401
+      ? { status: "anonymous", ...(error.code === "session_expired" ? { reason: "expired" as const } : {}) }
+      : { status: "error" };
   } catch {
     return { status: "error" };
   }
@@ -94,6 +97,16 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     });
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const expireSession = () => {
+      setState({ status: "anonymous", reason: "expired" });
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, expireSession);
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, expireSession);
     };
   }, []);
 

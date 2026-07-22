@@ -20,6 +20,7 @@ class SessionUserSerializer(serializers.Serializer):
 class SessionSerializer(serializers.Serializer):
     user = SessionUserSerializer()
     route_ids = serializers.ListField(child=serializers.CharField())
+    notification_unread_count = serializers.IntegerField(min_value=0)
     must_change_password = serializers.BooleanField()
     temporary_password_expires_at = serializers.DateTimeField(allow_null=True)
     temporary_password_expired = serializers.BooleanField()

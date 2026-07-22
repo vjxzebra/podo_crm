@@ -5,6 +5,10 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import User, UserRole
+from apps.patients.history_serializers import (
+    PatientHistoryBaseItemSerializer,
+    PatientHistoryMedicalItemSerializer,
+)
 from apps.patients.models import Patient, PatientMedicalProfile
 from apps.patients.normalization import InvalidPhoneError, normalize_phone
 
@@ -64,17 +68,6 @@ class PatientAppointmentSummarySerializer(serializers.Serializer[Any]):
     cost_minor = serializers.IntegerField(min_value=0)
 
 
-class PatientVisitHistoryItemSerializer(serializers.Serializer[Any]):
-    id = serializers.UUIDField()
-    occurred_at = serializers.DateTimeField()
-    status = serializers.CharField()
-    services = serializers.ListField(child=serializers.CharField())
-    specialist = serializers.CharField()
-    summary = serializers.CharField(allow_blank=True)
-    cost_minor = serializers.IntegerField(min_value=0)
-    has_photos = serializers.BooleanField()
-
-
 class PatientPhotoVisitMetadataSerializer(serializers.Serializer[Any]):
     visit_id = serializers.UUIDField()
     occurred_at = serializers.DateTimeField()
@@ -94,7 +87,6 @@ class PatientDetailBaseSerializer(PatientSerializer):
     service_started_at = serializers.DateTimeField(source="created_at", read_only=True)
     projection = serializers.SerializerMethodField()
     upcoming_appointment = serializers.SerializerMethodField()
-    visit_history = serializers.SerializerMethodField()
 
     class Meta:
         model = Patient
@@ -104,7 +96,6 @@ class PatientDetailBaseSerializer(PatientSerializer):
             "service_started_at",
             "projection",
             "upcoming_appointment",
-            "visit_history",
         )
 
     @extend_schema_field(serializers.IntegerField(allow_null=True, min_value=0))
@@ -127,17 +118,33 @@ class PatientDetailBaseSerializer(PatientSerializer):
         # Scheduling packets will populate this projection.
         return None
 
-    @extend_schema_field(PatientVisitHistoryItemSerializer(many=True))
-    def get_visit_history(self, patient: Patient) -> list[dict[str, Any]]:
-        # Visit packets will populate role-specific history rows.
-        return []
-
 
 class ReceptionPatientDetailSerializer(PatientDetailBaseSerializer):
     """Safe contact/administrative projection with no medical keys."""
 
+    visit_history = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Patient
+        fields = (*PatientDetailBaseSerializer.Meta.fields, "visit_history")
+
+    @extend_schema_field(PatientHistoryBaseItemSerializer(many=True))
+    def get_visit_history(self, patient: Patient) -> list[dict[str, Any]]:
+        from apps.patients.history import completed_visits_for_patient, visit_history_row
+
+        actor = self.context.get("actor")
+        return [
+            visit_history_row(visit, medical=False)
+            for visit in completed_visits_for_patient(
+                patient,
+                medical=False,
+                actor=actor if isinstance(actor, User) else None,
+            )[:3]
+        ]
+
 
 class MedicalPatientDetailSerializer(PatientDetailBaseSerializer):
+    visit_history = serializers.SerializerMethodField()
     medical_profile = serializers.SerializerMethodField()
     photo_archive = serializers.SerializerMethodField()
 
@@ -145,9 +152,24 @@ class MedicalPatientDetailSerializer(PatientDetailBaseSerializer):
         model = Patient
         fields = (
             *PatientDetailBaseSerializer.Meta.fields,
+            "visit_history",
             "medical_profile",
             "photo_archive",
         )
+
+    @extend_schema_field(PatientHistoryMedicalItemSerializer(many=True))
+    def get_visit_history(self, patient: Patient) -> list[dict[str, Any]]:
+        from apps.patients.history import completed_visits_for_patient, visit_history_row
+
+        actor = self.context.get("actor")
+        return [
+            visit_history_row(visit, medical=True)
+            for visit in completed_visits_for_patient(
+                patient,
+                medical=True,
+                actor=actor if isinstance(actor, User) else None,
+            )[:3]
+        ]
 
     @extend_schema_field(PatientMedicalProfileSerializer())
     def get_medical_profile(self, patient: Patient) -> dict[str, Any]:
@@ -163,8 +185,12 @@ class MedicalPatientDetailSerializer(PatientDetailBaseSerializer):
 
     @extend_schema_field(PatientPhotoVisitMetadataSerializer(many=True))
     def get_photo_archive(self, patient: Patient) -> list[dict[str, Any]]:
-        # TP-603/TP-605 will populate private visit-photo metadata.
-        return []
+        from apps.patients.history import photo_archive_metadata
+
+        actor = self.context.get("actor")
+        if not isinstance(actor, User):
+            return []
+        return photo_archive_metadata(patient, actor=actor)
 
     @extend_schema_field(serializers.CharField())
     def get_projection(self, patient: Patient) -> str:

@@ -1,8 +1,11 @@
+from io import BytesIO
 from unittest.mock import patch
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
+from django.test import override_settings
+from PIL import Image
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
@@ -11,6 +14,17 @@ from apps.audit.registry import AuditAction
 from apps.clinic.models import ClinicProfile, Room
 
 PASSWORD = "correct horse battery staple"  # noqa: S105
+
+
+def logo_upload(
+    *,
+    name: str = "logo.png",
+    content_type: str = "image/png",
+    image_format: str = "PNG",
+) -> SimpleUploadedFile:
+    output = BytesIO()
+    Image.new("RGB", (32, 24), color=(15, 118, 110)).save(output, format=image_format)
+    return SimpleUploadedFile(name, output.getvalue(), content_type=content_type)
 
 
 def create_user(*, email: str, role: str) -> User:
@@ -233,11 +247,7 @@ def test_logo_upload_validates_magic_bytes_and_writes_private_metadata_audit():
             {"logo": invalid, "version": profile.version},
             format="multipart",
         )
-        valid = SimpleUploadedFile(
-            "logo.png",
-            b"\x89PNG\r\n\x1a\nprivate-logo-bytes",
-            content_type="image/png",
-        )
+        valid = logo_upload()
         accepted = client.put(
             "/api/v1/clinic-profile/logo",
             {"logo": valid, "version": profile.version},
@@ -253,6 +263,33 @@ def test_logo_upload_validates_magic_bytes_and_writes_private_metadata_audit():
     event = AuditEvent.objects.get(action=AuditAction.CLINIC_LOGO_UPDATED)
     assert "object_key" not in event.after
     assert event.after["logo_content_type"] == "image/png"
+
+
+@pytest.mark.django_db
+def test_logo_upload_rejects_mime_spoofing_and_excessive_dimensions():
+    admin = create_user(email="admin@example.test", role=UserRole.ADMIN)
+    client = authenticated_client(admin)
+    profile = ClinicProfile.objects.get()
+
+    spoofed = client.put(
+        "/api/v1/clinic-profile/logo",
+        {
+            "logo": logo_upload(name="spoofed.jpg", content_type="image/jpeg"),
+            "version": profile.version,
+        },
+        format="multipart",
+    )
+    with override_settings(CLINIC_LOGO_MAX_DIMENSION=20):
+        too_wide = client.put(
+            "/api/v1/clinic-profile/logo",
+            {"logo": logo_upload(), "version": profile.version},
+            format="multipart",
+        )
+
+    assert spoofed.status_code == 422
+    assert spoofed.json()["code"] == "invalid_logo_content"
+    assert too_wide.status_code == 422
+    assert too_wide.json()["code"] == "invalid_logo_content"
 
 
 @pytest.mark.django_db

@@ -55,6 +55,21 @@ class AuditAction(StrEnum):
     APPOINTMENT_CANCELED = "scheduling.appointment_canceled"
     APPOINTMENT_STATUS_CHANGED = "scheduling.appointment_status_changed"
 
+    VISIT_STARTED = "visits.visit_started"
+    VISIT_DRAFT_SAVED = "visits.visit_draft_saved"
+    VISIT_PHOTO_ADDED = "visits.visit_photo_added"
+    VISIT_PHOTO_DELETED = "visits.visit_photo_deleted"
+    VISIT_RECOMMENDATION_CREATED = "medical.visit_recommendation_created"
+    VISIT_RECOMMENDATION_UPDATED = "medical.visit_recommendation_updated"
+
+    MATERIAL_CREATED = "inventory.material_created"
+    MATERIAL_UPDATED = "inventory.material_updated"
+    MATERIAL_DEACTIVATED = "inventory.material_deactivated"
+    MATERIAL_REACTIVATED = "inventory.material_reactivated"
+    INVENTORY_RECEIPT_POSTED = "inventory.receipt_posted"
+    INVENTORY_MANUAL_WRITEOFF_POSTED = "inventory.manual_writeoff_posted"
+    STOCKTAKE_CREATED = "inventory.stocktake_created"
+
     VISIT_COMPLETED = "visits.visit_completed"
 
     PAYMENT_POSTED = "billing.payment_posted"
@@ -103,6 +118,19 @@ EVENT_SECTIONS: dict[str, AuditSection] = {
     AuditAction.APPOINTMENT_RESCHEDULED: AuditSection.SCHEDULING,
     AuditAction.APPOINTMENT_CANCELED: AuditSection.SCHEDULING,
     AuditAction.APPOINTMENT_STATUS_CHANGED: AuditSection.SCHEDULING,
+    AuditAction.VISIT_STARTED: AuditSection.VISITS,
+    AuditAction.VISIT_DRAFT_SAVED: AuditSection.VISITS,
+    AuditAction.VISIT_PHOTO_ADDED: AuditSection.VISITS,
+    AuditAction.VISIT_PHOTO_DELETED: AuditSection.VISITS,
+    AuditAction.VISIT_RECOMMENDATION_CREATED: AuditSection.MEDICAL,
+    AuditAction.VISIT_RECOMMENDATION_UPDATED: AuditSection.MEDICAL,
+    AuditAction.MATERIAL_CREATED: AuditSection.INVENTORY,
+    AuditAction.MATERIAL_UPDATED: AuditSection.INVENTORY,
+    AuditAction.MATERIAL_DEACTIVATED: AuditSection.INVENTORY,
+    AuditAction.MATERIAL_REACTIVATED: AuditSection.INVENTORY,
+    AuditAction.INVENTORY_RECEIPT_POSTED: AuditSection.INVENTORY,
+    AuditAction.INVENTORY_MANUAL_WRITEOFF_POSTED: AuditSection.INVENTORY,
+    AuditAction.STOCKTAKE_CREATED: AuditSection.INVENTORY,
     AuditAction.VISIT_COMPLETED: AuditSection.VISITS,
     AuditAction.PAYMENT_POSTED: AuditSection.BILLING,
     AuditAction.REFUND_POSTED: AuditSection.BILLING,

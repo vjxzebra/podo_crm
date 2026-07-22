@@ -11,6 +11,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.access import route_ids_for
+from apps.accounts.login_security import (
+    clear_successful_login_attempt,
+    reserve_login_attempt,
+)
 from apps.accounts.models import PasswordResetRequest, User
 from apps.accounts.permissions import IsAdmin
 from apps.accounts.serializers import (
@@ -30,6 +34,8 @@ from apps.accounts.services import (
     request_password_reset,
     set_temporary_password,
 )
+from apps.accounts.session_security import initialize_session_security
+from apps.notifications.models import Notification
 from config.api.exceptions import ApiProblem
 from config.api.serializers import ErrorEnvelopeSerializer
 from config.middleware import get_request_id
@@ -44,6 +50,10 @@ def session_payload(user: User) -> dict[str, object]:
             "role": user.role,
         },
         "route_ids": [] if user.must_change_password else list(route_ids_for(user)),
+        "notification_unread_count": Notification.objects.filter(
+            recipient=user,
+            read_at__isnull=True,
+        ).count(),
         "must_change_password": user.must_change_password,
         "temporary_password_expires_at": user.temporary_password_expires_at,
         "temporary_password_expired": user.temporary_password_expired,
@@ -63,6 +73,8 @@ class LoginView(APIView):
             status.HTTP_200_OK: SessionSerializer,
             status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
             status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_429_TOO_MANY_REQUESTS: ErrorEnvelopeSerializer,
+            status.HTTP_503_SERVICE_UNAVAILABLE: ErrorEnvelopeSerializer,
             status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
         },
         tags=["authentication"],
@@ -70,9 +82,11 @@ class LoginView(APIView):
     def post(self, request: Request) -> Response:
         serializer = LoginRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"].strip().lower()
+        reserve_login_attempt(request, email)
         user = authenticate(
             request=request._request,
-            username=serializer.validated_data["email"].strip().lower(),
+            username=email,
             password=serializer.validated_data["password"],
         )
         if not isinstance(user, User):
@@ -82,7 +96,9 @@ class LoginView(APIView):
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
 
+        clear_successful_login_attempt(request, email)
         login(request._request, user)
+        initialize_session_security(request._request)
         return Response(session_payload(user))
 
 

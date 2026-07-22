@@ -7,7 +7,7 @@ import { csrfHeaders, useAuth } from "../auth/AuthContext";
 
 type WorkItem = components["schemas"]["WorkItem"];
 type WorkItemAssignee = components["schemas"]["WorkItemAssignee"];
-type WorkItemKind = components["schemas"]["KindEnum"];
+type WorkItemKind = components["schemas"]["WorkItemKindEnum"];
 type WorkItemPatient = components["schemas"]["WorkItemPatient"];
 type WorkItemCreateRequest = components["schemas"]["WorkItemCreateRequest"];
 type Patient = components["schemas"]["PatientListItem"];

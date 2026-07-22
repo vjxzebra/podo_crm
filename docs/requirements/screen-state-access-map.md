@@ -44,7 +44,7 @@ Hash і query preview-параметри прототипу потрібні л�
 |---|---|---|---|---|---|---|---|
 | AUTH-01 | Вхід `/login` | public | public | public | email, password, show/hide, forgot-password action | idle, submitting, invalid credentials без account enumeration, inactive profile, rate limited, offline, success redirect | `#loginScreen`; §3.1 |
 | AUTH-02 | Перший вхід `/first-login` | own | own | own | new password, confirmation, password visibility | forced route, validation, submitting, expired temporary password, success + session rotation | `#firstLoginModal`; §3.2 |
-| SCR-01 | Огляд `/app/overview` | full | full | own | role-specific stats, schedule, next appointment, workitems | loading, empty day, partial widget error, stale/retry, success toast | `#overviewView`; §5 |
+| SCR-01 | Огляд `/` | full | full | own | role-specific server stats, schedule, next appointment, workitems/attention | loading, empty day, error/retry, independent work-item state | `#overviewView`; §5; [TP-804 evidence](../evidence/tp-804/README.md) |
 | SCR-02 | Календар `/app/calendar` | full | full | own | day primary, week secondary, filters, free slots, appointment cards | loading, empty day, no free slots, conflict refresh, filtered empty, permission-safe events | `#calendarView`; §6, AC-02—AC-04 |
 | SCR-03 | Пацієнти `/app/patients` | full | all-safe | own | list/search and selected patient shell | loading, empty database, no search results, duplicate-phone warning, forbidden/not-found, pagination | `#patientsView`; §7 |
 | SCR-03A | Картка `/app/patients/:patientId/overview` | full | limited | own | identity, contacts, next/last appointment; medical blocks only admin/podologist | loading, redacted reception view, not-found/foreign ID, edit validation, unsaved | `#recordOverview`; §7.4–7.5 |
@@ -56,8 +56,8 @@ Hash і query preview-параметри прототипу потрібні л�
 | SCR-05A | Касові зміни `/app/finance/shifts` | full | own | — | period filter, history, selected shift operations | loading, empty, closed/open/discrepancy, foreign shift forbidden | `#cashHistoryContent`; §10.5; reception scope differs from prototype |
 | SCR-06 | Склад `/app/inventory/materials` | full | — | — | catalog, filters, low-stock/expiry alerts | loading, empty, filter empty, low/expired/healthy states | `#stockView`, `#stockCatalogPanel`; §11.1–11.3 |
 | SCR-06A | Рухи `/app/inventory/movements` | full | — | — | append-only movement journal and filters | loading, empty, filter empty, linked visit/manual/receipt/stocktake rows | `#stockMovementsPanel`; §11.8 |
-| SCR-07 | Аналітика `/app/analytics` | full | — | — | period, specialist, service filters; KPI/cards/charts | loading, empty dataset, partial query error, invalid range, refreshed values | `#analyticsView`; §13 |
-| SCR-08 | Журнал дій `/app/audit` | full | — | — | search, employee/section/date filters, event details | loading, empty, filter empty, redacted secrets, immutable detail | `#auditView`; §14 |
+| SCR-07 | Аналітика `/analytics` | full | — | — | month/quarter/year/custom period, specialist/service filters; KPI, trend, outcomes, utilization, service ranking | loading, empty dataset, error/retry, invalid range, refreshed server values; без export | `#analyticsView`; §13; [TP-804 evidence](../evidence/tp-804/README.md) |
+| SCR-08 | Журнал дій `/audit` | full | — | — | search, employee/section/date filters, reload-stable event details | loading, empty, filter empty, error/retry, redacted secrets, immutable detail, mobile fullscreen | `#auditView`; §14; TP-803 evidence |
 | SCR-09 | Налаштування `/app/settings/profile` | full | — | — | clinic profile | loading, validation, logo upload progress/error, unsaved, success | `#settingsView`, `#generalSettingsPanel`; §17.1 |
 | SCR-09A | Послуги `/app/settings/services` | full | — | — | search, active/inactive list, price/duration/color | loading, empty, validation, deactivate confirm, historical reference retained | `#serviceSettingsPanel`; §17.2 |
 | SCR-09B | Робочий час `/app/settings/schedule` | full | — | — | workdays, start/end, multiple breaks | loading, invalid/overlapping/out-of-hours break, unsaved, success | `#scheduleSettingsPanel`; §17.4 |
@@ -179,6 +179,9 @@ Modal accessibility contract:
 | ST-14 | Destructive confirm | Називає точний об’єкт і наслідок; окрема confirm action | Cancel, deactivate, refund, stocktake post, delete photo/break |
 | ST-15 | Read-only/immutable | Проведені ledger/stock/audit записи не мають edit action | Finance, shifts, movements, audit |
 | ST-16 | Partial widget failure | Інші незалежні widgets лишаються доступними; помилка локалізована | Overview, analytics |
+
+ST-13 verified у TP-902: server expiry повертає `401 session_expired`, frontend
+unmount-ить protected shell і веде на login із нейтральним notice; [evidence](../evidence/tp-902/README.md).
 
 ## 9. Feature-specific state map
 

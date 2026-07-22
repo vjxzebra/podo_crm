@@ -122,4 +122,10 @@ def request_password_reset(*, user: User, correlation_id: str) -> PasswordResetR
             after={"reset_request_id": reset_request.pk, "status": "pending"},
             description="Створено запит на відновлення пароля.",
         )
+        from apps.notifications.services import notify_domain_event_on_commit
+
+        notify_domain_event_on_commit(
+            event="password_reset_requested",
+            object_id=str(reset_request.pk),
+        )
     return reset_request

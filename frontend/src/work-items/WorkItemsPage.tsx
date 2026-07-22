@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 
 import { apiClient } from "../api/client";
 import type { components, operations } from "../api/schema";
@@ -33,6 +33,7 @@ function formatDueAt(value: string): { readonly date: string; readonly time: str
 }
 
 export function WorkItemsPage() {
+  const location = useLocation();
   const { state } = useAuth();
   const role = state.status === "authenticated" ? state.session.user.role : "podologist";
   const canViewAll = role !== "podologist";
@@ -47,6 +48,7 @@ export function WorkItemsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const highlightedItemId = new URLSearchParams(location.search).get("item");
 
   const loadWorkItems = useCallback(async (
     requestedScope: WorkItemScope,
@@ -87,6 +89,12 @@ export function WorkItemsPage() {
     }, search ? 250 : 0);
     return () => { window.clearTimeout(timeout); };
   }, [loadWorkItems, scope, search, status]);
+
+  useEffect(() => {
+    if (isLoading || highlightedItemId === null) return;
+    const target = document.getElementById(`work-item-${highlightedItemId}`);
+    target?.focus();
+  }, [highlightedItemId, isLoading, items]);
 
   const toggleCompletion = async (item: WorkItem) => {
     const completing = !item.is_completed;
@@ -158,7 +166,7 @@ export function WorkItemsPage() {
         {!isLoading && !error && items.length === 0 ? <div className="patient-empty work-item-empty"><span className="patient-empty__icon"><Icon name="tasks" /></span><h2>{search ? "Справ за запитом не знайдено" : status === "completed" ? "Виконаних справ ще немає" : "Відкритих справ немає"}</h2><p>{search ? "Змініть пошук або фільтр." : "Створіть нову внутрішню справу для себе чи колеги."}</p><button className="button button--primary" onClick={() => { setIsCreating(true); }} type="button"><Icon name="plus" />Створити справу</button></div> : null}
         {items.length ? <div className="work-item-list">{items.map((item) => {
           const due = formatDueAt(item.due_at);
-          return <article className={`work-item-card${item.is_important ? " work-item-card--important" : ""}${item.is_overdue ? " work-item-card--overdue" : ""}${item.is_completed ? " work-item-card--completed" : ""}`} key={item.id}>
+          return <article className={`work-item-card${item.is_important ? " work-item-card--important" : ""}${item.is_overdue ? " work-item-card--overdue" : ""}${item.is_completed ? " work-item-card--completed" : ""}${highlightedItemId === item.id ? " work-item-card--highlighted" : ""}`} id={`work-item-${item.id}`} key={item.id} tabIndex={-1}>
             <button aria-label={item.is_completed ? `Повернути в роботу: ${item.title}` : `Позначити виконаною: ${item.title}`} className="work-item-complete" disabled={mutatingId === item.id} onClick={() => void toggleCompletion(item)} type="button">{item.is_completed ? <Icon name="check" /> : null}</button>
             <div className="work-item-card__body"><header><span className="work-item-kind"><Icon name={item.kind === "callback" ? "phone" : "tasks"} />{item.kind_label}</span>{item.is_important ? <span className="work-item-important"><Icon name="flag" />Важлива</span> : null}</header><h3>{item.title}</h3>{item.comment ? <p>{item.comment}</p> : null}<div className="work-item-card__links">{item.patient ? <Link to={`/patients/${item.patient.id}/overview`}>{item.patient.display_name} · {item.patient.phone}</Link> : <span>Без пацієнта</span>}<span>Відповідальний: {item.assignee.display_name}</span></div></div>
             <time className="work-item-due" dateTime={item.due_at}><strong>{due.time}</strong><span>{due.date}</span>{item.is_overdue ? <em>Прострочено</em> : null}</time>

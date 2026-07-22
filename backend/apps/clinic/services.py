@@ -1,9 +1,12 @@
 import uuid
+import warnings
+from io import BytesIO
 from typing import Any
 
 from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from apps.accounts.models import User
 from apps.audit.registry import AuditAction
@@ -20,8 +23,8 @@ from apps.clinic.models import (
 from config.api.exceptions import ApiProblem
 
 ALLOWED_LOGO_TYPES = {
-    "image/jpeg": (b"\xff\xd8\xff", ".jpg"),
-    "image/png": (b"\x89PNG\r\n\x1a\n", ".png"),
+    "image/jpeg": ("JPEG", ".jpg"),
+    "image/png": ("PNG", ".png"),
 }
 
 
@@ -138,9 +141,9 @@ def update_clinic_profile(
 
 
 def _validated_logo(upload: UploadedFile) -> tuple[bytes, str, str]:
-    content_type = upload.content_type or ""
-    signature_and_extension = ALLOWED_LOGO_TYPES.get(content_type)
-    if signature_and_extension is None:
+    content_type = (upload.content_type or "").lower()
+    expected = ALLOWED_LOGO_TYPES.get(content_type)
+    if expected is None:
         raise ApiProblem(
             code="invalid_logo_type",
             message="Логотип має бути у форматі PNG або JPEG.",
@@ -155,15 +158,54 @@ def _validated_logo(upload: UploadedFile) -> tuple[bytes, str, str]:
             status_code=422,
             fields={"logo": ["Максимальний розмір — 5 МБ."]},
         )
-    signature, extension = signature_and_extension
-    if not content.startswith(signature):
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(content)) as source:
+                source.load()
+                image_format, extension = expected
+                if source.format != image_format:
+                    raise ValueError("Declared content type does not match decoded image format.")
+                normalized = ImageOps.exif_transpose(source)
+                if normalized.width <= 0 or normalized.height <= 0:
+                    raise ValueError("Image dimensions are invalid.")
+                if (
+                    normalized.width > settings.CLINIC_LOGO_MAX_DIMENSION
+                    or normalized.height > settings.CLINIC_LOGO_MAX_DIMENSION
+                ):
+                    raise ValueError("Image dimensions are too large.")
+                image = normalized.copy()
+                image.info.clear()
+    except (
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+        UnidentifiedImageError,
+        OSError,
+        ValueError,
+    ) as exc:
         raise ApiProblem(
             code="invalid_logo_content",
             message="Вміст файла не відповідає заявленому формату.",
             status_code=422,
             fields={"logo": ["Файл пошкоджений або має неправильний формат."]},
+        ) from exc
+
+    output = BytesIO()
+    if image_format == "JPEG":
+        if image.mode not in ("RGB", "L"):
+            image = image.convert("RGB")
+        image.save(output, format="JPEG", quality=90, optimize=True)
+    else:
+        image.save(output, format="PNG", optimize=True)
+    canonical = output.getvalue()
+    if len(canonical) > settings.CLINIC_LOGO_MAX_BYTES:
+        raise ApiProblem(
+            code="logo_too_large",
+            message="Канонічний логотип перевищує 5 МБ.",
+            status_code=422,
+            fields={"logo": ["Зменште роздільну здатність або якість логотипа."]},
         )
-    return content, content_type, extension
+    return canonical, content_type, extension
 
 
 def update_clinic_logo(

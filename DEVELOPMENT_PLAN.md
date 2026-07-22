@@ -233,7 +233,7 @@ Compose-профілі:
 
 **Gate:** подолог не може знайти чужого пацієнта ні через список, ні через ID; ресепшн не отримує медичних полів; duplicate-phone path перевірений e2e.
 
-**Стан:** TP-301—TP-303 завершено 2026-07-21 — patient list/live search/create, role-safe patient card/edit і внутрішні справи реалізовані наскрізно. `GET/POST /work-items` та versioned `PATCH /work-items/{id}` застосовують own/all scope до query, не розкривають чужі задачі подологу, перевіряють patient relationship і пишуть same-transaction audit для create/update/complete/reopen. Responsive `/work-items` має live summary, пошук, scope/status filters, create й explicit complete/reopen; дія «Перетелефонувати» відкриває справу з locked patient context і не виконує автоматичного дзвінка. Етап 3 закрито; appointment-linked relationship, реальні visit/photo projections і recommendations лишаються scheduling/visit packets.
+**Стан:** TP-301—TP-303 завершено 2026-07-21 — patient list/live search/create, role-safe patient card/edit і внутрішні справи реалізовані наскрізно. `GET/POST /work-items` та versioned `PATCH /work-items/{id}` застосовують own/all scope до query, не розкривають чужі задачі подологу, перевіряють patient relationship і пишуть same-transaction audit для create/update/complete/reopen. Responsive `/work-items` має live summary, пошук, scope/status filters, create й explicit complete/reopen; дія «Перетелефонувати» відкриває справу з locked patient context і не виконує автоматичного дзвінка. Етап 3 закрито; appointment-linked relationship додано в TP-401, а completed visit/photo/recommendation projections — у TP-605.
 
 ### Етап 4. Календар і записи — 1.5–2 тижні
 
@@ -263,6 +263,8 @@ Compose-профілі:
 - інвентаризація, різниці та компенсуючі коригування;
 - low-stock/expiry domain events.
 
+**Статус 2026-07-21:** TP-501—TP-503 завершено, етап 5 закрито — admin-only material/lot catalog, expiry/available/FEFO projections, idempotent multi-line receipts, sorted row locks, no-negative manual write-offs, immutable stocktake snapshots, stale-balance rejection, append-only compensating movements, atomic audit, filtered movement journal і responsive evidence.
+
 **Gate:** неможливий від’ємний залишок навіть при конкурентних списаннях; проведені рухи не редагуються; ресепшн і подолог отримують 403 на склад.
 
 ### Етап 6. Оформлення прийому — 1.5–2 тижні
@@ -277,7 +279,9 @@ Compose-профілі:
 - атомарний `finish_visit` service: visit + services + photos metadata + stock movements + receivable + history + audit + optional next appointment;
 - ідемпотентність, rollback і retry tests.
 
-**Gate:** критерії 8–13, 18 і 20 проходять; навмисний збій посеред завершення не залишає часткових даних; повторний submit не дублює списання.
+**Статус 2026-07-22:** TP-601—TP-605 завершено, етап 6 закрито — ARRIVED appointment атомарно та ідемпотентно переходить у IN_PROGRESS з одним visit, assigned-podologist/admin scope і audit; examination/line drafts мають complaint XOR, condition registry, quantities/totals, snapshots та visit-safe FEFO picker без складських, фінансових або completion side effects. Private BEFORE/AFTER lifecycle використовує короткоживучий upload intent, replay-safe finalize, канонізацію JPEG/PNG/WebP без EXIF/GPS, authorized signed read, async preview, cleanup і draft-only audited delete. Atomic finish під узгодженими locks створює stock movements, immutable receivable, recommendation, optional follow-up та audit без часткового commit, а replay не дублює наслідки. Completed patient archive повертає reception-safe або medical own-scope history, visit-grouped private carousel та versioned authored recommendations із conflict recovery. Усі чотири кроки й архів перевірені на desktop/tablet/mobile; TP-701 після цього відкрив етап 7.
+
+**Gate:** критерії 8–12, 18 і 20 проходять; навмисний збій посеред завершення не залишає часткових даних; повторний submit не дублює списання.
 
 ### Етап 7. Фінанси й касові зміни — 1.5–2 тижні
 
@@ -291,7 +295,9 @@ Compose-профілі:
 - історія змін і повний касовий список;
 - незмінний фінансовий ledger та audit events.
 
-**Gate:** критерії 14–17 і 20 проходять; подвійна оплата заблокована constraint/service layer; розбіжність відтворюється з ledger без збережених «магічних» totals.
+**Статус 2026-07-22:** TP-701—TP-704 завершено. Reception/admin можуть відкрити одну власну зміну з нульовим початковим залишком, отримати ledger-derived own-scope summary та clinic-wide tagged projection, провести idempotent повну оплату, одне повне server-derived повернення з original method і strict cash `DEPOSIT`/`WITHDRAWAL`, а потім звірити та закрити shift з server-derived expected/discrepancy. Exact replay, stale revision, owner/admin scope, close-vs-posting locks, atomic audit, immutable opener/closer/actor snapshots і DB lifecycle/formula/comment guards захищають CLOSED shift від reopen/edit/delete та late ledger rows. `/finance` має operation і close flows, `/finance/shifts` — reception-own/admin-all history, filters/cursor, responsive table/cards і full immutable detail. Canonical gate пройшов 298 backend, 164 frontend і 35 axe tests; focused gate — 71 billing і 14 TP-704 API/migration tests. OpenAPI/types/lint/typecheck/build чисті; dev migration `0004 → 0005 → 0004 → 0005` зберегла 1 OPEN shift, 1 CARD payment і counts `1/0/0/1`, runtime `/`, `/finance`, `/finance/shifts`, `/health/ready` повертає `200`. Authenticated desktop/tablet/mobile browser gate підтвердив close dialog без submit, history/full ledger detail, 0 page overflow, 44 px targets і clean console. [TP-704 evidence](docs/evidence/tp-704/README.md) також фіксує незмінний фінальний OPEN state; live close user-owned shift не виконувався.
+
+**Gate:** критерії 14–17 і finance-частина 20 проходять; AC-16—AC-17 мають стан `verified`. Подвійна оплата, подвійне/конкурентне повернення й double/concurrent close заблоковані constraint/service layer; physical cash, revision і shift status перевіряються під lock, а totals та reconciliation відтворюються з ledger без збережених «магічних» значень.
 
 **Проміжний реліз M2:** повний операційний цикл «запис → прийом → склад → оплата → каса».
 
@@ -308,6 +314,14 @@ Compose-профілі:
 
 **Gate:** пошук і сповіщення не витікають між ролями; аналітичні суми звіряються з ledger/visits на контрольному dataset; повторний Celery task не створює дублікатів.
 
+**Стан:** TP-801 і TP-802 завершено 2026-07-22. Role-scoped global search по patients, appointments, payments і materials застосовує scope до match/rank/limit/serialization, використовує exact/prefix/substring ranking, `pg_trgm` та вісім targeted GIN indexes. Recipient-owned internal notifications мають server unread state, idempotent `(recipient, event_key)`, role-safe local deep links, immediate `on_commit()` domain events і щохвилинні Celery beat reminders. Search і notifications пройшли contracts, migrations/data preservation, runtime, security та authenticated desktop/tablet/mobile gates; фінальний TP-802 gate — 340 backend, 180 frontend і 37 axe tests. AC-22 має стан `verified`; [TP-802 evidence](docs/evidence/tp-802/README.md).
+
+TP-803 завершено 2026-07-22: admin-only `/audit` реалізує search/employee/section/date filters, cursor list і reload-stable detail з redacted «Було → Стало», actor/object/result/correlation context та allowlisted object links без edit/delete/export. Registry completeness, append-only/redaction/RBAC/date contracts, responsive focus/body-lock lifecycle і authenticated desktop/tablet/mobile gates пройшли; browser gate додатково виправив обрізання рядків та 42 px mobile close target. Фінальний gate — 342 backend, 187 frontend і 38 axe tests; AC-20 має стан `verified`. [TP-803 evidence](docs/evidence/tp-803/README.md).
+
+TP-804 завершено 2026-07-22: `/` замінив prototype numbers на role-scoped live overview для admin/reception/podologist, а admin-only `/analytics` отримав server-backed period/specialist/service filters, KPI, trend, outcomes, specialist utilization і immutable service ranking. Net revenue віднімає refunds і не включає cash adjustments; control dataset, RBAC/range/OpenAPI contracts, loading/empty/error/retry та migration-free runtime пройшли. Canonical gate — 345 backend, 192 frontend і 39 axe tests; authenticated Edge на 1440×900, 1024×768 і 390×844 підтвердив adaptive layouts, quarter refetch, no overflow/export і clean console. [TP-804 evidence](docs/evidence/tp-804/README.md).
+
+TP-901—TP-903 завершено 2026-07-22. Після cross-feature та security/privacy gates TP-903 додав encrypted off-host PostgreSQL/MinIO recovery points, retention 30 daily/12 monthly, isolated restore verification, production-like immutable deployment та image-only rollback без reverse migrations. Фінальний gate — 357 backend, 198 frontend, 40 axe; ops image має 0C/0H/0M/0L у Docker Scout, restore відтворив 53 migrations і 10 objects без missing/pending/invalid за 8.3s. [TP-901 evidence](docs/evidence/tp-901/README.md), [TP-902 evidence](docs/evidence/tp-902/README.md), [TP-903 evidence](docs/evidence/tp-903/README.md). Наступний пакет — TP-904 full role UAT і 23/23 acceptance release gate.
+
 ### Етап 9. Адаптивність, безпека, UAT і запуск — 1–2 тижні
 
 - візуальна звірка з прототипом на desktop/tablet/mobile;
@@ -323,6 +337,14 @@ Compose-профілі:
 **Gate:** 23/23 критерії готовності пройдені, немає critical/high security findings, restore rehearsal успішний, deployment/rollback runbook перевірено.
 
 **Реліз M3:** production-ready MVP.
+
+**Статус 2026-07-23:** TP-904 завершено, реліз M3 закрито з `23/23 verified`.
+Full-role UAT перевірив podologist/reception/admin на трьох viewport: 75 route
+checks, 11 forbidden redirects, 0 serious/critical axe і clean console. Фінальний
+canonical gate — 364 backend, 198 frontend і 40 axe scenarios; fresh/populated
+database, npm/pip dependency audits, patched candidate images із 0 critical/high,
+production-like deployment та TP-903 encrypted restore/image-only rollback gates
+зелені. [TP-904 evidence](docs/evidence/tp-904/README.md).
 
 ## 6. Критичний шлях і допустимий паралелізм
 

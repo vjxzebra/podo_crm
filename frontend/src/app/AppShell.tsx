@@ -1,7 +1,10 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router";
 
 import { DesktopNavigation, MobileNavigation } from "./Navigation";
 import { roleLabels, useAuth } from "../auth/AuthContext";
+import { GlobalSearchOverlay } from "../search/GlobalSearchOverlay";
+import { NOTIFICATION_COUNT_EVENT } from "../notifications/notificationApi";
 import { Icon } from "./Icon";
 import { findRouteByPath } from "./routes";
 
@@ -9,6 +12,56 @@ export function AppShell() {
   const location = useLocation();
   const currentRoute = findRouteByPath(location.pathname);
   const { state } = useAuth();
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const searchTriggerRef = useRef<HTMLElement | null>(null);
+  const desktopSearchRef = useRef<HTMLButtonElement>(null);
+
+  const openSearch = useCallback((trigger: HTMLElement | null = null) => {
+    searchTriggerRef.current = trigger
+      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : desktopSearchRef.current);
+    setIsSearchOpen(true);
+  }, []);
+  const closeSearch = useCallback((restoreFocus: boolean) => {
+    setIsSearchOpen(false);
+    if (!restoreFocus) return;
+    const trigger = searchTriggerRef.current;
+    window.setTimeout(() => {
+      if (trigger?.isConnected) trigger.focus();
+      else desktopSearchRef.current?.focus();
+    }, 0);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.code !== "KeyK" || event.isComposing) return;
+      event.preventDefault();
+      if (isSearchOpen) {
+        document.querySelector<HTMLInputElement>("#global-search-dialog input[type='search']")?.focus();
+        return;
+      }
+      openSearch();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => { document.removeEventListener("keydown", onKeyDown); };
+  }, [isSearchOpen, openSearch]);
+
+  useEffect(() => {
+    if (state.status === "authenticated") {
+      setNotificationUnreadCount(state.session.notification_unread_count);
+    }
+  }, [state]);
+
+  useEffect(() => {
+    const updateUnreadCount = (event: Event) => {
+      if (event instanceof CustomEvent && typeof event.detail === "number") {
+        setNotificationUnreadCount(Math.max(0, event.detail));
+      }
+    };
+    window.addEventListener(NOTIFICATION_COUNT_EVENT, updateUnreadCount);
+    return () => { window.removeEventListener(NOTIFICATION_COUNT_EVENT, updateUnreadCount); };
+  }, []);
+
   if (state.status !== "authenticated") {
     return null;
   }
@@ -24,21 +77,39 @@ export function AppShell() {
             <span className="brand__mark">P</span>
             <strong>{currentRoute?.shortLabel ?? "Podoria"}</strong>
           </Link>
-          <label className="global-search">
-            <span className="visually-hidden">Глобальний пошук</span>
+          <button
+            aria-controls="global-search-dialog"
+            aria-expanded={isSearchOpen}
+            aria-haspopup="dialog"
+            aria-keyshortcuts="Control+K Meta+K"
+            aria-label="Відкрити глобальний пошук"
+            className="global-search"
+            onClick={(event) => { openSearch(event.currentTarget); }}
+            ref={desktopSearchRef}
+            type="button"
+          >
             <Icon name="search" />
-            <input aria-describedby="search-preview-note" placeholder="Пацієнт, телефон або запис" readOnly />
-            <kbd>⌘ K</kbd>
-          </label>
-          <span className="visually-hidden" id="search-preview-note">Пошук буде підключено в окремому task packet</span>
+            <span className="global-search__placeholder">Пацієнт, запис, оплата або матеріал</span>
+            <kbd aria-hidden="true">Ctrl K</kbd>
+          </button>
           <div className="topbar__actions">
             <span className="session-role" title="Роль із серверної сесії">
               <span className="session-role__dot" />
               {roleLabels[state.session.user.role]}
             </span>
-            <Link className="icon-button topbar__notifications" to="/notifications" aria-label="Сповіщення">
+            <Link
+              aria-label={notificationUnreadCount === 0
+                ? "Сповіщення: немає непрочитаних"
+                : `Сповіщення: ${String(notificationUnreadCount)} непрочитаних`}
+              className="icon-button topbar__notifications"
+              to="/notifications"
+            >
               <Icon name="bell" />
-              <span className="notification-dot" />
+              {notificationUnreadCount > 0 ? (
+                <span aria-hidden="true" className="notification-badge">
+                  {notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}
+                </span>
+              ) : null}
             </Link>
             <Link className="button button--primary topbar__create" to="/calendar?compose=appointment">
               <Icon name="plus" />
@@ -52,11 +123,12 @@ export function AppShell() {
             <span>Цей розділ недоступний для ролі «{roleLabels[state.session.user.role]}». Повернули вас до огляду.</span>
           </div>
         ) : null}
-        <main className="content-wrap" id="main-content">
+        <main className="content-wrap" id="main-content" tabIndex={-1}>
           <Outlet />
         </main>
       </div>
-      <MobileNavigation />
+      <MobileNavigation onSearchOpen={openSearch} />
+      {isSearchOpen ? <GlobalSearchOverlay onClose={() => { closeSearch(true); }} onNavigate={() => { closeSearch(false); }} /> : null}
     </div>
   );
 }

@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 import pytest
 from django.db import transaction
 from django.test import Client
+from django.utils import timezone
 
 from apps.accounts.models import User, UserRole
 from apps.audit.models import AuditEvent
@@ -117,6 +120,36 @@ def test_invalid_filter_uses_shared_validation_envelope():
     assert response.status_code == 422
     assert response.json()["code"] == "validation_error"
     assert "actor_id" in response.json()["fields"]
+
+
+@pytest.mark.django_db
+def test_date_filter_is_inclusive_and_rejects_an_inverted_range():
+    admin = create_user(UserRole.ADMIN, "admin@example.test")
+    event = create_event(admin)
+    client = Client()
+    client.force_login(admin)
+    now = timezone.now()
+
+    included = client.get(
+        "/api/v1/audit-events",
+        {
+            "date_from": (now - timedelta(minutes=1)).isoformat(),
+            "date_to": (now + timedelta(minutes=1)).isoformat(),
+        },
+    )
+    assert included.status_code == 200
+    assert [item["id"] for item in included.json()["events"]] == [str(event.pk)]
+
+    inverted = client.get(
+        "/api/v1/audit-events",
+        {
+            "date_from": (now + timedelta(minutes=1)).isoformat(),
+            "date_to": (now - timedelta(minutes=1)).isoformat(),
+        },
+    )
+    assert inverted.status_code == 422
+    assert inverted.json()["code"] == "validation_error"
+    assert "date_to" in inverted.json()["fields"]
 
 
 @pytest.mark.django_db

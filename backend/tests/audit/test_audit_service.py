@@ -7,7 +7,7 @@ from django.db import DatabaseError, connection, transaction
 
 from apps.accounts.models import User, UserRole
 from apps.audit.models import AuditEvent, AuditEventImmutableError
-from apps.audit.registry import AuditAction
+from apps.audit.registry import EVENT_SECTIONS, AuditAction, AuditSection
 from apps.audit.services import REDACTED, record_audit_event
 
 
@@ -144,3 +144,35 @@ def test_unregistered_action_is_rejected_without_side_effect():
         )
 
     assert not AuditEvent.objects.exists()
+
+
+def test_registry_covers_every_action_and_required_spec_families():
+    registered_actions = set(EVENT_SECTIONS)
+    declared_actions = {action.value for action in AuditAction}
+
+    assert registered_actions == declared_actions
+    assert set(EVENT_SECTIONS.values()) == set(AuditSection)
+    assert {
+        AuditAction.APPOINTMENT_CREATED,
+        AuditAction.APPOINTMENT_UPDATED,
+        AuditAction.APPOINTMENT_RESCHEDULED,
+        AuditAction.APPOINTMENT_CANCELED,
+        AuditAction.PATIENT_CREATED,
+        AuditAction.PATIENT_UPDATED,
+        AuditAction.MEDICAL_RECORD_UPDATED,
+        AuditAction.VISIT_COMPLETED,
+        AuditAction.PAYMENT_POSTED,
+        AuditAction.REFUND_POSTED,
+        AuditAction.CASH_DEPOSIT_POSTED,
+        AuditAction.CASH_WITHDRAWAL_POSTED,
+        AuditAction.CASH_SHIFT_OPENED,
+        AuditAction.CASH_SHIFT_CLOSED,
+        AuditAction.STOCK_MOVEMENT_POSTED,
+        AuditAction.STOCKTAKE_POSTED,
+        AuditAction.USER_CREATED,
+        AuditAction.USER_ROLE_CHANGED,
+        AuditAction.USER_DEACTIVATED,
+        AuditAction.PASSWORD_CHANGED,
+        AuditAction.PASSWORD_RESET_REQUESTED,
+        AuditAction.CLINIC_PROFILE_UPDATED,
+    } <= registered_actions

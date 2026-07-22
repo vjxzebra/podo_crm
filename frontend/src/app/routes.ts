@@ -99,6 +99,17 @@ export const routeRegistry = [
     requiresSession: true,
   },
   {
+    id: "audit",
+    path: "/audit",
+    label: "Журнал дій",
+    shortLabel: "Журнал",
+    description: "Незмінна історія критичних змін",
+    icon: "audit",
+    group: "utility",
+    surface: "module",
+    requiresSession: true,
+  },
+  {
     id: "notifications",
     path: "/notifications",
     label: "Сповіщення",
@@ -171,6 +182,9 @@ export function routesForIds(routeIds: readonly string[]): readonly AppRouteDefi
 export function findRouteByPath(pathname: string): AppRouteDefinition | undefined {
   if (pathname.startsWith("/patients/")) {
     return routeRegistry.find((route) => route.id === "patients");
+  }
+  if (pathname.startsWith("/finance/")) {
+    return routeRegistry.find((route) => route.id === "finance");
   }
   return routeRegistry.find((route) => route.path === pathname);
 }

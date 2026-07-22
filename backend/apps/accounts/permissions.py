@@ -29,12 +29,20 @@ class HasFinanceAccess(HasScope):
     required_scope = AccessScope.FINANCE
 
 
+class HasCashShiftAccess(HasScope):
+    required_scope = AccessScope.CASH_SHIFT
+
+
 class HasInventoryAccess(HasScope):
     required_scope = AccessScope.INVENTORY
 
 
 class HasAuditAccess(HasScope):
     required_scope = AccessScope.AUDIT
+
+
+class HasAnalyticsAccess(HasScope):
+    required_scope = AccessScope.ANALYTICS
 
 
 class HasTeamAccess(HasScope):

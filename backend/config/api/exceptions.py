@@ -40,6 +40,7 @@ class ApiProblem(APIException):
         message: str,
         status_code: int,
         fields: Mapping[str, Sequence[str]] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
         self.status_code = status_code
         self.problem_code = code
@@ -47,6 +48,7 @@ class ApiProblem(APIException):
         self.problem_fields = {
             key: [str(item) for item in values] for key, values in (fields or {}).items()
         }
+        self.problem_headers = dict(headers or {})
         super().__init__(detail=message, code=code)
 
 
@@ -91,6 +93,7 @@ def api_exception_handler(exc: Exception, context: Mapping[str, Any]) -> Respons
                 "correlation_id": correlation_id,
             },
             status=exc.status_code,
+            headers=exc.problem_headers,
         )
 
     response = drf_exception_handler(exc, dict(context))

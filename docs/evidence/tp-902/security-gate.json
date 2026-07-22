@@ -1,0 +1,52 @@
+{
+  "packet": "TP-902",
+  "date": "2026-07-22",
+  "canonical": {
+    "backend_tests": 352,
+    "frontend_tests": 198,
+    "component_axe_scenarios": 40,
+    "python_source_files_typed": 182,
+    "openapi_snapshot_current": true,
+    "migration_changes": 0
+  },
+  "dependency_audit": {
+    "npm_known_vulnerabilities": 0,
+    "python_known_vulnerabilities": 0,
+    "critical_or_high_findings": 0
+  },
+  "deploy_check": {
+    "errors": 0,
+    "critical_warnings": 0,
+    "accepted_advisories": [
+      {
+        "code": "security.W021",
+        "decision": "HSTS preload remains disabled until TP-903 domain and rollback rehearsal"
+      }
+    ]
+  },
+  "runtime": {
+    "root_status": 200,
+    "readiness_status": 200,
+    "unauthenticated_session_status": 401,
+    "root_csp_header_count": 1,
+    "api_csp_header_count": 1,
+    "api_cache_control_no_store": true,
+    "api_frame_deny": true,
+    "api_nosniff": true,
+    "running_web_matches_built_image": true
+  },
+  "browser": {
+    "expired_session_path": "/login",
+    "protected_shell_count": 0,
+    "session_notice_count": 1,
+    "horizontal_overflow": false,
+    "warning_or_error_logs": 0,
+    "invalid_login_is_generic": true,
+    "evidence_fields_sanitized": true
+  },
+  "credential_hygiene": {
+    "local_password_matches_in_tracked_or_untracked_artifacts": 0,
+    "env_local_ignored": true,
+    "raw_session_token_or_signed_url_in_tp902_evidence": false
+  }
+}
