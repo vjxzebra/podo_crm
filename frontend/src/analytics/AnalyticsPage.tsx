@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
+import { sessionAwareFetch } from "../api/client";
+import { attachmentFilename, downloadBlob, responseErrorMessage } from "../api/download";
+import type { operations } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { getAnalytics, type AnalyticsKpi, type AnalyticsResponse } from "./analyticsApi";
 
 type PeriodPreset = "month" | "quarter" | "year" | "custom";
+type AnalyticsExportQuery = NonNullable<operations["analytics_export"]["parameters"]["query"]>;
 
 const moneyFormatter = new Intl.NumberFormat("uk-UA", {
   style: "currency",
@@ -64,6 +68,24 @@ function dateLabel(value: string): string {
   return shortDateFormatter.format(new Date(`${value}T12:00:00Z`));
 }
 
+function analyticsExportUrl(analytics: AnalyticsResponse): string {
+  const url = new URL("/api/v1/analytics/export", window.location.origin);
+  const query: AnalyticsExportQuery = {
+    from: analytics.period.date_from,
+    to: analytics.period.date_to,
+    ...(analytics.filters.specialist === null
+      ? {}
+      : { specialist_id: Number(analytics.filters.specialist.id) }),
+    ...(analytics.filters.service === null
+      ? {}
+      : { service_id: analytics.filters.service.id }),
+  };
+  Object.entries(query).forEach(([name, value]) => {
+    url.searchParams.set(name, String(value));
+  });
+  return url.toString();
+}
+
 function kpiCards(kpis: AnalyticsKpi) {
   return [
     { key: "completed", label: "Завершені візити", value: integerFormatter.format(kpis.completed_visits), note: "клінічно завершені" },
@@ -95,6 +117,9 @@ export function AnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const rangeInvalid = dateFrom === "" || dateTo === "" || dateFrom > dateTo;
 
   useEffect(() => {
@@ -102,6 +127,8 @@ export function AnalyticsPage() {
     const controller = new AbortController();
     setIsLoading(true);
     setError(null);
+    setExportError(null);
+    setExportStatus(null);
     void getAnalytics(
       {
         dateFrom,
@@ -138,6 +165,34 @@ export function AnalyticsPage() {
     setDateTo(range.to);
   }
 
+  async function exportAnalytics() {
+    if (analytics === null || isLoading || error !== null || rangeInvalid) return;
+    setIsExporting(true);
+    setExportError(null);
+    setExportStatus(null);
+    const response = await sessionAwareFetch(new Request(analyticsExportUrl(analytics), {
+      headers: { Accept: "text/csv" },
+    })).catch(() => null);
+    setIsExporting(false);
+    if (response === null) {
+      setExportError("Немає зв’язку із сервером. Не вдалося підготувати CSV аналітики.");
+      return;
+    }
+    if (!response.ok) {
+      setExportError(await responseErrorMessage(
+        response,
+        "Не вдалося підготувати CSV аналітики. Спробуйте ще раз.",
+      ));
+      return;
+    }
+    const blob = await response.blob();
+    downloadBlob(blob, attachmentFilename(
+      response.headers.get("Content-Disposition"),
+      "analytics-report.csv",
+    ));
+    setExportStatus("Завантаження CSV аналітики розпочато.");
+  }
+
   const maxTrendVisits = Math.max(1, ...(analytics?.trend.map((point) => point.visits) ?? []));
   const maxOutcome = Math.max(1, ...(analytics?.appointment_outcomes.map((item) => item.count) ?? []));
 
@@ -149,8 +204,21 @@ export function AnalyticsPage() {
           <h1>Аналітика клініки</h1>
           <p>Візити, виторг і завантаженість звіряються із незмінними клінічними та касовими фактами.</p>
         </div>
-        <span className="analytics-heading__ledger"><Icon name="lock" /> Ledger-звірено</span>
+        <div className="analytics-heading__actions">
+          <span className="analytics-heading__ledger"><Icon name="lock" /> Ledger-звірено</span>
+          <button
+            className="button button--secondary"
+            disabled={isExporting || isLoading || error !== null || analytics === null || rangeInvalid}
+            onClick={() => { void exportAnalytics(); }}
+            type="button"
+          >
+            {isExporting ? "Готуємо CSV…" : "Експортувати CSV"}
+          </button>
+        </div>
       </header>
+
+      {exportError === null ? null : <div className="form-message form-message--error analytics-export-message" role="alert"><Icon name="warning" /><span>{exportError}</span><button className="text-action" onClick={() => { void exportAnalytics(); }} type="button">Повторити export</button></div>}
+      {exportStatus === null ? null : <div className="form-message form-message--success analytics-export-message" role="status"><Icon name="check" /><span>{exportStatus}</span></div>}
 
       <section className="panel analytics-filters" aria-labelledby="analytics-filters-heading">
         <header>

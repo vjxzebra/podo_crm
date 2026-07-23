@@ -9,8 +9,11 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router";
 
+import { sessionAwareFetch } from "../api/client";
+import { attachmentFilename, downloadBlob, responseErrorMessage } from "../api/download";
 import { Icon } from "../app/Icon";
 import {
+  auditExportUrl,
   getAuditEvent,
   listAuditActors,
   listAuditEvents,
@@ -230,6 +233,9 @@ export function AuditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [detail, setDetail] = useState<AuditEventDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
@@ -318,6 +324,8 @@ export function AuditPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    setExportError(null);
+    setExportStatus(null);
     void loadEvents(query, undefined, controller.signal);
     return () => { controller.abort(); };
   }, [loadEvents, query]);
@@ -403,12 +411,53 @@ export function AuditPage() {
     if (selectedEventId !== null) void loadDetail(selectedEventId);
   };
 
+  const exportDisabled = isLoading || listError !== null || isExporting;
+
+  const exportAuditEvents = async () => {
+    if (exportDisabled) return;
+    setIsExporting(true);
+    setExportError(null);
+    setExportStatus(null);
+    const response = await sessionAwareFetch(new Request(
+      auditExportUrl(query),
+      { headers: { Accept: "text/csv" } },
+    )).catch(() => null);
+    if (response === null) {
+      setExportError("Немає зв’язку із сервером. Не вдалося експортувати журнал.");
+      setIsExporting(false);
+      return;
+    }
+    if (!response.ok) {
+      setExportError(await responseErrorMessage(
+        response,
+        "Не вдалося експортувати журнал дій.",
+      ));
+      setIsExporting(false);
+      return;
+    }
+    downloadBlob(
+      await response.blob(),
+      attachmentFilename(
+        response.headers.get("Content-Disposition"),
+        "audit-events.csv",
+      ),
+    );
+    setIsExporting(false);
+    setExportStatus("Завантаження CSV журналу дій розпочато.");
+  };
+
   return (
     <>
       <header className="page-heading audit-heading">
-        <div><p className="eyebrow">Контроль і безпека · TP-803</p><h1>Журнал дій</h1><p>Незмінна історія записів, пацієнтів, прийомів, оплат, складу та доступу працівників.</p></div>
-        <span className="audit-owner-badge"><Icon name="lock" />Тільки адмін / власник</span>
+        <div><p className="eyebrow">Контроль і безпека · TP-803 / TP-1007</p><h1>Журнал дій</h1><p>Незмінна історія записів, пацієнтів, прийомів, оплат, складу та доступу працівників.</p></div>
+        <div className="audit-heading__actions">
+          <span className="audit-owner-badge"><Icon name="lock" />Тільки адмін / власник</span>
+          <button className="button button--secondary audit-export" disabled={exportDisabled} onClick={() => { void exportAuditEvents(); }} type="button">{isExporting ? "Готуємо CSV…" : "Експортувати CSV"}</button>
+        </div>
       </header>
+
+      {exportError === null ? null : <div className="form-message form-message--error audit-export-message" role="alert"><Icon name="warning" /><span>{exportError}</span><button className="text-action" onClick={() => { void exportAuditEvents(); }} type="button">Повторити export</button></div>}
+      {exportStatus === null ? null : <div className="form-message form-message--success audit-export-message" role="status"><Icon name="check" /><span>{exportStatus}</span></div>}
 
       <section className="panel audit-toolbar-panel" aria-label="Фільтри журналу">
         <form className="audit-toolbar" onSubmit={applyFilters} role="search">

@@ -160,6 +160,32 @@ class CashShiftFilterSerializer(serializers.Serializer[Any]):
         return attrs
 
 
+class CashShiftHistoryExportFilterSerializer(serializers.Serializer[Any]):
+    search = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+        trim_whitespace=True,
+    )
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False)
+    status = serializers.ChoiceField(required=False, choices=CashShiftStatus.choices)
+    employee_id = serializers.IntegerField(required=False, min_value=1)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        date_from = attrs.get("date_from")
+        date_to = attrs.get("date_to")
+        if date_from is not None and date_to is not None and date_from > date_to:
+            raise serializers.ValidationError(
+                {"date_to": ["Кінцева дата не може бути раніше початкової."]}
+            )
+        if date_from is not None and date_to is not None and (date_to - date_from).days > 365:
+            raise serializers.ValidationError(
+                {"date_to": ["Період експорту не може перевищувати 366 днів."]}
+            )
+        return attrs
+
+
 class CashShiftListResponseSerializer(serializers.Serializer[Any]):
     shifts = CashShiftSummarySerializer(many=True)
     next_cursor = serializers.CharField(allow_null=True)
@@ -262,6 +288,38 @@ class FinanceOperationFilterSerializer(serializers.Serializer[Any]):
                 errors["status"] = ["Для refundable_only доступний лише статус PAID."]
             if errors:
                 raise serializers.ValidationError(errors)
+        return attrs
+
+
+class FinanceOperationExportFilterSerializer(serializers.Serializer[Any]):
+    search = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    type = serializers.ChoiceField(
+        required=False,
+        choices=CashLedgerEntryKind.values,
+    )
+    status = serializers.ChoiceField(
+        required=False,
+        choices=(*ReceivableStatus.values, "POSTED"),
+    )
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False)
+    payment_method = serializers.ChoiceField(
+        required=False,
+        choices=PaymentMethod.values,
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        date_from = attrs.get("date_from")
+        date_to = attrs.get("date_to")
+        if date_from is not None and date_to is not None:
+            if date_from > date_to:
+                raise serializers.ValidationError(
+                    {"date_to": ["Кінцева дата не може бути раніше початкової."]}
+                )
+            if (date_to - date_from).days + 1 > 366:
+                raise serializers.ValidationError(
+                    {"date_to": ["Період export не може перевищувати 366 днів."]}
+                )
         return attrs
 
 

@@ -6,12 +6,15 @@ from apps.inventory.views import (
     MaterialDetailView,
     MaterialListCreateView,
     MaterialLotListView,
+    MovementExportView,
     MovementListView,
     ReceiptCreateView,
     StocktakeDetailView,
     StocktakeListCreateView,
     StocktakePostView,
     StocktakePreviewView,
+    SupplierDetailView,
+    SupplierListCreateView,
 )
 
 urlpatterns = [
@@ -25,6 +28,16 @@ urlpatterns = [
         "inventory/materials/<uuid:material_id>/lots",
         MaterialLotListView.as_view(),
         name="inventory-material-lot-list",
+    ),
+    path(
+        "inventory/suppliers",
+        SupplierListCreateView.as_view(),
+        name="inventory-supplier-list",
+    ),
+    path(
+        "inventory/suppliers/<uuid:supplier_id>",
+        SupplierDetailView.as_view(),
+        name="inventory-supplier-detail",
     ),
     path("inventory/receipts", ReceiptCreateView.as_view(), name="inventory-receipt-create"),
     path(
@@ -51,6 +64,11 @@ urlpatterns = [
         "inventory/stocktakes/<uuid:stocktake_id>/post",
         StocktakePostView.as_view(),
         name="inventory-stocktake-post",
+    ),
+    path(
+        "inventory/movements/export",
+        MovementExportView.as_view(),
+        name="inventory-movement-export",
     ),
     path(
         "inventory/movements",

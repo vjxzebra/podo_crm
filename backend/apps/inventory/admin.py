@@ -8,6 +8,7 @@ from apps.inventory.models import (
     StockMovement,
     Stocktake,
     StocktakeLine,
+    Supplier,
 )
 
 
@@ -16,6 +17,13 @@ class MaterialAdmin(admin.ModelAdmin):
     list_display = ("sku", "name", "category", "unit", "minimum_quantity", "is_active")
     list_filter = ("is_active", "category")
     search_fields = ("sku", "name")
+
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ("name", "contact_name", "phone", "email", "is_active", "updated_at")
+    list_filter = ("is_active",)
+    search_fields = ("name", "contact_name", "phone", "email")
 
 
 @admin.register(MaterialLot)

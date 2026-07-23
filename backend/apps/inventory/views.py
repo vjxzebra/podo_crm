@@ -2,25 +2,30 @@ from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
 from django.db import IntegrityError
-from django.db.models import Q, QuerySet
+from django.db.models import Count, Q, QuerySet
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.pagination import CursorPagination
+from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
 from apps.accounts.permissions import HasInventoryAccess
+from apps.inventory import exports as inventory_exports
 from apps.inventory.models import (
     InventoryOperation,
     Material,
     MaterialLot,
-    StockMovement,
     Stocktake,
+    Supplier,
 )
+from apps.inventory.selectors import movement_journal
 from apps.inventory.serializers import (
     InventoryOperationSerializer,
     ManualWriteoffCreateSerializer,
@@ -31,6 +36,7 @@ from apps.inventory.serializers import (
     MaterialLotSerializer,
     MaterialSerializer,
     MaterialUpdateSerializer,
+    MovementExportFilterSerializer,
     MovementFilterSerializer,
     MovementJournalItemSerializer,
     MovementJournalResponseSerializer,
@@ -38,15 +44,23 @@ from apps.inventory.serializers import (
     StocktakeCreateSerializer,
     StocktakePreviewSerializer,
     StocktakeSerializer,
+    SupplierCreateSerializer,
+    SupplierFilterSerializer,
+    SupplierListSerializer,
+    SupplierSerializer,
+    SupplierUpdateSerializer,
 )
 from apps.inventory.services import (
     create_material,
     create_stocktake,
+    create_supplier,
     post_manual_writeoff,
     post_receipt,
     post_stocktake,
     update_material,
+    update_supplier,
 )
+from config.api.csv import SafeCsvRenderer
 from config.api.exceptions import ApiProblem
 from config.api.serializers import ErrorEnvelopeSerializer
 from config.middleware import get_request_id
@@ -71,8 +85,21 @@ def _sku_conflict() -> ApiProblem:
     )
 
 
+def _supplier_name_conflict() -> ApiProblem:
+    return ApiProblem(
+        code="supplier_name_already_exists",
+        message="Постачальник із такою назвою вже існує.",
+        status_code=status.HTTP_409_CONFLICT,
+        fields={"name": ["Укажіть іншу унікальну назву постачальника."]},
+    )
+
+
 def _materials_with_lots() -> QuerySet[Material]:
     return Material.objects.prefetch_related("lots")
+
+
+def _suppliers_with_usage() -> QuerySet[Supplier]:
+    return Supplier.objects.annotate(lots_count=Count("lots"))
 
 
 def _idempotency_key(request: Request) -> str:
@@ -231,6 +258,114 @@ class MaterialDetailView(APIView):
             raise _sku_conflict() from exc
         material = get_object_or_404(_materials_with_lots(), pk=material.pk)
         return Response(MaterialSerializer(material).data)
+
+
+class SupplierListCreateView(APIView):
+    permission_classes = [HasInventoryAccess]
+
+    @extend_schema(
+        operation_id="inventory_supplier_list",
+        summary="Search and filter the administrator supplier directory",
+        parameters=[SupplierFilterSerializer],
+        responses={
+            status.HTTP_200_OK: SupplierListSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["inventory"],
+    )
+    def get(self, request: Request) -> Response:
+        filters = SupplierFilterSerializer(data=request.query_params)
+        filters.is_valid(raise_exception=True)
+        query = filters.validated_data
+        suppliers = _suppliers_with_usage()
+        if search := query.get("search", "").strip():
+            suppliers = suppliers.filter(
+                Q(name__icontains=search)
+                | Q(contact_name__icontains=search)
+                | Q(phone__icontains=search)
+                | Q(email__icontains=search)
+            )
+        if query.get("status") == "active":
+            suppliers = suppliers.filter(is_active=True)
+        elif query.get("status") == "inactive":
+            suppliers = suppliers.filter(is_active=False)
+        return Response({"suppliers": SupplierSerializer(suppliers, many=True).data})
+
+    @extend_schema(
+        operation_id="inventory_supplier_create",
+        summary="Create an administrator supplier directory record",
+        request=SupplierCreateSerializer,
+        responses={
+            status.HTTP_201_CREATED: SupplierSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_409_CONFLICT: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["inventory"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = SupplierCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            supplier = create_supplier(
+                actor=_actor(request),
+                correlation_id=get_request_id(request),
+                data=dict(serializer.validated_data),
+            )
+        except IntegrityError as exc:
+            raise _supplier_name_conflict() from exc
+        return Response(SupplierSerializer(supplier).data, status=status.HTTP_201_CREATED)
+
+
+class SupplierDetailView(APIView):
+    permission_classes = [HasInventoryAccess]
+
+    @extend_schema(
+        operation_id="inventory_supplier_retrieve",
+        summary="Return administrator supplier details and historical lot count",
+        responses={
+            status.HTTP_200_OK: SupplierSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_404_NOT_FOUND: ErrorEnvelopeSerializer,
+        },
+        tags=["inventory"],
+    )
+    def get(self, request: Request, supplier_id: UUID) -> Response:
+        supplier = get_object_or_404(_suppliers_with_usage(), pk=supplier_id)
+        return Response(SupplierSerializer(supplier).data)
+
+    @extend_schema(
+        operation_id="inventory_supplier_update",
+        summary="Edit, deactivate or reactivate a supplier without changing lot history",
+        request=SupplierUpdateSerializer,
+        responses={
+            status.HTTP_200_OK: SupplierSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_404_NOT_FOUND: ErrorEnvelopeSerializer,
+            status.HTTP_409_CONFLICT: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["inventory"],
+    )
+    def patch(self, request: Request, supplier_id: UUID) -> Response:
+        get_object_or_404(Supplier, pk=supplier_id)
+        serializer = SupplierUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            supplier = update_supplier(
+                actor=_actor(request),
+                supplier_id=supplier_id,
+                correlation_id=get_request_id(request),
+                changes=dict(serializer.validated_data),
+            )
+        except IntegrityError as exc:
+            raise _supplier_name_conflict() from exc
+        return Response(SupplierSerializer(supplier).data)
 
 
 class MaterialLotListView(APIView):
@@ -465,32 +600,7 @@ class MovementListView(APIView):
         filters = MovementFilterSerializer(data=request.query_params)
         filters.is_valid(raise_exception=True)
         query = filters.validated_data
-        movements = StockMovement.objects.select_related(
-            "operation__created_by", "lot__material"
-        ).all()
-        if search := query.get("search", "").strip():
-            movements = movements.filter(
-                Q(operation__public_number__icontains=search)
-                | Q(operation__reason__icontains=search)
-                | Q(operation__comment__icontains=search)
-                | Q(lot__lot_number__icontains=search)
-                | Q(lot__material__sku__icontains=search)
-                | Q(lot__material__name__icontains=search)
-            )
-        if query.get("kind") not in (None, "all"):
-            movements = movements.filter(operation__kind=query["kind"])
-        if material_id := query.get("material_id"):
-            movements = movements.filter(lot__material_id=material_id)
-        if actor := query.get("actor", "").strip():
-            movements = movements.filter(
-                Q(operation__created_by__email__icontains=actor)
-                | Q(operation__created_by__first_name__icontains=actor)
-                | Q(operation__created_by__last_name__icontains=actor)
-            )
-        if date_from := query.get("date_from"):
-            movements = movements.filter(operation__posted_at__date__gte=date_from)
-        if date_to := query.get("date_to"):
-            movements = movements.filter(operation__posted_at__date__lte=date_to)
+        movements = movement_journal(query)
 
         paginator = MovementCursorPagination()
         page = paginator.paginate_queryset(movements, request, view=self)
@@ -500,6 +610,63 @@ class MovementListView(APIView):
                 "next_cursor": _cursor_from_link(paginator.get_next_link()),
             }
         )
+
+
+class MovementExportView(APIView):
+    permission_classes = [HasInventoryAccess]
+    renderer_classes = [JSONRenderer, SafeCsvRenderer]
+
+    @extend_schema(
+        operation_id="inventory_movement_export",
+        summary="Export the filtered append-only stock movement journal as safe CSV",
+        parameters=[MovementExportFilterSerializer],
+        responses={
+            (status.HTTP_200_OK, "text/csv"): OpenApiResponse(
+                response=OpenApiTypes.BINARY,
+                description="UTF-8 BOM CSV attachment with at most 5000 movement rows.",
+            ),
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["inventory"],
+    )
+    def get(self, request: Request) -> HttpResponse:
+        if "cursor" in request.query_params:
+            raise ApiProblem(
+                code="export_cursor_not_supported",
+                message="Експорт завжди починається з повного відфільтрованого набору.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                fields={"cursor": ["Приберіть cursor з export-запиту."]},
+            )
+        filters = MovementExportFilterSerializer(data=request.query_params)
+        filters.is_valid(raise_exception=True)
+        movements = list(
+            movement_journal(filters.validated_data).order_by("-operation__posted_at", "-id")[
+                : inventory_exports.MOVEMENT_EXPORT_ROW_LIMIT + 1
+            ]
+        )
+        if len(movements) > inventory_exports.MOVEMENT_EXPORT_ROW_LIMIT:
+            raise ApiProblem(
+                code="export_too_large",
+                message="Експорт містить забагато рядків. Звузьте фільтри.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                fields={
+                    "filters": [
+                        "Максимум "
+                        f"{inventory_exports.MOVEMENT_EXPORT_ROW_LIMIT} рядків за один файл."
+                    ]
+                },
+            )
+        filename = timezone.localtime().strftime("inventory-movements-%Y%m%d-%H%M%S.csv")
+        response = HttpResponse(
+            inventory_exports.render_movement_csv(movements),
+            content_type="text/csv; charset=utf-8",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "no-store"
+        response["X-Export-Row-Count"] = str(len(movements))
+        return response
 
 
 class InventoryOperationDetailView(APIView):

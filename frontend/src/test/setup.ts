@@ -148,6 +148,34 @@ export const healthyInventoryMaterial = {
   lots_count: 1,
 } as const;
 
+export const inventorySupplier = {
+  id: "a4f59f8a-5c2f-41c0-8f10-9b85e9b952ad",
+  name: "Podology Market",
+  contact_name: "Олена Коваль",
+  phone: "+380 67 123 45 67",
+  email: "sales@podology-market.test",
+  address: "Київ, вул. Тестова, 1",
+  note: "Доставка щовівторка",
+  is_active: true,
+  lots_count: 1,
+  version: 1,
+  created_at: "2026-07-21T12:00:00+03:00",
+  updated_at: "2026-07-21T12:00:00+03:00",
+} as const;
+
+export const inactiveInventorySupplier = {
+  ...inventorySupplier,
+  id: "51636d4a-4962-4a3d-9472-96c7ff3ac624",
+  name: "ТОВ Медтехніка",
+  contact_name: "",
+  phone: "",
+  email: "",
+  address: "",
+  note: "",
+  is_active: false,
+  lots_count: 1,
+} as const;
+
 export const inventoryLots = [
   {
     id: "8cc5bb98-4bd6-4ea6-b167-dd7c3fe1b11d",
@@ -157,6 +185,7 @@ export const inventoryLots = [
     initial_quantity: "10.000",
     current_quantity: "4.000",
     purchase_price_minor: 320,
+    supplier_id: inventorySupplier.id,
     supplier_name: "Podology Market",
     is_expired: false,
     is_usable: true,
@@ -172,6 +201,7 @@ export const inventoryLots = [
     initial_quantity: "20.000",
     current_quantity: "8.000",
     purchase_price_minor: 320,
+    supplier_id: inactiveInventorySupplier.id,
     supplier_name: "ТОВ Медтехніка",
     is_expired: false,
     is_usable: true,
@@ -201,6 +231,8 @@ export const inventoryReceiptOperation = {
     material_unit: inventoryMaterial.unit,
     lot_id: "8a1601a2-6ac3-40a7-9fa8-218026be904f",
     lot_number: "N-050",
+    supplier_id: inventorySupplier.id,
+    supplier_name: inventorySupplier.name,
     quantity_delta: "15.000",
     balance_after: "15.000",
     created_at: "2026-07-21T18:30:00Z",
@@ -1282,6 +1314,14 @@ export function jsonResponse(body: unknown, status = 200): Response {
 }
 
 beforeEach(() => {
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: vi.fn(() => "blob:inventory-export"),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: vi.fn(),
+  });
   vi.stubGlobal(
     "fetch",
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -1328,6 +1368,9 @@ beforeEach(() => {
       if (url.includes("/api/v1/clinic-workdays") && method === "GET") {
         return Promise.resolve(jsonResponse({ timezone: "Europe/Kyiv", workdays: clinicWorkdays }));
       }
+      if (url.includes("/api/v1/inventory/suppliers") && method === "GET") {
+        return Promise.resolve(jsonResponse({ suppliers: [inventorySupplier, inactiveInventorySupplier] }));
+      }
       if (url.includes(`/api/v1/inventory/materials/${inventoryMaterial.id}/lots`) && method === "GET") {
         return Promise.resolve(jsonResponse({ lots: inventoryLots }));
       }
@@ -1342,6 +1385,19 @@ beforeEach(() => {
       }
       if (url.includes(`/api/v1/inventory/operations/${stocktakeOperationDetail.id}`) && method === "GET") {
         return Promise.resolve(jsonResponse(stocktakeOperationDetail));
+      }
+      if (url.includes("/api/v1/inventory/movements/export") && method === "GET") {
+        return Promise.resolve(new Response(
+          "posted_at_local,operation_number\r\n2026-07-23T10:00:00+03:00,INV-TEST-001\r\n",
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition": "attachment; filename=\"inventory-movements-20260723-100000.csv\"",
+              "X-Export-Row-Count": "1",
+            },
+          },
+        ));
       }
       if (url.includes("/api/v1/inventory/movements") && method === "GET") {
         return Promise.resolve(jsonResponse(inventoryMovementJournal));
@@ -1433,5 +1489,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });

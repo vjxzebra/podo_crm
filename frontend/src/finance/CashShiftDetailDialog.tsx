@@ -1,5 +1,7 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
+import { sessionAwareFetch } from "../api/client";
+import { attachmentFilename, downloadBlob, responseErrorMessage } from "../api/download";
 import { Icon } from "../app/Icon";
 import { roleLabels } from "../auth/AuthContext";
 import type { CashLedgerEntrySnapshot, CashShiftProjection } from "./cashShiftTypes";
@@ -27,9 +29,39 @@ function entryAmount(entry: CashLedgerEntrySnapshot): string {
 export function CashShiftDetailDialog({ shift, onClose, onRequestClose }: CashShiftDetailDialogProps) {
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   useFinanceDialogLifecycle({ dialogRef, initialFocusRef: closeRef, onEscape: onClose });
   const totals = shift.totals;
   const reconciliation = shift.reconciliation;
+  const exportShift = async () => {
+    setIsExporting(true);
+    setExportError(null);
+    setExportStatus(null);
+    const response = await sessionAwareFetch(new Request(
+      new URL(`/api/v1/cash-shifts/${shift.id}/export`, window.location.origin),
+      { headers: { Accept: "text/csv" } },
+    )).catch(() => null);
+    setIsExporting(false);
+    if (response === null) {
+      setExportError("Немає зв’язку із сервером. Не вдалося підготувати CSV зміни.");
+      return;
+    }
+    if (!response.ok) {
+      setExportError(await responseErrorMessage(
+        response,
+        "Не вдалося підготувати CSV зміни. Спробуйте ще раз.",
+      ));
+      return;
+    }
+    const blob = await response.blob();
+    downloadBlob(blob, attachmentFilename(
+      response.headers.get("Content-Disposition"),
+      `cash-shift-${shift.public_number}.csv`,
+    ));
+    setExportStatus("Завантаження CSV зміни розпочато.");
+  };
 
   return (
     <div className="modal-layer finance-shift-detail-layer" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }} role="presentation">
@@ -107,9 +139,13 @@ export function CashShiftDetailDialog({ shift, onClose, onRequestClose }: CashSh
           </section>
         </div>
 
+        {exportError === null ? null : <div className="form-message form-message--error finance-shift-export-message" role="alert"><Icon name="warning" /><span>{exportError}</span><button className="text-action" onClick={() => { void exportShift(); }} type="button">Повторити export</button></div>}
+        {exportStatus === null ? null : <div className="form-message form-message--success finance-shift-export-message" role="status"><Icon name="check" /><span>{exportStatus}</span></div>}
+
         <footer className="modal-card__footer finance-shift-detail-footer">
           <span><Icon name="lock" />{shift.status === "CLOSED" ? "Закриту зміну не можна редагувати, видалити або відкрити повторно." : "Ledger відкритої зміни незмінний; доступне лише закриття зі звіркою."}</span>
           <div>
+            <button className="button button--secondary" disabled={isExporting} onClick={() => { void exportShift(); }} type="button">{isExporting ? "Готуємо CSV…" : "Експортувати CSV"}</button>
             <button className="button button--secondary" onClick={onClose} type="button">Готово</button>
             {shift.status === "OPEN" && onRequestClose !== undefined ? <button className="button button--danger" onClick={onRequestClose} type="button">Закрити зміну</button> : null}
           </div>

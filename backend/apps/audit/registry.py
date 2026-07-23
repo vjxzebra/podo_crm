@@ -66,6 +66,10 @@ class AuditAction(StrEnum):
     MATERIAL_UPDATED = "inventory.material_updated"
     MATERIAL_DEACTIVATED = "inventory.material_deactivated"
     MATERIAL_REACTIVATED = "inventory.material_reactivated"
+    SUPPLIER_CREATED = "inventory.supplier_created"
+    SUPPLIER_UPDATED = "inventory.supplier_updated"
+    SUPPLIER_DEACTIVATED = "inventory.supplier_deactivated"
+    SUPPLIER_REACTIVATED = "inventory.supplier_reactivated"
     INVENTORY_RECEIPT_POSTED = "inventory.receipt_posted"
     INVENTORY_MANUAL_WRITEOFF_POSTED = "inventory.manual_writeoff_posted"
     STOCKTAKE_CREATED = "inventory.stocktake_created"
@@ -128,6 +132,10 @@ EVENT_SECTIONS: dict[str, AuditSection] = {
     AuditAction.MATERIAL_UPDATED: AuditSection.INVENTORY,
     AuditAction.MATERIAL_DEACTIVATED: AuditSection.INVENTORY,
     AuditAction.MATERIAL_REACTIVATED: AuditSection.INVENTORY,
+    AuditAction.SUPPLIER_CREATED: AuditSection.INVENTORY,
+    AuditAction.SUPPLIER_UPDATED: AuditSection.INVENTORY,
+    AuditAction.SUPPLIER_DEACTIVATED: AuditSection.INVENTORY,
+    AuditAction.SUPPLIER_REACTIVATED: AuditSection.INVENTORY,
     AuditAction.INVENTORY_RECEIPT_POSTED: AuditSection.INVENTORY,
     AuditAction.INVENTORY_MANUAL_WRITEOFF_POSTED: AuditSection.INVENTORY,
     AuditAction.STOCKTAKE_CREATED: AuditSection.INVENTORY,

@@ -553,8 +553,14 @@ def open_cash_shift(*, actor: User, correlation_id: str) -> CashShift:
 
 
 def _visible_cash_shifts(actor: User) -> QuerySet[CashShift]:
+    return _scope_cash_shift_queryset(_cash_shift_queryset(), actor)
+
+
+def _scope_cash_shift_queryset(
+    queryset: QuerySet[CashShift],
+    actor: User,
+) -> QuerySet[CashShift]:
     _validate_actor(actor)
-    queryset = _cash_shift_queryset()
     if actor.role != UserRole.ADMIN:
         queryset = queryset.filter(employee=actor)
     return queryset
@@ -565,6 +571,27 @@ def cash_shift_detail(*, actor: User, shift_id: UUID) -> CashShift:
     if shift is None:
         raise _cash_shift_not_found()
     return shift
+
+
+def cash_shift_export_snapshot(
+    *,
+    actor: User,
+    shift_id: UUID,
+    entry_limit: int,
+) -> tuple[CashShift, list[CashLedgerEntry]]:
+    _validate_actor(actor)
+    queryset = CashShift.objects.select_related("employee", "closed_by")
+    if actor.role != UserRole.ADMIN:
+        queryset = queryset.filter(employee=actor)
+    shift = queryset.filter(pk=shift_id).first()
+    if shift is None:
+        raise _cash_shift_not_found()
+    entries = list(
+        CashLedgerEntry.objects.filter(cash_shift=shift)
+        .select_related("created_by")
+        .order_by("-posted_at", "-id")[: entry_limit + 1]
+    )
+    return shift, entries
 
 
 def cash_shift_close_preview(*, actor: User, shift_id: UUID) -> dict[str, Any]:
@@ -630,12 +657,12 @@ def _encode_cash_shift_cursor(shift: CashShift) -> str:
     )
 
 
-def cash_shift_history_page(
+def _filter_cash_shift_history_queryset(
     *,
     actor: User,
     filters: dict[str, Any],
-) -> tuple[list[dict[str, Any]], str | None]:
-    queryset = _visible_cash_shifts(actor)
+    queryset: QuerySet[CashShift],
+) -> QuerySet[CashShift]:
     employee_id = filters.get("employee_id")
     if employee_id is not None:
         if actor.role != UserRole.ADMIN:
@@ -661,6 +688,19 @@ def cash_shift_history_page(
     if date_to is not None:
         end = datetime.combine(date_to, time.max, tzinfo=local_timezone)
         queryset = queryset.filter(opened_at__lte=end)
+    return queryset
+
+
+def cash_shift_history_page(
+    *,
+    actor: User,
+    filters: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str | None]:
+    queryset = _filter_cash_shift_history_queryset(
+        actor=actor,
+        filters=filters,
+        queryset=_visible_cash_shifts(actor),
+    )
 
     cursor = _decode_cash_shift_cursor(filters.get("cursor"))
     if cursor is not None:
@@ -674,6 +714,111 @@ def cash_shift_history_page(
     visible_page = page[:CASH_SHIFT_PAGE_SIZE]
     next_cursor = _encode_cash_shift_cursor(visible_page[-1]) if has_more else None
     return [cash_shift_summary(shift) for shift in visible_page], next_cursor
+
+
+def _cash_entry_sum(condition: Q) -> Any:
+    return Coalesce(
+        Sum("entries__amount_minor", filter=condition),
+        Value(0),
+        output_field=BigIntegerField(),
+    )
+
+
+def cash_shift_history_export_rows(
+    *,
+    actor: User,
+    filters: dict[str, Any],
+    row_limit: int,
+) -> list[dict[str, Any]]:
+    queryset = _filter_cash_shift_history_queryset(
+        actor=actor,
+        filters=filters,
+        queryset=_scope_cash_shift_queryset(CashShift.objects.all(), actor),
+    ).annotate(
+        export_operations_count=Count("entries"),
+        export_payment_count=Count(
+            "entries",
+            filter=Q(entries__kind=CashLedgerEntryKind.PAYMENT),
+        ),
+        export_refund_count=Count(
+            "entries",
+            filter=Q(entries__kind=CashLedgerEntryKind.REFUND),
+        ),
+        export_payments_total_minor=_cash_entry_sum(Q(entries__kind=CashLedgerEntryKind.PAYMENT)),
+        export_refunds_total_minor=_cash_entry_sum(Q(entries__kind=CashLedgerEntryKind.REFUND)),
+        export_cash_payments_minor=_cash_entry_sum(
+            Q(
+                entries__kind=CashLedgerEntryKind.PAYMENT,
+                entries__payment_method=PaymentMethod.CASH,
+            )
+        ),
+        export_cash_refunds_minor=_cash_entry_sum(
+            Q(
+                entries__kind=CashLedgerEntryKind.REFUND,
+                entries__payment_method=PaymentMethod.CASH,
+            )
+        ),
+        export_card_payments_minor=_cash_entry_sum(
+            Q(
+                entries__kind=CashLedgerEntryKind.PAYMENT,
+                entries__payment_method=PaymentMethod.CARD,
+            )
+        ),
+        export_card_refunds_minor=_cash_entry_sum(
+            Q(
+                entries__kind=CashLedgerEntryKind.REFUND,
+                entries__payment_method=PaymentMethod.CARD,
+            )
+        ),
+        export_transfer_payments_minor=_cash_entry_sum(
+            Q(
+                entries__kind=CashLedgerEntryKind.PAYMENT,
+                entries__payment_method=PaymentMethod.TRANSFER,
+            )
+        ),
+        export_transfer_refunds_minor=_cash_entry_sum(
+            Q(
+                entries__kind=CashLedgerEntryKind.REFUND,
+                entries__payment_method=PaymentMethod.TRANSFER,
+            )
+        ),
+        export_deposits_minor=_cash_entry_sum(Q(entries__kind=CashLedgerEntryKind.DEPOSIT)),
+        export_withdrawals_minor=_cash_entry_sum(Q(entries__kind=CashLedgerEntryKind.WITHDRAWAL)),
+    )
+    shifts = list(queryset.order_by("-opened_at", "-id")[: row_limit + 1])
+    rows: list[dict[str, Any]] = []
+    for shift in shifts:
+        annotated_shift = cast(Any, shift)
+        payments_total = int(annotated_shift.export_payments_total_minor)
+        refunds_total = int(annotated_shift.export_refunds_total_minor)
+        cash_payments = int(annotated_shift.export_cash_payments_minor)
+        cash_refunds = int(annotated_shift.export_cash_refunds_minor)
+        card_payments = int(annotated_shift.export_card_payments_minor)
+        card_refunds = int(annotated_shift.export_card_refunds_minor)
+        transfer_payments = int(annotated_shift.export_transfer_payments_minor)
+        transfer_refunds = int(annotated_shift.export_transfer_refunds_minor)
+        deposits = int(annotated_shift.export_deposits_minor)
+        withdrawals = int(annotated_shift.export_withdrawals_minor)
+        rows.append(
+            {
+                "shift": shift,
+                "totals": {
+                    "operations_count": int(annotated_shift.export_operations_count),
+                    "payment_count": int(annotated_shift.export_payment_count),
+                    "refund_count": int(annotated_shift.export_refund_count),
+                    "payments_total_minor": payments_total,
+                    "refunds_total_minor": refunds_total,
+                    "revenue_minor": payments_total - refunds_total,
+                    "cash_net_minor": cash_payments - cash_refunds,
+                    "card_net_minor": card_payments - card_refunds,
+                    "transfer_net_minor": transfer_payments - transfer_refunds,
+                    "deposits_minor": deposits,
+                    "withdrawals_minor": withdrawals,
+                    "expected_cash_minor": (cash_payments - cash_refunds + deposits - withdrawals),
+                },
+            }
+        )
+    return rows
 
 
 def _normalized_close_payload(
@@ -1276,26 +1421,25 @@ def _apply_finance_cursor(
     )
 
 
-def finance_operations_page(
+def _finance_operation_candidates(
     *,
-    actor: User,
     filters: dict[str, Any],
-) -> tuple[list[dict[str, Any]], str | None]:
-    _validate_finance_actor(actor)
-    cursor = _decode_finance_cursor(filters.get("cursor"))
+    cursor: FinanceOperationCursor | None,
+    per_type_limit: int,
+) -> list[FinanceOperationCandidate]:
     payment_rows = list(
         _apply_finance_cursor(
             _payment_operations_queryset(filters),
             operation_type=CashLedgerEntryKind.PAYMENT,
             cursor=cursor,
-        )[: _FINANCE_PAGE_SIZE + 1]
+        )[:per_type_limit]
     )
     refund_rows = list(
         _apply_finance_cursor(
             _refund_operations_queryset(filters),
             operation_type=CashLedgerEntryKind.REFUND,
             cursor=cursor,
-        )[: _FINANCE_PAGE_SIZE + 1]
+        )[:per_type_limit]
     )
     deposit_rows = list(
         _apply_finance_cursor(
@@ -1305,7 +1449,7 @@ def finance_operations_page(
             ),
             operation_type=CashLedgerEntryKind.DEPOSIT,
             cursor=cursor,
-        )[: _FINANCE_PAGE_SIZE + 1]
+        )[:per_type_limit]
     )
     withdrawal_rows = list(
         _apply_finance_cursor(
@@ -1315,7 +1459,7 @@ def finance_operations_page(
             ),
             operation_type=CashLedgerEntryKind.WITHDRAWAL,
             cursor=cursor,
-        )[: _FINANCE_PAGE_SIZE + 1]
+        )[:per_type_limit]
     )
     candidates = [
         *(
@@ -1354,19 +1498,50 @@ def finance_operations_page(
         ),
         reverse=True,
     )
+    return candidates
+
+
+def _finance_operation_candidate_read_model(
+    item: FinanceOperationCandidate,
+) -> dict[str, Any]:
+    if item.operation_type == CashLedgerEntryKind.PAYMENT:
+        return finance_payment_operation_read_model(cast(Receivable, item.value))
+    if item.operation_type == CashLedgerEntryKind.REFUND:
+        return finance_refund_operation_read_model(cast(Refund, item.value))
+    return finance_cash_adjustment_operation_read_model(cast(CashAdjustment, item.value))
+
+
+def finance_operations_page(
+    *,
+    actor: User,
+    filters: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str | None]:
+    _validate_finance_actor(actor)
+    cursor = _decode_finance_cursor(filters.get("cursor"))
+    candidates = _finance_operation_candidates(
+        filters=filters,
+        cursor=cursor,
+        per_type_limit=_FINANCE_PAGE_SIZE + 1,
+    )
     page = candidates[:_FINANCE_PAGE_SIZE]
-    operations = []
-    for item in page:
-        if item.operation_type == CashLedgerEntryKind.PAYMENT:
-            operations.append(finance_payment_operation_read_model(cast(Receivable, item.value)))
-        elif item.operation_type == CashLedgerEntryKind.REFUND:
-            operations.append(finance_refund_operation_read_model(cast(Refund, item.value)))
-        else:
-            operations.append(
-                finance_cash_adjustment_operation_read_model(cast(CashAdjustment, item.value))
-            )
+    operations = [_finance_operation_candidate_read_model(item) for item in page]
     next_cursor = _encode_finance_cursor(page[-1]) if len(candidates) > len(page) else None
     return operations, next_cursor
+
+
+def finance_operations_export_rows(
+    *,
+    actor: User,
+    filters: dict[str, Any],
+    row_limit: int,
+) -> list[dict[str, Any]]:
+    _validate_finance_actor(actor)
+    candidates = _finance_operation_candidates(
+        filters=filters,
+        cursor=None,
+        per_type_limit=row_limit + 1,
+    )
+    return [_finance_operation_candidate_read_model(item) for item in candidates[: row_limit + 1]]
 
 
 def payment_operation_by_receivable_id(receivable_id: UUID) -> dict[str, Any]:

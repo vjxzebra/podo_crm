@@ -1,4 +1,6 @@
+import csv
 from datetime import datetime, time, timedelta
+from io import StringIO
 from unittest.mock import patch
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -7,6 +9,8 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
+from apps.analytics import exports as analytics_exports
+from apps.audit.models import AuditEvent
 from apps.billing.models import CashShift, Receivable, ReceivableStatus
 from apps.clinic.models import AppointmentStatusConfig, ClinicWorkday, Room, Service
 from apps.patients.models import Patient
@@ -439,3 +443,232 @@ def test_analytics_reconciles_ledger_cohorts_rankings_and_filters() -> None:
     assert filtered_body["kpis"]["payment_count"] == 1
     assert [item["id"] for item in filtered_body["service_ranking"]] == [str(service_b.pk)]
     assert UUID(filtered_body["filters"]["service"]["id"]) == service_b.pk
+
+
+@pytest.mark.django_db(transaction=True)
+def test_analytics_export_is_filtered_summary_first_safe_and_contains_no_raw_identifiers() -> None:
+    admin = create_user(
+        email="analytics-export-admin@example.test", role=UserRole.ADMIN, first_name="Анна"
+    )
+    cashier = create_user(
+        email="analytics-export-cashier@example.test",
+        role=UserRole.RECEPTION,
+        first_name="Марина",
+    )
+    specialist = create_user(
+        email="analytics-export-podo@example.test",
+        role=UserRole.PODOLOGIST,
+        first_name="=Олена",
+    )
+    CashShift.objects.create(employee=cashier)
+    service = Service.objects.create(
+        code="@SERVICE-EXPORT",
+        name="+Послуга export",
+        duration_minutes=60,
+        price_minor=15_000,
+        color="#39645A",
+    )
+    room = Room.objects.create(name="Export кабінет")
+    ClinicWorkday.objects.update_or_create(
+        weekday=0,
+        defaults={"is_working": True, "start_time": time(9, 0), "end_time": time(18, 0)},
+    )
+    patient = create_patient(
+        first_name="PRIVATE-PATIENT-MARKER",
+        phone="0679999988",
+        specialist=specialist,
+        created_at=moment(2, 9),
+    )
+    visit = complete_visit(
+        patient=patient,
+        specialist=specialist,
+        service=service,
+        room=room,
+        starts_at=moment(5, 9),
+        amount_minor=15_000,
+    )
+    create_receivable(visit)
+    post_payment(
+        client=client_for(cashier),
+        visit=visit,
+        key="analytics-export-payment",
+        posted_at=moment(6, 12),
+    )
+    audit_count = AuditEvent.objects.count()
+
+    response = client_for(admin).get(
+        "/api/v1/analytics/export",
+        {
+            "from": "2026-07-01",
+            "to": "2026-07-31",
+            "specialist_id": specialist.pk,
+            "service_id": str(service.pk),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "text/csv; charset=utf-8"
+    assert response["Cache-Control"] == "no-store"
+    assert response["Content-Disposition"].startswith('attachment; filename="analytics-report-')
+    assert response.content.startswith(b"\xef\xbb\xbf")
+    assert b"\r\n" in response.content
+    decoded = response.content.decode("utf-8-sig")
+    reader = csv.DictReader(StringIO(decoded, newline=""))
+    rows = list(reader)
+    assert reader.fieldnames == list(analytics_exports.ANALYTICS_EXPORT_COLUMNS)
+    assert len(reader.fieldnames) == 34
+    assert response["X-Export-Row-Count"] == str(len(rows))
+    assert rows[0]["row_type"] == "REPORT_SUMMARY"
+    assert rows[0]["completed_visits"] == "1"
+    assert rows[0]["revenue_minor"] == "15000"
+    assert rows[0]["payment_count"] == "1"
+    assert rows[0]["filter_specialist_name"] == "'=Олена Коваль"
+    assert rows[0]["filter_service_name"] == "'+Послуга export"
+    assert [row["row_type"] for row in rows] == sorted(
+        [row["row_type"] for row in rows],
+        key=(
+            "REPORT_SUMMARY",
+            "TREND",
+            "APPOINTMENT_OUTCOME",
+            "SPECIALIST_PERFORMANCE",
+            "SERVICE_RANKING",
+        ).index,
+    )
+    specialist_row = next(row for row in rows if row["row_type"] == "SPECIALIST_PERFORMANCE")
+    service_row = next(row for row in rows if row["row_type"] == "SERVICE_RANKING")
+    assert specialist_row["dimension_name"] == "'=Олена Коваль"
+    assert service_row["dimension_code"] == "'@SERVICE-EXPORT"
+    assert service_row["dimension_name"] == "'+Послуга export"
+    assert "PRIVATE-PATIENT-MARKER" not in decoded
+    assert "0679999988" not in decoded
+    assert str(patient.pk) not in decoded
+    assert str(visit.pk) not in decoded
+    assert AuditEvent.objects.count() == audit_count
+
+
+@pytest.mark.django_db
+def test_analytics_export_empty_report_keeps_summary_trend_and_canonical_outcomes() -> None:
+    admin = create_user(
+        email="analytics-export-empty@example.test", role=UserRole.ADMIN, first_name="Анна"
+    )
+
+    response = client_for(admin).get("/api/v1/analytics/export?from=2026-07-01&to=2026-07-02")
+
+    assert response.status_code == 200
+    rows = list(csv.DictReader(StringIO(response.content.decode("utf-8-sig"), newline="")))
+    assert rows[0]["row_type"] == "REPORT_SUMMARY"
+    assert rows[0]["completed_visits"] == "0"
+    assert rows[0]["average_return_interval_days"] == ""
+    assert [row["row_type"] for row in rows].count("TREND") == 2
+    outcomes = [row["dimension_code"] for row in rows if row["row_type"] == "APPOINTMENT_OUTCOME"]
+    assert outcomes == ["COMPLETED", "CANCELED", "NO_SHOW", "OTHER"]
+    assert not any(row["row_type"] == "SPECIALIST_PERFORMANCE" for row in rows)
+    assert not any(row["row_type"] == "SERVICE_RANKING" for row in rows)
+
+
+@pytest.mark.django_db
+def test_analytics_export_repeats_admin_scope_and_filter_validation() -> None:
+    admin = create_user(
+        email="analytics-export-scope-admin@example.test",
+        role=UserRole.ADMIN,
+        first_name="Анна",
+    )
+    reception = create_user(
+        email="analytics-export-scope-reception@example.test",
+        role=UserRole.RECEPTION,
+        first_name="Марина",
+    )
+    podologist = create_user(
+        email="analytics-export-scope-podo@example.test",
+        role=UserRole.PODOLOGIST,
+        first_name="Олена",
+    )
+    query = "?from=2026-07-01&to=2026-07-31"
+
+    allowed = client_for(admin).get(f"/api/v1/analytics/export{query}")
+    reception_denied = client_for(reception).get(f"/api/v1/analytics/export{query}")
+    podologist_denied = client_for(podologist).get(f"/api/v1/analytics/export{query}")
+    anonymous_denied = APIClient().get(f"/api/v1/analytics/export{query}")
+    inverted = client_for(admin).get("/api/v1/analytics/export?from=2026-08-01&to=2026-07-01")
+    oversized = client_for(admin).get("/api/v1/analytics/export?from=2025-01-01&to=2026-07-01")
+    missing_specialist = client_for(admin).get(
+        f"/api/v1/analytics/export{query}&specialist_id=999999"
+    )
+    missing_service = client_for(admin).get(f"/api/v1/analytics/export{query}&service_id={uuid4()}")
+
+    assert allowed.status_code == 200
+    assert reception_denied.status_code == 403
+    assert podologist_denied.status_code == 403
+    assert anonymous_denied.status_code == 401
+    assert inverted.status_code == 422
+    assert oversized.status_code == 422
+    assert missing_specialist.status_code == 404
+    assert missing_service.status_code == 404
+
+
+@pytest.mark.django_db
+def test_analytics_export_limit_returns_json_without_partial_csv() -> None:
+    admin = create_user(
+        email="analytics-export-limit@example.test", role=UserRole.ADMIN, first_name="Анна"
+    )
+    with (
+        patch.object(
+            analytics_exports,
+            "analytics_export_row_count",
+            return_value=analytics_exports.ANALYTICS_EXPORT_ROW_LIMIT + 1,
+        ),
+        patch.object(analytics_exports, "render_analytics_csv") as render_csv,
+    ):
+        response = client_for(admin).get("/api/v1/analytics/export?from=2026-07-01&to=2026-07-31")
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "analytics_export_too_large"
+    assert response["Content-Type"].startswith("application/json")
+    render_csv.assert_not_called()
+
+
+def test_analytics_csv_sanitizes_nul_before_formula_detection() -> None:
+    result = {
+        "period": {
+            "from": datetime(2026, 7, 1).date(),
+            "to": datetime(2026, 7, 1).date(),
+            "timezone": "Europe/Kyiv",
+            "bucket": "day",
+        },
+        "filters": {
+            "specialist": {"id": "1", "name": "\x00=Фільтр", "is_active": True},
+            "service": None,
+        },
+        "kpis": {
+            "completed_visits": 0,
+            "revenue_minor": 0,
+            "payment_count": 0,
+            "average_check_minor": 0,
+            "returning_patient_rate_bps": 0,
+            "returning_patients": 0,
+            "served_patients": 0,
+            "new_patients": 0,
+            "canceled_appointments": 0,
+            "no_show_appointments": 0,
+            "average_return_interval_days": None,
+        },
+        "trend": [
+            {
+                "from": datetime(2026, 7, 1).date(),
+                "to": datetime(2026, 7, 1).date(),
+                "label": "\x00+День",
+                "visits": 0,
+                "revenue_minor": 0,
+            }
+        ],
+        "appointment_outcomes": [],
+        "specialist_performance": [],
+        "service_ranking": [],
+    }
+
+    decoded = analytics_exports.render_analytics_csv(result).decode("utf-8-sig")
+    rows = list(csv.DictReader(StringIO(decoded, newline="")))
+
+    assert "\x00" not in decoded
+    assert rows[0]["filter_specialist_name"] == "'=Фільтр"
+    assert rows[1]["dimension_name"] == "'+День"

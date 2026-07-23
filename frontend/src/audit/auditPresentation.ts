@@ -63,6 +63,10 @@ const actionLabels: Readonly<Record<string, string>> = {
   "inventory.material_updated": "Оновлено матеріал",
   "inventory.material_deactivated": "Деактивовано матеріал",
   "inventory.material_reactivated": "Відновлено матеріал",
+  "inventory.supplier_created": "Створено постачальника",
+  "inventory.supplier_updated": "Оновлено постачальника",
+  "inventory.supplier_deactivated": "Деактивовано постачальника",
+  "inventory.supplier_reactivated": "Відновлено постачальника",
   "inventory.receipt_posted": "Проведено надходження",
   "inventory.manual_writeoff_posted": "Проведено ручне списання",
   "inventory.stocktake_created": "Створено інвентаризацію",
@@ -82,6 +86,9 @@ const fieldLabels: Readonly<Record<string, string>> = {
   display_name: "Працівник",
   email: "Email",
   phone: "Телефон",
+  contact_name: "Контактна особа",
+  address: "Адреса",
+  note: "Примітка",
   role: "Роль",
   is_active: "Активний статус",
   must_change_password: "Зміна пароля при вході",
@@ -173,6 +180,7 @@ export function auditObjectLink(object: AuditEventDetail["object"]): string | nu
   if (object.type === "visit") return `/visits/${encodedId}`;
   if (object.type === "work_item") return `/work-items?item=${encodedId}`;
   if (object.type === "material") return `/inventory?material=${encodedId}`;
+  if (object.type === "supplier") return "/inventory?section=suppliers";
   if (object.type === "cash_shift") return `/finance/shifts?shift=${encodedId}`;
   if (object.type === "payment") return `/finance?operation=PAYMENT:${encodedId}`;
   if (["clinic_profile", "room", "service", "appointment_status_config", "clinic_schedule"].includes(object.type)) return "/settings";

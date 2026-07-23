@@ -8,6 +8,7 @@ import { csrfHeaders } from "../auth/AuthContext";
 import { MovementJournal } from "./InventoryMovements";
 import { ReceiptDialog, WriteoffDialog } from "./InventoryOperations";
 import { StocktakeDialog } from "./InventoryStocktake";
+import { InventorySuppliers } from "./InventorySuppliers";
 
 type Material = components["schemas"]["Material"];
 type MaterialLot = components["schemas"]["MaterialLot"];
@@ -204,7 +205,12 @@ function MaterialDetailsDialog({ material, lots, onClose, onEdit, onStocktake, o
 
 export function InventoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [view, setView] = useState<"catalog" | "movements">("catalog");
+  const requestedSection = searchParams.get("section");
+  const [view, setView] = useState<"catalog" | "suppliers" | "movements">(
+    requestedSection === "suppliers" || requestedSection === "movements"
+      ? requestedSection
+      : "catalog",
+  );
   const [materials, setMaterials] = useState<readonly Material[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -235,6 +241,12 @@ export function InventoryPage() {
   };
 
   useEffect(() => { void loadMaterials(); }, []);
+
+  useEffect(() => {
+    if (requestedSection === "suppliers" || requestedSection === "movements") {
+      setView(requestedSection);
+    }
+  }, [requestedSection]);
 
   const categories = useMemo(() => [...new Set(materials.map((item) => item.category))].sort((left, right) => left.localeCompare(right, "uk")), [materials]);
   const visible = useMemo(() => {
@@ -314,13 +326,21 @@ export function InventoryPage() {
     setError(null);
     void loadMaterials();
   };
+  const changeView = (nextView: "catalog" | "suppliers" | "movements") => {
+    setView(nextView);
+    const next = new URLSearchParams(searchParams);
+    if (nextView === "catalog") next.delete("section");
+    else next.set("section", nextView);
+    if (nextView !== "catalog") next.delete("material");
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <>
-      <header className="page-heading inventory-heading"><div><p className="eyebrow">Облік матеріалів · TP-503</p><h1>Склад і матеріали</h1><p>Партійні залишки, фізична інвентаризація та append-only журнал рухів.</p></div><div><span className="admin-only-badge"><Icon name="lock" />Тільки адміністратор</span><button className="button button--secondary" onClick={() => { setEditor({ mode: "create" }); setSuccess(null); }} type="button"><Icon name="plus" />Додати матеріал</button><button className="button button--secondary" onClick={() => { setStocktakeScope(null); setStocktakeOpen(true); setSuccess(null); }} type="button">Інвентаризація</button><button className="button button--primary" onClick={() => { setReceiptOpen(true); setSuccess(null); }} type="button"><Icon name="plus" />Нове надходження</button></div></header>
+      <header className="page-heading inventory-heading"><div><p className="eyebrow">Облік матеріалів · TP-1001</p><h1>Склад і матеріали</h1><p>Партійні залишки, постачальники, фізична інвентаризація та append-only журнал рухів.</p></div><div><span className="admin-only-badge"><Icon name="lock" />Тільки адміністратор</span>{view === "catalog" ? <><button className="button button--secondary" onClick={() => { setEditor({ mode: "create" }); setSuccess(null); }} type="button"><Icon name="plus" />Додати матеріал</button><button className="button button--secondary" onClick={() => { setStocktakeScope(null); setStocktakeOpen(true); setSuccess(null); }} type="button">Інвентаризація</button><button className="button button--primary" onClick={() => { setReceiptOpen(true); setSuccess(null); }} type="button"><Icon name="plus" />Нове надходження</button></> : null}</div></header>
       {error === null ? null : <div className="form-message form-message--error page-message" role="alert"><Icon name="warning" /><span>{error}</span><button className="text-action" onClick={() => void loadMaterials()} type="button">Повторити</button></div>}
       {success === null ? null : <div className="form-message form-message--success page-message" role="status"><Icon name="check" /><span>{success}</span></div>}
-      <nav aria-label="Розділи складу" className="inventory-section-nav"><button aria-current={view === "catalog" ? "page" : undefined} className={view === "catalog" ? "active" : ""} onClick={() => { setView("catalog"); }} type="button">Каталог і залишки</button><button aria-current={view === "movements" ? "page" : undefined} className={view === "movements" ? "active" : ""} onClick={() => { setView("movements"); }} type="button">Журнал рухів</button></nav>
+      <nav aria-label="Розділи складу" className="inventory-section-nav"><button aria-current={view === "catalog" ? "page" : undefined} className={view === "catalog" ? "active" : ""} onClick={() => { changeView("catalog"); }} type="button">Каталог і залишки</button><button aria-current={view === "suppliers" ? "page" : undefined} className={view === "suppliers" ? "active" : ""} onClick={() => { changeView("suppliers"); }} type="button">Постачальники</button><button aria-current={view === "movements" ? "page" : undefined} className={view === "movements" ? "active" : ""} onClick={() => { changeView("movements"); }} type="button">Журнал рухів</button></nav>
       {view === "catalog" ? <><section className="inventory-stats" aria-label="Зведення складу"><article className="panel"><span>Найменувань</span><strong>{materials.length}</strong><small>{materials.filter((item) => item.is_active).length} активних</small></article><article className="panel"><span>Потребують уваги</span><strong>{attentionCount}</strong><small>Низькі, відсутні або прострочені</small></article><article className="panel"><span>Контроль термінів</span><strong>{expiringCount}</strong><small>Спливають або вже минули</small></article><article className="panel"><span>Партій</span><strong>{materials.reduce((total, item) => total + item.lots_count, 0)}</strong><small>Залишки змінюють лише проведені операції</small></article></section>
       <section className="panel inventory-catalog">
         <header><div><p className="eyebrow">Каталог</p><h2>Залишки матеріалів</h2><p>Доступний залишок не включає прострочені партії.</p></div></header>
@@ -328,7 +348,7 @@ export function InventoryPage() {
         {isLoading ? <div className="inventory-empty"><span className="spinner" /><h3>Завантажуємо склад…</h3></div> : null}
         {!isLoading && visible.length === 0 ? <div className="inventory-empty"><Icon name="empty" /><h3>{materials.length === 0 ? "Матеріалів ще немає" : "Матеріалів не знайдено"}</h3><p>{materials.length === 0 ? "Створіть першу картку матеріалу; партії з’являться після надходження." : "Змініть пошук або скиньте фільтри."}</p>{materials.length === 0 ? <button className="button button--primary" onClick={() => { setEditor({ mode: "create" }); }} type="button">Створити матеріал</button> : <button className="button button--secondary" onClick={clearFilters} type="button">Скинути фільтри</button>}</div> : null}
         {!isLoading && visible.length > 0 ? <div className="inventory-table"><div className="inventory-table__head" aria-hidden="true"><span>Матеріал</span><span>Категорія</span><span>Доступно</span><span>Мінімум</span><span>Найближчий термін</span><span>Стан</span><span /></div>{visible.map((material) => <button aria-label={`Відкрити ${material.name}`} className={`inventory-row${material.is_active ? "" : " inventory-row--inactive"}`} key={material.id} onClick={(event) => { openDetails(material.id, event.currentTarget); }} type="button"><span className="inventory-identity"><i className="inventory-monogram">{material.name.slice(0, 1).toLocaleUpperCase("uk")}</i><span><strong>{material.name}</strong><small>ART {material.sku} · {material.unit}</small></span></span><span data-label="Категорія">{material.category}</span><span data-label="Доступно"><strong>{quantity(material.available_quantity, material.unit)}</strong><small>усього {quantity(material.total_quantity, material.unit)}</small></span><span data-label="Мінімум">{quantity(material.minimum_quantity, material.unit)}</span><span data-label="Термін">{dateLabel(material.nearest_expiry)}</span><span data-label="Стан"><b className={`inventory-status inventory-status--${material.stock_status}`}>{statusLabels[material.stock_status]}</b>{material.is_active ? null : <small>Неактивна картка</small>}</span><Icon name="chevron" /></button>)}</div> : null}
-      </section></> : <MovementJournal materials={materials} />}
+      </section></> : view === "suppliers" ? <InventorySuppliers /> : <MovementJournal materials={materials} />}
       {isLoadingDetails ? <div className="inventory-detail-loading" role="status"><span className="spinner" />Відкриваємо матеріал…</div> : null}
       {detailError === null ? null : <div className="inventory-detail-loading inventory-detail-loading--error" role="alert"><Icon name="warning" /><span>{detailError}</span><button className="button button--secondary" onClick={() => { if (requestedMaterialId !== null) void loadDetails(requestedMaterialId); }} type="button">Повторити</button><button className="button button--secondary" onClick={() => { closeDetails(); }} type="button">Закрити</button></div>}
       {editor === null ? null : <MaterialEditorDialog editor={editor} onClose={() => { setEditor(null); }} onSaved={replaceMaterial} />}

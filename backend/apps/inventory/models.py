@@ -68,6 +68,29 @@ class StocktakeDifferenceKind(models.TextChoices):
     SHORTAGE = "SHORTAGE", "Нестача"
 
 
+class Supplier(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=180)
+    contact_name = models.CharField(max_length=180, blank=True)
+    phone = models.CharField(max_length=32, blank=True)
+    email = models.EmailField(blank=True)
+    address = models.CharField(max_length=300, blank=True)
+    note = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    version = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-is_active", "name", "id")
+        constraints = [
+            models.UniqueConstraint(Lower("name"), name="inventory_supplier_name_ci_unique"),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Material(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sku = models.CharField(max_length=48)
@@ -190,6 +213,13 @@ class MaterialLot(models.Model):
     initial_quantity = models.DecimalField(max_digits=12, decimal_places=3)
     current_quantity = models.DecimalField(max_digits=12, decimal_places=3)
     purchase_price_minor = models.PositiveBigIntegerField(null=True, blank=True)
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.PROTECT,
+        related_name="lots",
+        null=True,
+        blank=True,
+    )
     supplier_name = models.CharField(max_length=180, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

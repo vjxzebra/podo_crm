@@ -84,17 +84,45 @@ function response(body: unknown, status = 200): ResponseFactory {
   return () => Promise.resolve(jsonResponse(body, status));
 }
 
+function csvResponse(filename = "cash-shift-CS-20260722-0001-20260723-100000.csv"): ResponseFactory {
+  return () => Promise.resolve(new Response("\ufeffrow_type,shift_number\r\nSHIFT_SUMMARY,CS-20260722-0001\r\n", {
+    headers: {
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Type": "text/csv; charset=utf-8",
+      "X-Export-Entry-Count": "0",
+      "X-Export-Row-Count": "1",
+    },
+  }));
+}
+
+function historyCsvResponse(filename = "cash-shift-history-20260723-100000.csv"): ResponseFactory {
+  return () => Promise.resolve(new Response("\ufeffrow_type,shift_count\r\nREPORT_SUMMARY,2\r\n", {
+    headers: {
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Type": "text/csv; charset=utf-8",
+      "X-Export-Row-Count": "3",
+      "X-Export-Shift-Count": "2",
+    },
+  }));
+}
+
 function mockHistoryApi({
   session = adminSession,
   lists = [response({ shifts: summaries, next_cursor: null })],
   details = [response(closedShift)],
+  exports = [csvResponse()],
+  historyExports = [historyCsvResponse()],
 }: {
   readonly session?: typeof adminSession | typeof receptionSession;
   readonly lists?: readonly ResponseFactory[];
   readonly details?: readonly ResponseFactory[];
+  readonly exports?: readonly ResponseFactory[];
+  readonly historyExports?: readonly ResponseFactory[];
 } = {}) {
   const listQueue = [...lists];
   const detailQueue = [...details];
+  const exportQueue = [...exports];
+  const historyExportQueue = [...historyExports];
   const requests: Request[] = [];
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -102,9 +130,17 @@ function mockHistoryApi({
     const url = new URL(request.url);
     if (url.pathname === "/api/v1/session") return Promise.resolve(jsonResponse(session));
     if (url.pathname === "/api/v1/users") return Promise.resolve(jsonResponse({ users: employees }));
+    if (url.pathname === "/api/v1/cash-shifts/export" && request.method === "GET") {
+      const factory = historyExportQueue.shift() ?? historyExports[historyExports.length - 1];
+      return factory?.(request) ?? historyCsvResponse()(request);
+    }
     if (url.pathname === "/api/v1/cash-shifts" && request.method === "GET") {
       const factory = listQueue.shift() ?? lists[lists.length - 1];
       return factory?.(request) ?? Promise.resolve(jsonResponse({ shifts: [], next_cursor: null }));
+    }
+    if (/^\/api\/v1\/cash-shifts\/[0-9a-f-]+\/export$/.test(url.pathname) && request.method === "GET") {
+      const factory = exportQueue.shift() ?? exports[exports.length - 1];
+      return factory?.(request) ?? csvResponse()(request);
     }
     if (/^\/api\/v1\/cash-shifts\/[0-9a-f-]+$/.test(url.pathname) && request.method === "GET") {
       const factory = detailQueue.shift() ?? details[details.length - 1];
@@ -136,7 +172,7 @@ describe("TP-704 cash-shift history", () => {
     expect(table).toHaveAttribute("tabindex", "0");
     expect(table).toHaveAccessibleDescription("Прокрутіть таблицю горизонтально, щоб переглянути всі стовпці.");
     expect(await screen.findByRole("option", { name: "Колишня Касирка" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /експорт/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Експортувати CSV" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("Номер зміни або працівник"), { target: { value: "  CS-2026  " } });
     fireEvent.change(screen.getByLabelText("Період історії"), { target: { value: "custom" } });
@@ -183,6 +219,83 @@ describe("TP-704 cash-shift history", () => {
     expect(new URL(listRequests[1]?.url ?? "http://invalid").searchParams.get("cursor")).toBe("cursor-2");
   });
 
+  it("exports only the last applied history filters and keeps rows visible", async () => {
+    let resolveExport: ((response: Response) => void) | undefined;
+    let downloadedFilename = "";
+    let downloadedHref = "";
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function captureDownload(this: HTMLAnchorElement) {
+        downloadedFilename = this.download;
+        downloadedHref = this.href;
+      });
+    const requests = mockHistoryApi({
+      historyExports: [() => new Promise<Response>((resolve) => { resolveExport = resolve; })],
+    });
+    renderHistory();
+
+    await screen.findByRole("table", { name: "Історія касових змін" });
+    fireEvent.change(screen.getByPlaceholderText("Номер зміни або працівник"), { target: { value: "CS-2026" } });
+    fireEvent.change(screen.getByLabelText("Статус касової зміни"), { target: { value: "CLOSED" } });
+    fireEvent.change(screen.getByLabelText("Працівник касової зміни"), { target: { value: "9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Застосувати" }));
+    await waitFor(() => {
+      expect(requests.filter((request) => new URL(request.url).pathname === "/api/v1/cash-shifts")).toHaveLength(2);
+    });
+    fireEvent.change(screen.getByPlaceholderText("Номер зміни або працівник"), { target: { value: "ще-не-застосовано" } });
+    fireEvent.click(screen.getByRole("button", { name: "Експортувати CSV" }));
+
+    expect(screen.getByRole("button", { name: "Готуємо CSV…" })).toBeDisabled();
+    expect(screen.getByRole("table", { name: "Історія касових змін" })).toBeInTheDocument();
+    resolveExport?.(await historyCsvResponse()(new Request("http://localhost/export")));
+
+    const history = screen.getByRole("region", { name: "Касові зміни" });
+    expect(await within(history).findByRole("status")).toHaveTextContent("Завантаження CSV історії розпочато.");
+    const exportRequests = requests.filter((request) => new URL(request.url).pathname === "/api/v1/cash-shifts/export");
+    expect(exportRequests).toHaveLength(1);
+    const exportUrl = new URL(exportRequests[0]?.url ?? "http://invalid");
+    expect(exportUrl.searchParams.get("search")).toBe("CS-2026");
+    expect(exportUrl.searchParams.get("status")).toBe("CLOSED");
+    expect(exportUrl.searchParams.get("employee_id")).toBe("9");
+    expect(exportUrl.searchParams.has("cursor")).toBe(false);
+    expect(exportUrl.href).not.toContain(encodeURIComponent("ще-не-застосовано"));
+    expect(exportRequests[0]?.headers.get("Accept")).toBe("text/csv");
+    expect(downloadedFilename).toBe("cash-shift-history-20260723-100000.csv");
+    expect(downloadedHref).toBe("blob:inventory-export");
+    anchorClick.mockRestore();
+  });
+
+  it("keeps history rows after an export error and retries with the same filters", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 480 });
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const requests = mockHistoryApi({
+      session: receptionSession,
+      historyExports: [
+        response({
+          code: "cash_shift_history_export_too_large",
+          message: "Експорт історії містить забагато касових змін. Звузьте фільтри.",
+          fields: { filters: ["Максимум 5000 змін за один файл."] },
+          correlation_id: "tp-1004-test",
+        }, 422),
+        historyCsvResponse(),
+      ],
+    });
+    renderHistory();
+
+    await screen.findByRole("list", { name: "Історія касових змін" });
+    fireEvent.click(screen.getByRole("button", { name: "Експортувати CSV" }));
+
+    const history = screen.getByRole("region", { name: "Касові зміни" });
+    expect(await within(history).findByRole("alert")).toHaveTextContent("Експорт історії містить забагато касових змін.");
+    expect(within(history).getByRole("list", { name: "Історія касових змін" })).toBeInTheDocument();
+    expect(anchorClick).not.toHaveBeenCalled();
+    fireEvent.click(within(history).getByRole("button", { name: "Повторити export" }));
+
+    expect(await within(history).findByRole("status")).toHaveTextContent("Завантаження CSV історії розпочато.");
+    expect(requests.filter((request) => new URL(request.url).pathname === "/api/v1/cash-shifts/export")).toHaveLength(2);
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    anchorClick.mockRestore();
+  });
+
   it("recovers a row detail failure and shows full immutable ledger detail", async () => {
     mockHistoryApi({
       details: [
@@ -205,6 +318,69 @@ describe("TP-704 cash-shift history", () => {
     expect(results.violations).toEqual([]);
     fireEvent.click(within(dialog).getByRole("button", { name: "Готово" }));
     await waitFor(() => { expect(detailTrigger).toHaveFocus(); });
+  });
+
+  it("downloads the exact shift CSV with the server filename and keeps the detail visible", async () => {
+    let resolveExport: ((response: Response) => void) | undefined;
+    let downloadedFilename = "";
+    let downloadedHref = "";
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function captureDownload(this: HTMLAnchorElement) {
+        downloadedFilename = this.download;
+        downloadedHref = this.href;
+      });
+    const requests = mockHistoryApi({
+      exports: [() => new Promise<Response>((resolve) => { resolveExport = resolve; })],
+    });
+    renderHistory();
+
+    fireEvent.click(await screen.findByRole("button", { name: `Відкрити деталі ${closedShift.public_number}` }));
+    const dialog = await screen.findByRole("dialog", { name: closedShift.public_number });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Експортувати CSV" }));
+
+    expect(within(dialog).getByRole("button", { name: "Готуємо CSV…" })).toBeDisabled();
+    expect(within(dialog).getByRole("table", { name: `Операції ${closedShift.public_number}` })).toBeInTheDocument();
+    resolveExport?.(await csvResponse()(new Request("http://localhost/export")));
+
+    expect(await within(dialog).findByRole("status")).toHaveTextContent("Завантаження CSV зміни розпочато.");
+    const exportRequests = requests.filter((request) => new URL(request.url).pathname === `/api/v1/cash-shifts/${closedShift.id}/export`);
+    expect(exportRequests).toHaveLength(1);
+    expect(new URL(exportRequests[0]?.url ?? "http://invalid").search).toBe("");
+    expect(exportRequests[0]?.headers.get("Accept")).toBe("text/csv");
+    expect(downloadedFilename).toBe("cash-shift-CS-20260722-0001-20260723-100000.csv");
+    expect(downloadedHref).toBe("blob:inventory-export");
+    expect(dialog).toBeInTheDocument();
+    anchorClick.mockRestore();
+  });
+
+  it("keeps the immutable ledger visible after an export error and retries in place", async () => {
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const requests = mockHistoryApi({
+      exports: [
+        response({
+          code: "cash_shift_export_too_large",
+          message: "Експорт зміни містить забагато касових записів.",
+          fields: { shift: ["Максимум 5000 записів за один файл."] },
+          correlation_id: "tp-1003-test",
+        }, 422),
+        csvResponse(),
+      ],
+    });
+    renderHistory();
+
+    fireEvent.click(await screen.findByRole("button", { name: `Відкрити деталі ${closedShift.public_number}` }));
+    const dialog = await screen.findByRole("dialog", { name: closedShift.public_number });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Експортувати CSV" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Експорт зміни містить забагато касових записів.");
+    expect(within(dialog).getByRole("table", { name: `Операції ${closedShift.public_number}` })).toBeInTheDocument();
+    expect(anchorClick).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Повторити export" }));
+
+    expect(await within(dialog).findByRole("status")).toHaveTextContent("Завантаження CSV зміни розпочато.");
+    expect(requests.filter((request) => new URL(request.url).pathname === `/api/v1/cash-shifts/${closedShift.id}/export`)).toHaveLength(2);
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    anchorClick.mockRestore();
   });
 
   it("retries a failed deep-linked detail and renders required mobile card facts", async () => {

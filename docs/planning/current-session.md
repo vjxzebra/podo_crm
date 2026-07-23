@@ -1,6 +1,6 @@
 # Поточний checkpoint розробки
 
-Дата: 2026-07-22
+Дата: 2026-07-23
 
 ## Зафіксований стан
 
@@ -14,7 +14,7 @@
 - TP-402 реалізує transactional `POST /appointments` із server-derived snapshots/NEW status, role-visible patient і active resource validation, podologist-to-self, complaint XOR, clinic-time/occupancy checks, concurrent `409 appointment_slot_conflict`, atomic audit та responsive CTA/slot/locked-patient/inline-create UI.
 - TP-403 реалізує role-scoped `GET/PATCH /appointments/{id}`, окремі status/cancel actions, row lock + optimistic `version`, self-excluding reschedule occupancy, server-provided allowed transitions, terminal/visit guards, required cancellation reason, slot release й atomic before/after audit для update/reschedule/status/cancel.
 - TP-404 формалізує exact-viewport day/week gate: named/focusable internal scroll, видимі scroll hints, 44px tablet/mobile targets, capped sticky grid, concurrent no-overlap/text-clipping assertions і detail focus-return без нового business API.
-- TP-501 реалізує admin-only `Material`/`MaterialLot`, create/update/deactivate/reactivate без delete, atomic audit, optimistic version, незмінні unit після першої партії та lot identity, expiry/available/FEFO projections, search/filter/catalog/details UI і unsaved guard. Пряме редагування lots лишається забороненим; balance змінюють лише проведені операції TP-502. Supplier лишається lot/receipt attribute без окремого module.
+- TP-501 реалізує admin-only `Material`/`MaterialLot`, create/update/deactivate/reactivate без delete, atomic audit, optimistic version, незмінні unit після першої партії та lot identity, expiry/available/FEFO projections, search/filter/catalog/details UI і unsaved guard. Пряме редагування lots лишається забороненим; balance змінюють лише проведені операції TP-502. У межах MVP supplier був лише lot/receipt attribute; TP-1001 додав окремий post-MVP directory без зміни історичних snapshot.
 - TP-502 реалізує idempotent multi-line receipt і locked manual write-off з детермінованим lock order, full pre-mutation validation, no-negative balance, append-only operations/movements, atomic audit та admin-only responsive forms. Existing-lot receipt потребує явного підтвердження і збігу immutable details.
 - TP-503 реалізує immutable DRAFT stocktake snapshot, idempotent create/post, sorted row locks, stale-balance `409`, append-only `STOCKTAKE_ADJUSTMENT`, atomic audit, read-only posted state та cursor movement journal/search/date/kind/material/actor filters з operation detail. Responsive UI має preview, difference/valuation, confirm/post/retry/unsaved guards і read-only journal detail.
 - TP-601 реалізує `POST /appointments/{id}/start-visit`, `GET /visits/{id}` і versioned `PUT /visits/{id}`: лише ARRIVED appointment, один visit на appointment, assigned podologist/admin scope, atomic ARRIVED→IN_PROGRESS transition та idempotent retry без duplicate audit. Examination draft має complaint XOR, objective examination, фіксований condition registry, notes, autosave/manual save, optimistic conflict і unsaved guard; жодних stock/finance/completion side effects.
@@ -141,16 +141,116 @@ MinIO/age clients на MinIO SDK та source-built `age` має `0C/0H/0M/0L` у
 
 ## Поточний стан
 
-TP-904 завершено 2026-07-23; MVP release gate закрито з `23/23 verified`.
-[Machine-readable manifest](../evidence/tp-904/acceptance-gate.json) і
-[evidence overview](../evidence/tp-904/README.md) фіксують canonical
-`364 backend / 198 frontend / 40 axe`, fresh/populated database, clean dependency
-та candidate-image audits, production rehearsal і повторно валідований TP-903
-restore/deploy/rollback gate.
+TP-904 завершив MVP 2026-07-23 з `23/23 verified`; post-MVP TP-1001—TP-1007
+також завершені. TP-1004 закрив погоджений prototype `.history-export` як
+filtered summary-first CSV історії касових змін: stable 28 columns, UTF-8 BOM,
+CRLF, local time, applied list filters без cursor, 5000 shifts/366 days,
+no-store і spreadsheet-formula injection protection. Scope повторює list —
+admin all visible, reception own only — без individual ledger rows та
+patient/visit/service/typed Payment/Refund data. Finance-operations, analytics
+і audit exports не додано. [Contract](../architecture/tp-1004-cash-shift-history-export-contract.md)
+і [evidence](../evidence/tp-1004/README.md).
 
-Full-role UAT перевірив podologist/reception/admin на desktop, tablet і phone:
-`75` route checks, `11` forbidden redirects, `0` serious/critical axe violations і
-clean console. Live browser UAT був read-only щодо clinical/finance/inventory
-mutations; їх submit/concurrency/audit/rollback semantics підтвердив automated suite.
-Тимчасові UAT fixtures, isolated release project і secret directory очищені.
-Наступні зміни мають оформлюватися окремими post-MVP task packets.
+Фінальний TP-1004 gate: `5/5` нових focused backend, `10/10` разом із exact
+shift export, `143/143` focused frontend, `390/390` canonical backend,
+`206/206` canonical frontend і `40/40` axe. Ruff/format для 254 Python files,
+mypy для 192 source files, Django checks, clean migrations, OpenAPI snapshot,
+generated TypeScript schema, contracts, ESLint, strict typecheck і production
+build — green.
+
+Authenticated live HTTP probe з applied `search` і `status` підтвердив `200`,
+CSV content type, BOM, CRLF, 28 columns, summary-first, no-store, server filename,
+shift/row counts `1/2` і відсутність cursor. Browser gate на `1440×1000`,
+`768×1024` і `390×844` підтвердив header CTA, success-state, збереження
+table/cards, 0 horizontal overflow, `44px` target і clean console. Download
+handle у in-app browser недоступний, тому bytes та headers окремо доведені
+HTTP/integration gates.
+
+Ручний mypy запуск без canonical `--no-sqlite-cache` впав на відсутньому в
+runtime Python модулі `sqlite3`. Окрема recovery-підзадача перевірила traceback
+і `backend/scripts/check.sh`, exact `cache.db` тимчасово перемістила та відновила;
+мінімальний і повний canonical mypy пройшли. Під час browser setup advertised
+fallback path для viewport docs був відсутній; authoritative file знайдено в
+plugin `docs/`, інструкцію застосовано, capability set/reset пройшов.
+
+Backend/web відтворені з `docker compose ... --wait`, readiness повернув `200`.
+Volumes/domain data не змінювалися. Локальні credentials читалися лише з
+Git-ignored `.env.local` і не потрапили у tracked output.
+
+TP-1005 завершено за окремим
+[frozen contract](../architecture/tp-1005-analytics-export-contract.md):
+admin-only aggregate CSV поточної analytics projection, stable 34-column
+summary/trend/outcome/specialist/service sections, 5000 rows/366 days і без raw
+patient/visit/appointment/payment/refund/ledger identifiers. Focused gates:
+`8/8` analytics backend і `140/140` frontend/accessibility; canonical gates:
+`395/395` backend, `208/208` frontend і `40/40` axe. OpenAPI/types, lint,
+strict typecheck і production build green. [Evidence](../evidence/tp-1005/README.md).
+
+Authenticated live HTTP із чотирма applied analytics filters підтвердив `200`,
+CSV content type, server filename, no-store, BOM, CRLF, 34 columns,
+summary-first і row-count header/parser parity `37/37`. Browser gate на
+`1440×1000`, `768×1024` і `390×844` підтвердив success state, content
+preservation, відсутність horizontal overflow, 44px CTA та clean console.
+
+Після backend/web recreate proxy мав stale backend upstream `172.19.0.6`, тоді
+як healthy backend отримав `172.19.0.2`; окрема recovery-підзадача звірила
+Compose/logs/IP, перезапустила лише proxy і повернула readiness/session `200`.
+Завершальний browser viewport reset відновлено через authoritative `reset()`
+після capability inspection. Volumes/domain data не змінювалися, credentials
+лишилися тільки у Git-ignored `.env.local`.
+
+TP-1006 завершено за окремим
+[frozen contract](../architecture/tp-1006-finance-operation-export-contract.md):
+admin-only CSV current finance-operation journal, exact six applied filters,
+summary-first stable 41-column projection, 5000 rows/366 days та без phone,
+internal UUID, raw ledger/audit/clinical fields. Audit export не входить.
+Focused gates: `6/6` backend і `28/28` frontend; canonical gates: `401/401`
+backend, `211/211` frontend і `40/40` axe. Ruff/format перевірили 256 Python
+files, mypy — 193 source files; OpenAPI/types, lint, strict typecheck,
+production build і production web image green.
+[Evidence](../evidence/tp-1006/README.md).
+
+Authenticated live HTTP з трьома applied filters підтвердив `200`, CSV content
+type, server filename, no-store, BOM, CRLF, 41 columns, summary-first та
+operation/row parity `1/2`. Browser gate на `1440×1000`, `768×1024` і
+`390×844` підтвердив success/content preservation, `0` horizontal overflow,
+44px CTA та clean console.
+
+Паралельний frontend gate один раз завершив Vitest через Node `SIGSEGV`;
+sequential запуск відокремив і дозволив виправити actual relative-URL defect.
+Перший canonical wrapper був перерваний зовнішнім timeout, а дочірній
+backend-test завис без stdout consumer. Container не реагував на stop/SIGKILL;
+діагностика підтвердила zombie Docker daemon. Штатний restart Docker Desktop,
+`docker compose up -d --wait` і readiness `200` відновили stack без видалення
+volumes; повторний canonical gate повністю пройшов за `99s`. Browser viewport
+скинуто, вкладку закрито, credentials лишилися тільки у Git-ignored
+`.env.local`.
+
+TP-1007 завершено за окремим
+[frozen contract](../architecture/tp-1007-audit-export-contract.md):
+admin-only CSV поточного audit journal, exact five applied filters,
+summary-first stable 28-column projection, 5000 rows/366 days та без
+before/after/changes, note, correlation ID, actor email/ID, object ID,
+clinical/security payload. Focused gates: `6/6` backend і `8/8` AuditPage;
+canonical gates: `407/407` backend, `213/213` frontend і `40/40` axe.
+Ruff/format перевірили 258 Python files, mypy — 194 source files;
+OpenAPI/types, lint, strict typecheck, production build та production web image
+green. [Evidence](../evidence/tp-1007/README.md).
+
+Memory-only authenticated live HTTP з трьома applied filters підтвердив `200`,
+CSV content type, server filename, no-store, BOM, CRLF, 28 columns,
+summary-first і event/row parity `1/2`, без forbidden columns. Browser gate на
+`1440×1000`, `768×1024` і `390×844` підтвердив success/content preservation,
+`0` horizontal overflow, 44px CTA та clean console.
+
+Focused backend спочатку не бачив нові файли, бо immutable `backend-test`
+image не має bind mount; точковий rebuild image відновив visibility і tests.
+Mypy у stripped runtime потребував canonical `--no-sqlite-cache`. Паралельний
+frontend wrapper та integrated BuildKit по одному разу впали у V8; isolated
+frontend gate пройшов, Docker Desktop штатно перезапущено після missing exit
+event, а production web image успішно зібрано ізольованим buildx builder.
+`docker compose up -d --wait`, root/readiness `200` і актуальний frontend asset
+підтвердили відновлення без видалення volumes. Browser viewport скинуто,
+вкладки закрито, credentials лишилися тільки у Git-ignored `.env.local`.
+
+Post-MVP TP-1001—TP-1007 завершені; GAP-11 і GAP-18 мають статус `resolved`.

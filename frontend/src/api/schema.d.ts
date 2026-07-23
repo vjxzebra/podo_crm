@@ -17,6 +17,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the current aggregate administrator analytics projection as safe CSV */
+        get: operations["analytics_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointment-status-configs": {
         parameters: {
             query?: never;
@@ -180,6 +197,23 @@ export interface paths {
         };
         /** Return redacted before/after details for one audit event */
         get: operations["audit_event_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-events/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the filtered administrator audit journal as safe CSV */
+        get: operations["audit_event_export"];
         put?: never;
         post?: never;
         delete?: never;
@@ -359,6 +393,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cash-shifts/{shift_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export one role-scoped cash shift and its append-only ledger as safe CSV */
+        get: operations["cash_shift_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cash-shifts/current": {
         parameters: {
             query?: never;
@@ -368,6 +419,23 @@ export interface paths {
         };
         /** Return the current employee's open shift and ledger-derived totals */
         get: operations["cash_shift_current"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-shifts/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export filtered role-scoped cash-shift summaries as safe CSV */
+        get: operations["cash_shift_history_export"];
         put?: never;
         post?: never;
         delete?: never;
@@ -481,6 +549,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/finance/operations/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export filtered admin finance-operation journal as safe CSV */
+        get: operations["finance_operation_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/materials": {
         parameters: {
             query?: never;
@@ -543,6 +628,23 @@ export interface paths {
         };
         /** Search and cursor-page the append-only stock movement journal */
         get: operations["inventory_movement_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/movements/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the filtered append-only stock movement journal as safe CSV */
+        get: operations["inventory_movement_export"];
         put?: never;
         post?: never;
         delete?: never;
@@ -651,6 +753,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search and filter the administrator supplier directory */
+        get: operations["inventory_supplier_list"];
+        put?: never;
+        /** Create an administrator supplier directory record */
+        post: operations["inventory_supplier_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/suppliers/{supplier_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return administrator supplier details and historical lot count */
+        get: operations["inventory_supplier_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit, deactivate or reactivate a supplier without changing lot history */
+        patch: operations["inventory_supplier_update"];
         trace?: never;
     };
     "/api/v1/inventory/write-offs": {
@@ -2111,6 +2249,8 @@ export interface components {
             /** Format: date */
             received_on: string;
             readonly status: string;
+            /** Format: uuid */
+            readonly supplier_id: string | null;
             supplier_name?: string;
         };
         MaterialLotList: {
@@ -2400,6 +2540,16 @@ export interface components {
             price_minor?: number;
             version?: number;
         };
+        PatchedSupplierUpdateRequest: {
+            address?: string;
+            contact_name?: string;
+            email?: string;
+            is_active?: boolean;
+            name?: string;
+            note?: string;
+            phone?: string;
+            version?: number;
+        };
         PatchedTeamUserUpdateRequest: {
             /** Format: email */
             email?: string;
@@ -2646,6 +2796,8 @@ export interface components {
             purchase_price_minor?: number | null;
             /** Format: decimal */
             quantity: string;
+            /** Format: uuid */
+            supplier_id?: string | null;
             /** @default  */
             supplier_name: string;
         };
@@ -2800,6 +2952,9 @@ export interface components {
             readonly material_unit: string;
             /** Format: decimal */
             quantity_delta: string;
+            /** Format: uuid */
+            readonly supplier_id: string | null;
+            readonly supplier_name: string;
         };
         /**
          * @description * `out_of_stock` - Немає в наявності
@@ -2891,6 +3046,40 @@ export interface components {
          * @enum {string}
          */
         StocktakeStatusEnum: "DRAFT" | "POSTED";
+        Supplier: {
+            address?: string;
+            contact_name?: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            email?: string;
+            /** Format: uuid */
+            readonly id: string;
+            is_active?: boolean;
+            readonly lots_count: number;
+            name: string;
+            note?: string;
+            phone?: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            version?: number;
+        };
+        SupplierCreateRequest: {
+            /** @default  */
+            address: string;
+            /** @default  */
+            contact_name: string;
+            email?: string;
+            /** @default true */
+            is_active: boolean;
+            name: string;
+            /** @default  */
+            note: string;
+            /** @default  */
+            phone: string;
+        };
+        SupplierList: {
+            suppliers: components["schemas"]["Supplier"][];
+        };
         TeamUser: {
             display_name: string;
             /** Format: email */
@@ -3300,6 +3489,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    analytics_export: {
+        parameters: {
+            query: {
+                format?: "csv" | "json";
+                from: string;
+                service_id?: string;
+                specialist_id?: number;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description UTF-8 BOM CSV with an aggregate summary and at most 5000 trend/outcome/specialist/service rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -3942,6 +4193,73 @@ export interface operations {
             };
         };
     };
+    audit_event_export: {
+        parameters: {
+            query?: {
+                actor_id?: number;
+                date_from?: string;
+                date_to?: string;
+                format?: "csv" | "json";
+                search?: string;
+                /**
+                 * @description * `accounts` - accounts
+                 *     * `team` - team
+                 *     * `settings` - settings
+                 *     * `patients` - patients
+                 *     * `work_items` - work_items
+                 *     * `scheduling` - scheduling
+                 *     * `medical` - medical
+                 *     * `visits` - visits
+                 *     * `billing` - billing
+                 *     * `cash` - cash
+                 *     * `inventory` - inventory
+                 */
+                section?: "accounts" | "team" | "settings" | "patients" | "work_items" | "scheduling" | "medical" | "visits" | "billing" | "cash" | "inventory";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description UTF-8 BOM CSV with one report summary and at most 5000 minimal audit-event rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     auth_change_password: {
         parameters: {
             query?: never;
@@ -4519,6 +4837,66 @@ export interface operations {
             };
         };
     };
+    cash_shift_export: {
+        parameters: {
+            query?: {
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path: {
+                shift_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description UTF-8 BOM CSV with one summary row and at most 5000 ledger rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     cash_shift_current: {
         parameters: {
             query?: never;
@@ -4550,6 +4928,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    cash_shift_history_export: {
+        parameters: {
+            query?: {
+                date_from?: string;
+                date_to?: string;
+                employee_id?: number;
+                format?: "csv" | "json";
+                search?: string;
+                /**
+                 * @description * `OPEN` - Відкрита
+                 *     * `CLOSED` - Закрита
+                 */
+                status?: "OPEN" | "CLOSED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description UTF-8 BOM CSV with one report summary and at most 5000 cash-shift rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -4990,6 +5426,78 @@ export interface operations {
             };
         };
     };
+    finance_operation_export: {
+        parameters: {
+            query?: {
+                date_from?: string;
+                date_to?: string;
+                format?: "csv" | "json";
+                /**
+                 * @description * `CASH` - CASH
+                 *     * `CARD` - CARD
+                 *     * `TRANSFER` - TRANSFER
+                 */
+                payment_method?: "CASH" | "CARD" | "TRANSFER";
+                search?: string;
+                /**
+                 * @description * `OPEN` - OPEN
+                 *     * `PAID` - PAID
+                 *     * `REFUNDED` - REFUNDED
+                 *     * `POSTED` - POSTED
+                 */
+                status?: "OPEN" | "PAID" | "REFUNDED" | "POSTED";
+                /**
+                 * @description * `PAYMENT` - PAYMENT
+                 *     * `REFUND` - REFUND
+                 *     * `DEPOSIT` - DEPOSIT
+                 *     * `WITHDRAWAL` - WITHDRAWAL
+                 */
+                type?: "PAYMENT" | "REFUND" | "DEPOSIT" | "WITHDRAWAL";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description UTF-8 BOM CSV with one report summary and at most 5000 finance-operation rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     inventory_material_list: {
         parameters: {
             query?: {
@@ -5323,6 +5831,68 @@ export interface operations {
             };
         };
     };
+    inventory_movement_export: {
+        parameters: {
+            query?: {
+                actor?: string;
+                date_from?: string;
+                date_to?: string;
+                format?: "csv" | "json";
+                /**
+                 * @description * `all` - all
+                 *     * `RECEIPT` - RECEIPT
+                 *     * `VISIT_USAGE` - VISIT_USAGE
+                 *     * `MANUAL_WRITEOFF` - MANUAL_WRITEOFF
+                 *     * `STOCKTAKE_ADJUSTMENT` - STOCKTAKE_ADJUSTMENT
+                 */
+                kind?: "all" | "RECEIPT" | "VISIT_USAGE" | "MANUAL_WRITEOFF" | "STOCKTAKE_ADJUSTMENT";
+                material_id?: string;
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description UTF-8 BOM CSV attachment with at most 5000 movement rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     inventory_operation_retrieve: {
         parameters: {
             query?: never;
@@ -5639,6 +6209,226 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    inventory_supplier_list: {
+        parameters: {
+            query?: {
+                search?: string;
+                /**
+                 * @description * `all` - all
+                 *     * `active` - active
+                 *     * `inactive` - inactive
+                 */
+                status?: "all" | "active" | "inactive";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierList"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    inventory_supplier_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupplierCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SupplierCreateRequest"];
+                "multipart/form-data": components["schemas"]["SupplierCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    inventory_supplier_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    inventory_supplier_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSupplierUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSupplierUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedSupplierUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Supplier"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

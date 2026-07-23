@@ -5,9 +5,12 @@ from apps.billing.views import (
     CashShiftClosePreviewView,
     CashShiftCloseView,
     CashShiftDetailView,
+    CashShiftExportView,
+    CashShiftHistoryExportView,
     CashShiftOpenView,
     CurrentCashShiftView,
     FinanceOperationDetailView,
+    FinanceOperationExportView,
     FinanceOperationListView,
     PaymentCreateView,
     RefundCreateView,
@@ -21,6 +24,11 @@ urlpatterns = [
         name="cash-shift-current",
     ),
     path(
+        "cash-shifts/export",
+        CashShiftHistoryExportView.as_view(),
+        name="cash-shift-history-export",
+    ),
+    path(
         "cash-shifts/<uuid:shift_id>/close-preview",
         CashShiftClosePreviewView.as_view(),
         name="cash-shift-close-preview",
@@ -31,9 +39,19 @@ urlpatterns = [
         name="cash-shift-close",
     ),
     path(
+        "cash-shifts/<uuid:shift_id>/export",
+        CashShiftExportView.as_view(),
+        name="cash-shift-export",
+    ),
+    path(
         "cash-shifts/<uuid:shift_id>",
         CashShiftDetailView.as_view(),
         name="cash-shift-detail",
+    ),
+    path(
+        "finance/operations/export",
+        FinanceOperationExportView.as_view(),
+        name="finance-operation-export",
     ),
     path(
         "finance/operations",

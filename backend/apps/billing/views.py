@@ -1,15 +1,19 @@
 from uuid import UUID
 
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
-from apps.accounts.permissions import HasCashShiftAccess, HasFinanceAccess
+from apps.accounts.permissions import HasCashShiftAccess, HasFinanceAccess, IsAdmin
+from apps.billing import exports as billing_exports
 from apps.billing.models import CashLedgerEntryKind
 from apps.billing.selectors import payment_receivables_visible_to
 from apps.billing.serializers import (
@@ -20,8 +24,10 @@ from apps.billing.serializers import (
     CashShiftCloseSerializer,
     CashShiftCurrentResponseSerializer,
     CashShiftFilterSerializer,
+    CashShiftHistoryExportFilterSerializer,
     CashShiftListResponseSerializer,
     CashShiftProjectionSerializer,
+    FinanceOperationExportFilterSerializer,
     FinanceOperationFilterSerializer,
     FinanceOperationListResponseSerializer,
     FinancePaymentOperationSerializer,
@@ -33,11 +39,14 @@ from apps.billing.serializers import (
 from apps.billing.services import (
     cash_shift_close_preview,
     cash_shift_detail,
+    cash_shift_export_snapshot,
+    cash_shift_history_export_rows,
     cash_shift_history_page,
     cash_shift_projection,
     close_cash_shift,
     current_cash_shift,
     finance_cash_adjustment_operation_read_model,
+    finance_operations_export_rows,
     finance_operations_page,
     finance_payment_operation_read_model,
     finance_refund_operation_read_model,
@@ -47,6 +56,7 @@ from apps.billing.services import (
     post_payment,
     post_refund,
 )
+from config.api.csv import SafeCsvRenderer
 from config.api.exceptions import ApiProblem
 from config.api.serializers import ErrorEnvelopeSerializer
 from config.middleware import get_request_id
@@ -177,6 +187,127 @@ class CashShiftDetailView(APIView):
         return Response(CashShiftProjectionSerializer(cash_shift_projection(shift)).data)
 
 
+class CashShiftHistoryExportView(APIView):
+    permission_classes = [HasCashShiftAccess]
+    renderer_classes = [JSONRenderer, SafeCsvRenderer]
+
+    @extend_schema(
+        operation_id="cash_shift_history_export",
+        summary="Export filtered role-scoped cash-shift summaries as safe CSV",
+        parameters=[CashShiftHistoryExportFilterSerializer],
+        responses={
+            (status.HTTP_200_OK, "text/csv"): OpenApiResponse(
+                response=OpenApiTypes.BINARY,
+                description=(
+                    "UTF-8 BOM CSV with one report summary and at most 5000 cash-shift rows."
+                ),
+            ),
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["cash"],
+    )
+    def get(self, request: Request) -> HttpResponse:
+        if "cursor" in request.query_params:
+            raise ApiProblem(
+                code="cash_shift_history_export_cursor_not_supported",
+                message="Експорт історії завжди починається з повного набору за фільтрами.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                fields={"cursor": ["Приберіть cursor з export-запиту."]},
+            )
+        serializer = CashShiftHistoryExportFilterSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        rows = cash_shift_history_export_rows(
+            actor=_actor(request),
+            filters=dict(serializer.validated_data),
+            row_limit=billing_exports.CASH_SHIFT_HISTORY_EXPORT_ROW_LIMIT,
+        )
+        if len(rows) > billing_exports.CASH_SHIFT_HISTORY_EXPORT_ROW_LIMIT:
+            raise ApiProblem(
+                code="cash_shift_history_export_too_large",
+                message="Експорт історії містить забагато касових змін. Звузьте фільтри.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                fields={
+                    "filters": [
+                        "Максимум "
+                        f"{billing_exports.CASH_SHIFT_HISTORY_EXPORT_ROW_LIMIT} змін "
+                        "за один файл."
+                    ]
+                },
+            )
+        filename = timezone.localtime().strftime("cash-shift-history-%Y%m%d-%H%M%S.csv")
+        response = HttpResponse(
+            billing_exports.render_cash_shift_history_csv(rows),
+            content_type="text/csv; charset=utf-8",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "no-store"
+        response["X-Export-Shift-Count"] = str(len(rows))
+        response["X-Export-Row-Count"] = str(len(rows) + 1)
+        return response
+
+
+class CashShiftExportView(APIView):
+    permission_classes = [HasCashShiftAccess]
+    renderer_classes = [JSONRenderer, SafeCsvRenderer]
+
+    @extend_schema(
+        operation_id="cash_shift_export",
+        summary="Export one role-scoped cash shift and its append-only ledger as safe CSV",
+        responses={
+            (status.HTTP_200_OK, "text/csv"): OpenApiResponse(
+                response=OpenApiTypes.BINARY,
+                description="UTF-8 BOM CSV with one summary row and at most 5000 ledger rows.",
+            ),
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_404_NOT_FOUND: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["cash"],
+    )
+    def get(self, request: Request, shift_id: UUID) -> HttpResponse:
+        if request.query_params:
+            raise ApiProblem(
+                code="cash_shift_export_query_not_supported",
+                message="Експорт однієї касової зміни не приймає фільтри або cursor.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                fields={
+                    name: ["Приберіть query parameter з exact-shift export."]
+                    for name in sorted(request.query_params)
+                },
+            )
+        shift, entries = cash_shift_export_snapshot(
+            actor=_actor(request),
+            shift_id=shift_id,
+            entry_limit=billing_exports.CASH_SHIFT_EXPORT_ENTRY_LIMIT,
+        )
+        if len(entries) > billing_exports.CASH_SHIFT_EXPORT_ENTRY_LIMIT:
+            raise ApiProblem(
+                code="cash_shift_export_too_large",
+                message="У касовій зміні забагато операцій для синхронного CSV export.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                fields={
+                    "entries": [
+                        "Допустимо не більше "
+                        f"{billing_exports.CASH_SHIFT_EXPORT_ENTRY_LIMIT} операцій."
+                    ]
+                },
+            )
+        content = billing_exports.render_cash_shift_csv(shift, entries)
+        filename = (
+            f"cash-shift-{shift.public_number}-"
+            f"{timezone.localtime(timezone.now()).strftime('%Y%m%d-%H%M%S')}.csv"
+        )
+        response = HttpResponse(content, content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "no-store"
+        response["X-Export-Entry-Count"] = str(len(entries))
+        response["X-Export-Row-Count"] = str(len(entries) + 1)
+        return response
+
+
 class CashShiftClosePreviewView(APIView):
     permission_classes = [HasCashShiftAccess]
 
@@ -263,6 +394,80 @@ class FinanceOperationListView(APIView):
             "next_cursor": next_cursor,
         }
         return Response(FinanceOperationListResponseSerializer(payload).data)
+
+
+class FinanceOperationExportView(APIView):
+    permission_classes = [IsAdmin]
+    renderer_classes = [JSONRenderer, SafeCsvRenderer]
+
+    @extend_schema(
+        operation_id="finance_operation_export",
+        summary="Export filtered admin finance-operation journal as safe CSV",
+        parameters=[FinanceOperationExportFilterSerializer],
+        responses={
+            (status.HTTP_200_OK, "text/csv"): OpenApiResponse(
+                response=OpenApiTypes.BINARY,
+                description=(
+                    "UTF-8 BOM CSV with one report summary and at most 5000 finance-operation rows."
+                ),
+            ),
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["finance"],
+    )
+    def get(self, request: Request) -> HttpResponse:
+        supported_query = {
+            "search",
+            "type",
+            "status",
+            "payment_method",
+            "date_from",
+            "date_to",
+        }
+        unsupported = sorted(set(request.query_params) - supported_query)
+        if unsupported:
+            raise ApiProblem(
+                code="finance_operation_export_query_not_supported",
+                message="Експорт фінансових операцій приймає лише фільтри головного журналу.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                fields={
+                    name: ["Приберіть unsupported query parameter з export-запиту."]
+                    for name in unsupported
+                },
+            )
+        serializer = FinanceOperationExportFilterSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        filters = dict(serializer.validated_data)
+        operations = finance_operations_export_rows(
+            actor=_actor(request),
+            filters=filters,
+            row_limit=billing_exports.FINANCE_OPERATION_EXPORT_ROW_LIMIT,
+        )
+        if len(operations) > billing_exports.FINANCE_OPERATION_EXPORT_ROW_LIMIT:
+            raise ApiProblem(
+                code="finance_operation_export_too_large",
+                message="Експорт містить забагато фінансових операцій. Звузьте фільтри.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                fields={
+                    "filters": [
+                        "Максимум "
+                        f"{billing_exports.FINANCE_OPERATION_EXPORT_ROW_LIMIT} "
+                        "операцій за один файл."
+                    ]
+                },
+            )
+        filename = timezone.localtime().strftime("finance-operations-%Y%m%d-%H%M%S.csv")
+        response = HttpResponse(
+            billing_exports.render_finance_operations_csv(operations, filters),
+            content_type="text/csv; charset=utf-8",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "no-store"
+        response["X-Export-Operation-Count"] = str(len(operations))
+        response["X-Export-Row-Count"] = str(len(operations) + 1)
+        return response
 
 
 class FinanceOperationDetailView(APIView):

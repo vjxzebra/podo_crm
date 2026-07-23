@@ -8,6 +8,9 @@ export type AuditActorOption = components["schemas"]["TeamUser"];
 export type AuditSection = NonNullable<NonNullable<
   operations["audit_event_list"]["parameters"]["query"]
 >["section"]>;
+export type AuditExportQuery = NonNullable<
+  operations["audit_event_export"]["parameters"]["query"]
+>;
 
 export interface AuditListQuery {
   readonly search?: string;
@@ -15,6 +18,21 @@ export interface AuditListQuery {
   readonly section?: AuditSection;
   readonly date_from?: string;
   readonly date_to?: string;
+}
+
+export function auditExportUrl(query: AuditListQuery): string {
+  const url = new URL("/api/v1/audit-events/export", window.location.origin);
+  const exportQuery: AuditExportQuery = {
+    ...(query.search === undefined ? {} : { search: query.search }),
+    ...(query.actor_id === undefined ? {} : { actor_id: query.actor_id }),
+    ...(query.section === undefined ? {} : { section: query.section }),
+    ...(query.date_from === undefined ? {} : { date_from: query.date_from }),
+    ...(query.date_to === undefined ? {} : { date_to: query.date_to }),
+  };
+  for (const [name, value] of Object.entries(exportQuery)) {
+    url.searchParams.set(name, String(value));
+  }
+  return url.toString();
 }
 
 type ApiError = components["schemas"]["ErrorEnvelope"];

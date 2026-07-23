@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  adminSession,
   cashShiftFixture,
   emptyCashShiftFixture,
   financeCrossShiftRefundOperation,
@@ -15,17 +16,30 @@ import {
   financeRefundResult,
   financeWithdrawalResult,
   jsonResponse,
+  receptionSession,
 } from "../test/setup";
+import { AuthProvider } from "../auth/AuthContext";
 import { FinancePage } from "./FinancePage";
 
 function render(ui: ReactElement) {
-  return testingLibraryRender(<MemoryRouter>{ui}</MemoryRouter>);
+  return testingLibraryRender(<MemoryRouter><AuthProvider>{ui}</AuthProvider></MemoryRouter>);
 }
 
 type ResponseFactory = (request: Request) => Promise<Response>;
 
 function responseFactory(body: unknown, status = 200): ResponseFactory {
   return () => Promise.resolve(jsonResponse(body, status));
+}
+
+function csvResponse(filename = "finance-operations-20260723-100000.csv"): ResponseFactory {
+  return () => Promise.resolve(new Response("\ufeffrow_type,operation_number\r\nREPORT_SUMMARY,\r\n", {
+    headers: {
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Type": "text/csv; charset=utf-8",
+      "X-Export-Operation-Count": "0",
+      "X-Export-Row-Count": "1",
+    },
+  }));
 }
 
 function rejectedFactory(message = "offline"): ResponseFactory {
@@ -36,22 +50,30 @@ function mockFinanceApi({
   current = [responseFactory({ shift: cashShiftFixture })],
   openShift = responseFactory(emptyCashShiftFixture, 201),
   operations,
+  operationExports = [csvResponse()],
   payment = responseFactory(financePaymentResult, 201),
   refund = responseFactory(financeRefundResult, 201),
   cashMovement,
+  session = adminSession,
 }: {
   readonly current?: readonly ResponseFactory[];
   readonly openShift?: ResponseFactory;
   readonly operations?: ResponseFactory;
+  readonly operationExports?: readonly ResponseFactory[];
   readonly payment?: ResponseFactory;
   readonly refund?: ResponseFactory;
   readonly cashMovement?: ResponseFactory;
+  readonly session?: typeof adminSession | typeof receptionSession;
 } = {}) {
   const currentQueue = [...current];
+  const exportQueue = [...operationExports];
   const fetchMock = vi.mocked(fetch);
   fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const url = new URL(request.url);
+    if (url.pathname === "/api/v1/session" && request.method === "GET") {
+      return Promise.resolve(jsonResponse(session));
+    }
     if (url.pathname === "/api/v1/cash-shifts/current" && request.method === "GET") {
       const factory = currentQueue.shift() ?? current[current.length - 1];
       return factory?.(request) ?? Promise.resolve(jsonResponse({ shift: null }));
@@ -67,6 +89,15 @@ function mockFinanceApi({
       return Promise.resolve(jsonResponse(url.searchParams.get("status") === "OPEN"
         ? { operations: [financeOpenOperation], next_cursor: null }
         : financeOperationsFixture));
+    }
+    if (url.pathname === "/api/v1/finance/operations/export" && request.method === "GET") {
+      const factory = exportQueue.shift() ?? operationExports[operationExports.length - 1];
+      return factory?.(request) ?? Promise.resolve(jsonResponse({
+        code: "not_found",
+        message: "Not found",
+        fields: {},
+        correlation_id: "test",
+      }, 404));
     }
     if (url.pathname === "/api/v1/payments" && request.method === "POST") {
       return payment(request);
@@ -197,7 +228,7 @@ describe("TP-701 current cash shift", () => {
     expect(screen.getByRole("button", { name: "+ Внесення" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "− Вилучення" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Закрити зміну" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /експорт/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Експортувати CSV" })).toBeInTheDocument();
   });
 });
 
@@ -734,5 +765,128 @@ describe("TP-703 full refund and cash movements", () => {
     fireEvent.click(screen.getByRole("button", { name: "Повторити" }));
     expect(await screen.findByRole("heading", { name: "Поточна касова зміна" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Провести оплату" })).toBeInTheDocument();
+  });
+});
+
+describe("TP-1006 finance operation export", () => {
+  beforeEach(() => {
+    document.cookie = "podoria_csrftoken=test-csrf; path=/";
+  });
+
+  afterEach(() => {
+    document.cookie = "podoria_csrftoken=; max-age=0; path=/";
+    document.body.style.overflow = "";
+  });
+
+  it("exports only applied main-list filters and keeps the loaded journal visible", async () => {
+    let resolveFilteredList: ((response: Response) => void) | undefined;
+    let resolveExport: ((response: Response) => void) | undefined;
+    let downloadedFilename = "";
+    let downloadedHref = "";
+    const listRequests: Request[] = [];
+    const exportRequests: Request[] = [];
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function captureDownload(this: HTMLAnchorElement) {
+        downloadedFilename = this.download;
+        downloadedHref = this.href;
+      });
+    mockFinanceApi({
+      operations: (request) => {
+        listRequests.push(request);
+        if (listRequests.length === 1) return Promise.resolve(jsonResponse(financeOperationsFixture));
+        return new Promise<Response>((resolve) => { resolveFilteredList = resolve; });
+      },
+      operationExports: [
+        (request) => {
+          exportRequests.push(request);
+          return new Promise<Response>((resolve) => { resolveExport = resolve; });
+        },
+      ],
+    });
+    render(<FinancePage />);
+
+    await screen.findByRole("table", { name: "Список фінансових операцій" });
+    const exportButton = await screen.findByRole("button", { name: "Експортувати CSV" });
+    fireEvent.change(screen.getByPlaceholderText("Пацієнт, телефон або номер"), { target: { value: "Марія" } });
+    fireEvent.change(screen.getByLabelText("Тип"), { target: { value: "PAYMENT" } });
+    fireEvent.change(screen.getByLabelText("Статус"), { target: { value: "PAID" } });
+    fireEvent.change(screen.getByLabelText("Спосіб"), { target: { value: "CARD" } });
+    fireEvent.change(screen.getByLabelText("Від дати"), { target: { value: "2026-07-24" } });
+    fireEvent.change(screen.getByLabelText("До дати"), { target: { value: "2026-07-23" } });
+    expect(exportButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Від дати"), { target: { value: "2026-07-22" } });
+    fireEvent.click(screen.getByRole("button", { name: "Застосувати" }));
+    expect(exportButton).toBeDisabled();
+    resolveFilteredList?.(jsonResponse(financeOperationsFixture));
+    await waitFor(() => { expect(exportButton).toBeEnabled(); });
+    fireEvent.change(screen.getByPlaceholderText("Пацієнт, телефон або номер"), { target: { value: "ще-не-застосовано" } });
+    fireEvent.click(exportButton);
+
+    expect(screen.getByRole("button", { name: "Готуємо CSV…" })).toBeDisabled();
+    expect(screen.getByRole("table", { name: "Список фінансових операцій" })).toBeInTheDocument();
+    resolveExport?.(await csvResponse()(new Request("http://localhost/export")));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Завантаження CSV фінансових операцій розпочато.");
+    expect(exportRequests).toHaveLength(1);
+    const exportUrl = new URL(exportRequests[0]?.url ?? "http://invalid");
+    expect(exportUrl.searchParams.get("search")).toBe("Марія");
+    expect(exportUrl.searchParams.get("type")).toBe("PAYMENT");
+    expect(exportUrl.searchParams.get("status")).toBe("PAID");
+    expect(exportUrl.searchParams.get("payment_method")).toBe("CARD");
+    expect(exportUrl.searchParams.get("date_from")).toBe("2026-07-22");
+    expect(exportUrl.searchParams.get("date_to")).toBe("2026-07-23");
+    expect(exportUrl.searchParams.has("cursor")).toBe(false);
+    expect(exportUrl.href).not.toContain(encodeURIComponent("ще-не-застосовано"));
+    expect(exportRequests[0]?.headers.get("Accept")).toBe("text/csv");
+    expect(downloadedFilename).toBe("finance-operations-20260723-100000.csv");
+    expect(downloadedHref).toBe("blob:inventory-export");
+    anchorClick.mockRestore();
+  });
+
+  it("keeps rows after an export error and retries the same applied projection", async () => {
+    const exportRequests: Request[] = [];
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    mockFinanceApi({
+      operationExports: [
+        (request) => {
+          exportRequests.push(request);
+          return Promise.resolve(jsonResponse({
+            code: "finance_operation_export_too_large",
+            message: "Експорт містить забагато фінансових операцій. Звузьте фільтри.",
+            fields: { filters: ["Максимум 5000 операцій за один файл."] },
+            correlation_id: "tp-1006-test",
+          }, 422));
+        },
+        (request) => {
+          exportRequests.push(request);
+          return csvResponse()(request);
+        },
+      ],
+    });
+    render(<FinancePage />);
+
+    await screen.findByRole("table", { name: "Список фінансових операцій" });
+    fireEvent.click(await screen.findByRole("button", { name: "Експортувати CSV" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Експорт містить забагато фінансових операцій.");
+    expect(screen.getByRole("table", { name: "Список фінансових операцій" })).toBeInTheDocument();
+    expect(anchorClick).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Повторити export" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Завантаження CSV фінансових операцій розпочато.");
+    expect(exportRequests).toHaveLength(2);
+    expect(new URL(exportRequests[0]?.url ?? "http://invalid").search).toBe(
+      new URL(exportRequests[1]?.url ?? "http://invalid").search,
+    );
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    anchorClick.mockRestore();
+  });
+
+  it("does not expose the admin export control to reception", async () => {
+    mockFinanceApi({ session: receptionSession });
+    render(<FinancePage />);
+
+    await screen.findByRole("table", { name: "Список фінансових операцій" });
+    expect(screen.queryByRole("button", { name: "Експортувати CSV" })).not.toBeInTheDocument();
   });
 });

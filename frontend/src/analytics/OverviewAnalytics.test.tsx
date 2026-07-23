@@ -20,6 +20,16 @@ function renderApp(path = "/") {
   );
 }
 
+function analyticsCsvResponse(filename = "analytics-report-20260723-100000.csv") {
+  return new Response("\ufeffrow_type,completed_visits\r\nREPORT_SUMMARY,2\r\n", {
+    headers: {
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Type": "text/csv; charset=utf-8",
+      "X-Export-Row-Count": "38",
+    },
+  });
+}
+
 describe("TP-804 role overview", () => {
   it("renders live metrics, schedule and canonical appointment links", async () => {
     renderApp();
@@ -117,5 +127,108 @@ describe("TP-804 administrator analytics", () => {
     fireEvent.click(screen.getByRole("button", { name: "Повторити" }));
     expect(await screen.findAllByText("28 450 ₴")).not.toHaveLength(0);
     expect(attempts).toBe(2);
+  });
+});
+
+describe("TP-1005 administrator analytics CSV", () => {
+  it("exports only the current loaded projection and keeps analytics visible while pending", async () => {
+    const requests: Request[] = [];
+    let resolveFiltered: ((response: Response) => void) | undefined;
+    let resolveExport: ((response: Response) => void) | undefined;
+    const filteredAnalytics = {
+      ...analyticsFixture,
+      filters: {
+        specialist: null,
+        service: analyticsFixture.available_services[0],
+      },
+    } as const;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      requests.push(request);
+      const url = new URL(request.url);
+      if (url.pathname === "/api/v1/session") return Promise.resolve(jsonResponse(adminSession));
+      if (url.pathname === "/api/v1/analytics/export") {
+        return new Promise<Response>((resolve) => { resolveExport = resolve; });
+      }
+      if (url.pathname === "/api/v1/analytics") {
+        if (url.searchParams.has("service_id")) {
+          return new Promise<Response>((resolve) => { resolveFiltered = resolve; });
+        }
+        return Promise.resolve(jsonResponse(analyticsFixture));
+      }
+      return Promise.resolve(jsonResponse({ code: "not_found", message: "Not found", fields: {}, correlation_id: "tp1005" }, 404));
+    });
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    renderApp("/analytics");
+
+    const exportButton = await screen.findByRole("button", { name: "Експортувати CSV" });
+    await waitFor(() => { expect(exportButton).toBeEnabled(); });
+    fireEvent.change(screen.getByLabelText("Послуга"), {
+      target: { value: analyticsFixture.available_services[0].id },
+    });
+    await waitFor(() => { expect(exportButton).toBeDisabled(); });
+    expect(requests.filter((request) => new URL(request.url).pathname === "/api/v1/analytics/export")).toHaveLength(0);
+
+    resolveFiltered?.(jsonResponse(filteredAnalytics));
+    await waitFor(() => { expect(exportButton).toBeEnabled(); });
+    fireEvent.click(exportButton);
+
+    expect(screen.getByRole("button", { name: "Готуємо CSV…" })).toBeDisabled();
+    expect(screen.getByRole("heading", { name: "Завантаженість спеціалістів" })).toBeInTheDocument();
+    resolveExport?.(analyticsCsvResponse("analytics-safe.csv"));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Завантаження CSV аналітики розпочато.");
+    const exportRequests = requests.filter((request) => new URL(request.url).pathname === "/api/v1/analytics/export");
+    expect(exportRequests).toHaveLength(1);
+    const exportUrl = new URL(exportRequests[0]?.url ?? "http://invalid");
+    expect(exportUrl.searchParams.get("from")).toBe(analyticsFixture.period.date_from);
+    expect(exportUrl.searchParams.get("to")).toBe(analyticsFixture.period.date_to);
+    expect(exportUrl.searchParams.get("service_id")).toBe(analyticsFixture.available_services[0].id);
+    expect(exportUrl.searchParams.has("specialist_id")).toBe(false);
+    expect(exportRequests[0]?.headers.get("Accept")).toBe("text/csv");
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("a[download='analytics-safe.csv']")).not.toBeInTheDocument();
+    anchorClick.mockRestore();
+  });
+
+  it("shows a retryable export error without replacing KPI, chart or tables", async () => {
+    let exportAttempts = 0;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const url = new URL(request.url);
+      if (url.pathname === "/api/v1/session") return Promise.resolve(jsonResponse(adminSession));
+      if (url.pathname === "/api/v1/analytics") return Promise.resolve(jsonResponse(analyticsFixture));
+      if (url.pathname === "/api/v1/analytics/export") {
+        exportAttempts += 1;
+        return exportAttempts === 1
+          ? Promise.resolve(jsonResponse({
+              code: "analytics_export_too_large",
+              message: "Експорт аналітики містить забагато агрегованих рядків.",
+              fields: {},
+              correlation_id: "tp1005",
+            }, 422))
+          : Promise.resolve(analyticsCsvResponse());
+      }
+      return Promise.resolve(jsonResponse({ code: "not_found", message: "Not found", fields: {}, correlation_id: "tp1005" }, 404));
+    });
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    renderApp("/analytics");
+
+    const exportButton = await screen.findByRole("button", { name: "Експортувати CSV" });
+    await waitFor(() => { expect(exportButton).toBeEnabled(); });
+    fireEvent.click(exportButton);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Експорт аналітики містить забагато агрегованих рядків.");
+    expect(screen.getByRole("region", { name: "Графік завершених візитів і виторгу" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Рейтинг за виконаним обсягом" })).toBeInTheDocument();
+    expect(anchorClick).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Повторити export" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Завантаження CSV аналітики розпочато.");
+    expect(exportAttempts).toBe(2);
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    anchorClick.mockRestore();
   });
 });

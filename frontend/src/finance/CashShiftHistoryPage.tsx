@@ -8,7 +8,8 @@ import {
 } from "react";
 import { useLocation, useSearchParams } from "react-router";
 
-import { apiClient } from "../api/client";
+import { apiClient, sessionAwareFetch } from "../api/client";
+import { attachmentFilename, downloadBlob, responseErrorMessage } from "../api/download";
 import type { components } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { useAuth } from "../auth/AuthContext";
@@ -75,6 +76,14 @@ function discrepancy(summary: CashShiftSummary): string {
   const value = summary.reconciliation?.discrepancy_minor;
   if (value === undefined) return "—";
   return `${value > 0 ? "+" : value < 0 ? "−" : ""}${money(Math.abs(value))}`;
+}
+
+function cashShiftHistoryExportUrl(query: CashShiftListQuery): URL {
+  const url = new URL("/api/v1/cash-shifts/export", window.location.origin);
+  Object.entries(query).forEach(([name, value]) => {
+    if (name !== "cursor") url.searchParams.set(name, String(value));
+  });
+  return url;
 }
 
 interface HistoryRowsProps {
@@ -144,6 +153,9 @@ export function CashShiftHistoryPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [attemptedDetailId, setAttemptedDetailId] = useState<string | null>(null);
   const [filterError, setFilterError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [detail, setDetail] = useState<CashShiftProjection | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [closingShift, setClosingShift] = useState<CashShiftProjection | null>(null);
@@ -256,6 +268,33 @@ export function CashShiftHistoryPage() {
   };
 
   const filtersActive = useMemo(() => Object.keys(query).length > 0, [query]);
+  const exportHistory = async () => {
+    setIsExporting(true);
+    setExportError(null);
+    setExportStatus(null);
+    const response = await sessionAwareFetch(new Request(
+      cashShiftHistoryExportUrl(query),
+      { headers: { Accept: "text/csv" } },
+    )).catch(() => null);
+    setIsExporting(false);
+    if (response === null) {
+      setExportError("Немає зв’язку із сервером. Не вдалося підготувати CSV історії.");
+      return;
+    }
+    if (!response.ok) {
+      setExportError(await responseErrorMessage(
+        response,
+        "Не вдалося підготувати CSV історії. Спробуйте ще раз.",
+      ));
+      return;
+    }
+    const blob = await response.blob();
+    downloadBlob(blob, attachmentFilename(
+      response.headers.get("Content-Disposition"),
+      "cash-shift-history.csv",
+    ));
+    setExportStatus("Завантаження CSV історії розпочато.");
+  };
   const openRow = (shift: CashShiftSummary, trigger: HTMLButtonElement) => {
     detailTriggerRef.current = trigger;
     autoOpenedShiftRef.current = shift.id;
@@ -279,7 +318,7 @@ export function CashShiftHistoryPage() {
       {flash === null ? null : <div className="success-banner finance-success" role="status"><Icon name="check" /><span>{flash}</span><button aria-label="Закрити повідомлення" className="icon-button" onClick={() => { setFlash(null); }} type="button"><Icon name="close" /></button></div>}
 
       <section aria-labelledby="finance-history-title" className="panel finance-history">
-        <header className="finance-history__header"><div><p className="eyebrow">Каса · Immutable history</p><h2 id="finance-history-title">Касові зміни</h2><p>{shifts.length} завантажено · {isAdmin ? "усі працівники" : "лише ваші зміни"}</p></div><span><Icon name="lock" />Лише читання</span></header>
+        <header className="finance-history__header"><div><p className="eyebrow">Каса · Immutable history</p><h2 id="finance-history-title">Касові зміни</h2><p>{shifts.length} завантажено · {isAdmin ? "усі працівники" : "лише ваші зміни"}</p></div><div className="finance-history__header-actions"><span><Icon name="lock" />Лише читання</span><button className="button button--secondary" disabled={isExporting} onClick={() => { void exportHistory(); }} type="button">{isExporting ? "Готуємо CSV…" : "Експортувати CSV"}</button></div></header>
 
         <form className="finance-history-filters" onSubmit={applyFilters}>
           <label className="form-field finance-history-search"><span>Пошук</span><span className="input-with-icon"><Icon name="search" /><input maxLength={255} onChange={(event) => { setSearch(event.target.value); }} placeholder="Номер зміни або працівник" value={search} /></span></label>
@@ -301,6 +340,8 @@ export function CashShiftHistoryPage() {
         </form>
 
         {filterError === null ? null : <div className="form-message form-message--error finance-history-message" role="alert"><Icon name="warning" /><span>{filterError}</span></div>}
+        {exportError === null ? null : <div className="form-message form-message--error finance-history-message" role="alert"><Icon name="warning" /><span>{exportError}</span><button className="text-action" onClick={() => { void exportHistory(); }} type="button">Повторити export</button></div>}
+        {exportStatus === null ? null : <div className="form-message form-message--success finance-history-message" role="status"><Icon name="check" /><span>{exportStatus}</span></div>}
         {error === null ? null : <div className="form-message form-message--error finance-history-message" role="alert"><Icon name="warning" /><span>{error}</span><button className="text-action" onClick={() => { void load(query); }} type="button">Повторити</button></div>}
         {detailError === null ? null : <div className="form-message form-message--error finance-history-message" role="alert"><Icon name="warning" /><span>{detailError}</span>{attemptedDetailId === null ? null : <button className="text-action" onClick={() => { void loadDetail(attemptedDetailId); }} type="button">Повторити деталі</button>}</div>}
         {isDetailLoading ? <div aria-label="Завантаження деталей касової зміни" className="finance-history-detail-loading" role="status"><span className="spinner" />Завантажуємо деталі…</div> : null}

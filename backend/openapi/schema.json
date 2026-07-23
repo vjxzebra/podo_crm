@@ -107,6 +107,139 @@
                 }
             }
         },
+        "/api/v1/analytics/export": {
+            "get": {
+                "operationId": "analytics_export",
+                "summary": "Export the current aggregate administrator analytics projection as safe CSV",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "format",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "csv",
+                                "json"
+                            ]
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "service_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "specialist_id",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "text/csv": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": "UTF-8 BOM CSV with an aggregate summary and at most 5000 trend/outcome/specialist/service rows."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/appointment-status-configs": {
             "get": {
                 "operationId": "appointment_status_config_list",
@@ -1143,6 +1276,145 @@
                 }
             }
         },
+        "/api/v1/audit-events/export": {
+            "get": {
+                "operationId": "audit_event_export",
+                "summary": "Export the filtered administrator audit journal as safe CSV",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "actor_id",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "date_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "date_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "format",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "csv",
+                                "json"
+                            ]
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 255
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "section",
+                        "schema": {
+                            "enum": [
+                                "accounts",
+                                "team",
+                                "settings",
+                                "patients",
+                                "work_items",
+                                "scheduling",
+                                "medical",
+                                "visits",
+                                "billing",
+                                "cash",
+                                "inventory"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "* `accounts` - accounts\n* `team` - team\n* `settings` - settings\n* `patients` - patients\n* `work_items` - work_items\n* `scheduling` - scheduling\n* `medical` - medical\n* `visits` - visits\n* `billing` - billing\n* `cash` - cash\n* `inventory` - inventory"
+                    }
+                ],
+                "tags": [
+                    "audit"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "text/csv": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": "UTF-8 BOM CSV with one report summary and at most 5000 minimal audit-event rows."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/auth/change-password": {
             "post": {
                 "operationId": "auth_change_password",
@@ -2049,6 +2321,115 @@
                 }
             }
         },
+        "/api/v1/cash-shifts/{shift_id}/export": {
+            "get": {
+                "operationId": "cash_shift_export",
+                "summary": "Export one role-scoped cash shift and its append-only ledger as safe CSV",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "format",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "csv",
+                                "json"
+                            ]
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "shift_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "cash"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "text/csv": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": "UTF-8 BOM CSV with one summary row and at most 5000 ledger rows."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/cash-shifts/current": {
             "get": {
                 "operationId": "cash_shift_current",
@@ -2085,6 +2466,136 @@
                     "403": {
                         "content": {
                             "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/cash-shifts/export": {
+            "get": {
+                "operationId": "cash_shift_history_export",
+                "summary": "Export filtered role-scoped cash-shift summaries as safe CSV",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "date_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "employee_id",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "format",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "csv",
+                                "json"
+                            ]
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 255
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "enum": [
+                                "OPEN",
+                                "CLOSED"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "* `OPEN` - Відкрита\n* `CLOSED` - Закрита"
+                    }
+                ],
+                "tags": [
+                    "cash"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "text/csv": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": "UTF-8 BOM CSV with one report summary and at most 5000 cash-shift rows."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorEnvelope"
                                 }
@@ -2805,6 +3316,159 @@
                 }
             }
         },
+        "/api/v1/finance/operations/export": {
+            "get": {
+                "operationId": "finance_operation_export",
+                "summary": "Export filtered admin finance-operation journal as safe CSV",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "date_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "format",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "csv",
+                                "json"
+                            ]
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "payment_method",
+                        "schema": {
+                            "enum": [
+                                "CASH",
+                                "CARD",
+                                "TRANSFER"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "* `CASH` - CASH\n* `CARD` - CARD\n* `TRANSFER` - TRANSFER"
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 255
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "enum": [
+                                "OPEN",
+                                "PAID",
+                                "REFUNDED",
+                                "POSTED"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "* `OPEN` - OPEN\n* `PAID` - PAID\n* `REFUNDED` - REFUNDED\n* `POSTED` - POSTED"
+                    },
+                    {
+                        "in": "query",
+                        "name": "type",
+                        "schema": {
+                            "enum": [
+                                "PAYMENT",
+                                "REFUND",
+                                "DEPOSIT",
+                                "WITHDRAWAL"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "* `PAYMENT` - PAYMENT\n* `REFUND` - REFUND\n* `DEPOSIT` - DEPOSIT\n* `WITHDRAWAL` - WITHDRAWAL"
+                    }
+                ],
+                "tags": [
+                    "finance"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "text/csv": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": "UTF-8 BOM CSV with one report summary and at most 5000 finance-operation rows."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/inventory/materials": {
             "get": {
                 "operationId": "inventory_material_list",
@@ -3356,6 +4020,148 @@
                 }
             }
         },
+        "/api/v1/inventory/movements/export": {
+            "get": {
+                "operationId": "inventory_movement_export",
+                "summary": "Export the filtered append-only stock movement journal as safe CSV",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "actor",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 255
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "date_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "date_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "format",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "csv",
+                                "json"
+                            ]
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "kind",
+                        "schema": {
+                            "enum": [
+                                "all",
+                                "RECEIPT",
+                                "VISIT_USAGE",
+                                "MANUAL_WRITEOFF",
+                                "STOCKTAKE_ADJUSTMENT"
+                            ],
+                            "type": "string",
+                            "default": "all",
+                            "minLength": 1
+                        },
+                        "description": "* `all` - all\n* `RECEIPT` - RECEIPT\n* `VISIT_USAGE` - VISIT_USAGE\n* `MANUAL_WRITEOFF` - MANUAL_WRITEOFF\n* `STOCKTAKE_ADJUSTMENT` - STOCKTAKE_ADJUSTMENT"
+                    },
+                    {
+                        "in": "query",
+                        "name": "material_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 255
+                        }
+                    }
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "text/csv": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": "UTF-8 BOM CSV attachment with at most 5000 movement rows."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/inventory/operations/{operation_id}": {
             "get": {
                 "operationId": "inventory_operation_retrieve",
@@ -3834,6 +4640,342 @@
                         "description": ""
                     },
                     "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/suppliers": {
+            "get": {
+                "operationId": "inventory_supplier_list",
+                "summary": "Search and filter the administrator supplier directory",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 255
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "enum": [
+                                "all",
+                                "active",
+                                "inactive"
+                            ],
+                            "type": "string",
+                            "default": "all",
+                            "minLength": 1
+                        },
+                        "description": "* `all` - all\n* `active` - active\n* `inactive` - inactive"
+                    }
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SupplierList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "inventory_supplier_create",
+                "summary": "Create an administrator supplier directory record",
+                "tags": [
+                    "inventory"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SupplierCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SupplierCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SupplierCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Supplier"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/suppliers/{supplier_id}": {
+            "get": {
+                "operationId": "inventory_supplier_retrieve",
+                "summary": "Return administrator supplier details and historical lot count",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "supplier_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Supplier"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "inventory_supplier_update",
+                "summary": "Edit, deactivate or reactivate a supplier without changing lot history",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "supplier_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedSupplierUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedSupplierUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedSupplierUpdateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Supplier"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -10662,6 +11804,12 @@
                         "format": "int64",
                         "nullable": true
                     },
+                    "supplier_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true
+                    },
                     "supplier_name": {
                         "type": "string",
                         "maxLength": 180
@@ -10699,7 +11847,8 @@
                     "is_usable",
                     "lot_number",
                     "received_on",
-                    "status"
+                    "status",
+                    "supplier_id"
                 ]
             },
             "MaterialLotList": {
@@ -11773,6 +12922,51 @@
                     }
                 }
             },
+            "PatchedSupplierUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 180
+                    },
+                    "contact_name": {
+                        "type": "string",
+                        "maxLength": 180
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email"
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "address": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "note": {
+                        "type": "string",
+                        "maxLength": 2000
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                }
+            },
             "PatchedTeamUserUpdateRequest": {
                 "type": "object",
                 "properties": {
@@ -12719,6 +13913,11 @@
                         "minimum": 0,
                         "nullable": true
                     },
+                    "supplier_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
                     "supplier_name": {
                         "type": "string",
                         "default": "",
@@ -13270,6 +14469,16 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "supplier_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "supplier_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "quantity_delta": {
                         "type": "string",
                         "format": "decimal",
@@ -13295,7 +14504,9 @@
                     "material_id",
                     "material_name",
                     "material_unit",
-                    "quantity_delta"
+                    "quantity_delta",
+                    "supplier_id",
+                    "supplier_name"
                 ]
             },
             "StockStatusEnum": {
@@ -13620,6 +14831,141 @@
                 ],
                 "type": "string",
                 "description": "* `DRAFT` - Чернетка\n* `POSTED` - Проведено"
+            },
+            "Supplier": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 180
+                    },
+                    "contact_name": {
+                        "type": "string",
+                        "maxLength": 180
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "address": {
+                        "type": "string",
+                        "maxLength": 300
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "lots_count": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "lots_count",
+                    "name",
+                    "updated_at"
+                ]
+            },
+            "SupplierCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 180
+                    },
+                    "contact_name": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 180
+                    },
+                    "phone": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 32
+                    },
+                    "email": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "default": ""
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "address": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 300
+                    },
+                    "note": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 2000
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "default": true
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            },
+            "SupplierList": {
+                "type": "object",
+                "properties": {
+                    "suppliers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Supplier"
+                        }
+                    }
+                },
+                "required": [
+                    "suppliers"
+                ]
             },
             "TeamUser": {
                 "type": "object",

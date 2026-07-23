@@ -20,6 +20,7 @@ from apps.inventory.models import (
     Stocktake,
     StocktakeLine,
     StocktakeStatus,
+    Supplier,
 )
 from config.api.exceptions import ApiProblem
 
@@ -36,11 +37,11 @@ def material_snapshot(material: Material) -> dict[str, Any]:
     }
 
 
-def _check_version(*, actual: int, expected: int) -> None:
+def _check_version(*, actual: int, expected: int, resource: str = "Матеріал") -> None:
     if actual != expected:
         raise ApiProblem(
             code="stale_version",
-            message="Матеріал уже змінено в іншій сесії. Оновіть дані та повторіть дію.",
+            message=f"{resource} уже змінено в іншій сесії. Оновіть дані та повторіть дію.",
             status_code=409,
         )
 
@@ -106,6 +107,81 @@ def update_material(
     return material
 
 
+def supplier_snapshot(supplier: Supplier) -> dict[str, Any]:
+    return {
+        "name": supplier.name,
+        "contact_name": supplier.contact_name,
+        "phone": supplier.phone,
+        "email": supplier.email,
+        "address": supplier.address,
+        "note": supplier.note,
+        "is_active": supplier.is_active,
+        "version": supplier.version,
+    }
+
+
+@transaction.atomic
+def create_supplier(*, actor: User, correlation_id: str, data: dict[str, Any]) -> Supplier:
+    supplier = Supplier.objects.create(**data)
+    record_audit_event(
+        actor=actor,
+        action=AuditAction.SUPPLIER_CREATED,
+        object_type="supplier",
+        object_id=supplier.pk,
+        object_label=supplier.name,
+        correlation_id=correlation_id,
+        before={},
+        after=supplier_snapshot(supplier),
+        description="Створено постачальника для складських надходжень.",
+    )
+    return supplier
+
+
+@transaction.atomic
+def update_supplier(
+    *, actor: User, supplier_id: uuid.UUID, correlation_id: str, changes: dict[str, Any]
+) -> Supplier:
+    supplier = Supplier.objects.select_for_update().get(pk=supplier_id)
+    expected_version = changes.pop("version")
+    _check_version(actual=supplier.version, expected=expected_version, resource="Постачальника")
+    before = supplier_snapshot(supplier)
+    was_active = supplier.is_active
+    for field in (
+        "name",
+        "contact_name",
+        "phone",
+        "email",
+        "address",
+        "note",
+        "is_active",
+    ):
+        if field in changes:
+            setattr(supplier, field, changes[field])
+    supplier.version += 1
+    supplier.save()
+    if was_active and not supplier.is_active:
+        action = AuditAction.SUPPLIER_DEACTIVATED
+        description = "Деактивовано постачальника без зміни історичних партій."
+    elif not was_active and supplier.is_active:
+        action = AuditAction.SUPPLIER_REACTIVATED
+        description = "Повторно активовано постачальника."
+    else:
+        action = AuditAction.SUPPLIER_UPDATED
+        description = "Оновлено картку постачальника."
+    record_audit_event(
+        actor=actor,
+        action=action,
+        object_type="supplier",
+        object_id=supplier.pk,
+        object_label=supplier.name,
+        correlation_id=correlation_id,
+        before=before,
+        after=supplier_snapshot(supplier),
+        description=description,
+    )
+    return supplier
+
+
 def _json_default(value: object) -> str:
     if isinstance(value, (date, Decimal, uuid.UUID)):
         return str(value)
@@ -163,6 +239,8 @@ def operation_snapshot(operation: InventoryOperation) -> dict[str, Any]:
                 "material": movement.lot.material.name,
                 "lot_id": movement.lot_id,
                 "lot_number": movement.lot.lot_number,
+                "supplier_id": movement.lot.supplier_id,
+                "supplier_name": movement.lot.supplier_name,
                 "quantity_delta": movement.quantity_delta,
                 "balance_after": movement.balance_after,
             }
@@ -176,12 +254,17 @@ def _lot_detail_conflict(
     lot: MaterialLot,
     expires_on: date | None,
     purchase_price_minor: int | None,
+    supplier_id: uuid.UUID | None,
     supplier_name: str,
 ) -> bool:
     return (
         lot.expires_on != expires_on
         or (purchase_price_minor is not None and lot.purchase_price_minor != purchase_price_minor)
-        or (supplier_name != "" and lot.supplier_name != supplier_name)
+        or (
+            supplier_id is not None
+            and (lot.supplier_id != supplier_id or lot.supplier_name != supplier_name)
+        )
+        or (supplier_id is None and supplier_name != "" and lot.supplier_name != supplier_name)
     )
 
 
@@ -205,6 +288,37 @@ def post_receipt(
         return existing, True
 
     lines = data["lines"]
+    supplier_ids = sorted(
+        {line["supplier_id"] for line in lines if line["supplier_id"] is not None},
+        key=str,
+    )
+    locked_suppliers = list(
+        Supplier.objects.select_for_update().filter(pk__in=supplier_ids).order_by("pk")
+    )
+    suppliers = {item.pk: item for item in locked_suppliers}
+    for index, line in enumerate(lines):
+        supplier_id = line["supplier_id"]
+        if supplier_id is None:
+            continue
+        supplier = suppliers.get(supplier_id)
+        if supplier is None:
+            raise ApiProblem(
+                code="supplier_not_found",
+                message="Один із постачальників не знайдений.",
+                status_code=422,
+                fields={f"lines.{index}.supplier_id": ["Оберіть постачальника з довідника."]},
+            )
+        if not supplier.is_active:
+            raise ApiProblem(
+                code="supplier_inactive",
+                message="Надходження можна провести лише від активного постачальника.",
+                status_code=409,
+                fields={
+                    f"lines.{index}.supplier_id": ["Активуйте постачальника або оберіть іншого."]
+                },
+            )
+        line["supplier_name"] = supplier.name
+
     material_ids = sorted({line["material_id"] for line in lines}, key=str)
     locked_materials = list(
         Material.objects.select_for_update().filter(pk__in=material_ids).order_by("pk")
@@ -254,6 +368,7 @@ def post_receipt(
             lot=lot,
             expires_on=line["expires_on"],
             purchase_price_minor=line["purchase_price_minor"],
+            supplier_id=line["supplier_id"],
             supplier_name=line["supplier_name"],
         ):
             raise ApiProblem(
@@ -285,6 +400,7 @@ def post_receipt(
                 initial_quantity=line["quantity"],
                 current_quantity=line["quantity"],
                 purchase_price_minor=line["purchase_price_minor"],
+                supplier_id=line["supplier_id"],
                 supplier_name=line["supplier_name"],
             )
             lots[(line["material_id"], line["lot_number"])] = lot

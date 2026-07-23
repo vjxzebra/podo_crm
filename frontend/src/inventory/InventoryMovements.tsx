@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type SyntheticEvent } from "react";
 
-import { apiClient } from "../api/client";
+import { apiClient, sessionAwareFetch } from "../api/client";
+import { attachmentFilename, downloadBlob, responseErrorMessage } from "../api/download";
 import type { components, operations } from "../api/schema";
 import { Icon } from "../app/Icon";
 
@@ -8,6 +9,7 @@ type Material = components["schemas"]["Material"];
 type Movement = components["schemas"]["MovementJournalItem"];
 type InventoryOperation = components["schemas"]["InventoryOperation"];
 type JournalQuery = NonNullable<operations["inventory_movement_list"]["parameters"]["query"]>;
+type MovementExportQuery = NonNullable<operations["inventory_movement_export"]["parameters"]["query"]>;
 type MovementKind = Exclude<JournalQuery["kind"], undefined>;
 
 const kindLabels: Readonly<Record<string, string>> = {
@@ -29,6 +31,22 @@ function dateTimeLabel(value: string): string {
 function signedQuantity(value: string, unit: string): string {
   const amount = Number(value);
   return `${amount > 0 ? "+" : ""}${amount.toLocaleString("uk-UA", { maximumFractionDigits: 3 })} ${unit}`;
+}
+
+function exportUrl(query: JournalQuery): string {
+  const url = new URL("/api/v1/inventory/movements/export", window.location.origin);
+  const exportQuery: MovementExportQuery = {
+    ...(query.search === undefined ? {} : { search: query.search }),
+    ...(query.kind === undefined ? {} : { kind: query.kind }),
+    ...(query.material_id === undefined ? {} : { material_id: query.material_id }),
+    ...(query.actor === undefined ? {} : { actor: query.actor }),
+    ...(query.date_from === undefined ? {} : { date_from: query.date_from }),
+    ...(query.date_to === undefined ? {} : { date_to: query.date_to }),
+  };
+  Object.entries(exportQuery).forEach(([name, value]) => {
+    url.searchParams.set(name, value);
+  });
+  return url.toString();
 }
 
 interface OperationDetailProps {
@@ -63,6 +81,9 @@ export function MovementJournal({ materials }: MovementJournalProps) {
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<InventoryOperation | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
 
   const load = useCallback(async (currentQuery: JournalQuery, append = false) => {
     setIsLoading(true);
@@ -114,11 +135,37 @@ export function MovementJournal({ materials }: MovementJournalProps) {
     else if (result.data === undefined) setError(result.error.message);
     else setDetail(result.data);
   };
+  const exportMovements = async () => {
+    setIsExporting(true);
+    setExportError(null);
+    setExportStatus(null);
+    const response = await sessionAwareFetch(new Request(exportUrl(query), {
+      headers: { Accept: "text/csv" },
+    })).catch(() => null);
+    setIsExporting(false);
+    if (response === null) {
+      setExportError("Немає зв’язку із сервером. Не вдалося підготувати CSV.");
+      return;
+    }
+    if (!response.ok) {
+      setExportError(await responseErrorMessage(
+        response,
+        "Не вдалося підготувати CSV. Спробуйте ще раз.",
+      ));
+      return;
+    }
+    const blob = await response.blob();
+    downloadBlob(blob, attachmentFilename(
+      response.headers.get("Content-Disposition"),
+      "inventory-movements.csv",
+    ));
+    setExportStatus("Завантаження CSV розпочато.");
+  };
   const filtersActive = search !== "" || kind !== "all" || materialId !== ""
     || actor !== "" || dateFrom !== "" || dateTo !== "";
 
   return <>
-    <section className="panel movement-journal"><header><div><p className="eyebrow">Append-only журнал</p><h2>Рухи матеріалів</h2><p>Надходження, списання та коригування інвентаризації в одному незмінному реєстрі.</p></div><span className="admin-only-badge"><Icon name="lock" />Лише читання</span></header><form className="movement-filters" onSubmit={applyFilters}><label className="form-field movement-search"><span>Пошук</span><span className="input-with-icon"><Icon name="search" /><input onChange={(event) => { setSearch(event.target.value); }} placeholder="Операція, матеріал або партія" value={search} /></span></label><label className="form-field"><span>Тип руху</span><select onChange={(event) => { setKind(event.target.value as MovementKind); }} value={kind}><option value="all">Усі типи</option><option value="RECEIPT">Надходження</option><option value="MANUAL_WRITEOFF">Ручне списання</option><option value="STOCKTAKE_ADJUSTMENT">Інвентаризація</option></select></label><label className="form-field"><span>Матеріал</span><select onChange={(event) => { setMaterialId(event.target.value); }} value={materialId}><option value="">Усі матеріали</option>{materials.map((material) => <option key={material.id} value={material.id}>{material.sku} · {material.name}</option>)}</select></label><label className="form-field"><span>Працівник</span><input onChange={(event) => { setActor(event.target.value); }} placeholder="Ім’я або email" value={actor} /></label><label className="form-field"><span>Від дати</span><input max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); }} type="date" value={dateFrom} /></label><label className="form-field"><span>До дати</span><input min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); }} type="date" value={dateTo} /></label><div className="movement-filter-actions"><button aria-label="Скинути фільтри журналу" className="icon-button" disabled={!filtersActive} onClick={resetFilters} type="button"><Icon name="refresh" /></button><button className="button button--secondary" type="submit">Застосувати</button></div></form>
+    <section className="panel movement-journal"><header><div><p className="eyebrow">Append-only журнал · TP-1002</p><h2>Рухи матеріалів</h2><p>Надходження, списання та коригування інвентаризації в одному незмінному реєстрі.</p></div><div className="movement-journal__actions"><span className="admin-only-badge"><Icon name="lock" />Лише читання</span><button className="button button--secondary" disabled={isExporting} onClick={() => void exportMovements()} type="button">{isExporting ? "Готуємо CSV…" : "Експортувати CSV"}</button></div></header>{exportError === null ? null : <div className="form-message form-message--error movement-message" role="alert"><Icon name="warning" /><span>{exportError}</span><button className="text-action" onClick={() => void exportMovements()} type="button">Повторити export</button></div>}{exportStatus === null ? null : <div className="form-message form-message--success movement-message" role="status"><Icon name="check" /><span>{exportStatus}</span></div>}<form className="movement-filters" onSubmit={applyFilters}><label className="form-field movement-search"><span>Пошук</span><span className="input-with-icon"><Icon name="search" /><input onChange={(event) => { setSearch(event.target.value); }} placeholder="Операція, матеріал або партія" value={search} /></span></label><label className="form-field"><span>Тип руху</span><select onChange={(event) => { setKind(event.target.value as MovementKind); }} value={kind}><option value="all">Усі типи</option><option value="RECEIPT">Надходження</option><option value="MANUAL_WRITEOFF">Ручне списання</option><option value="STOCKTAKE_ADJUSTMENT">Інвентаризація</option></select></label><label className="form-field"><span>Матеріал</span><select onChange={(event) => { setMaterialId(event.target.value); }} value={materialId}><option value="">Усі матеріали</option>{materials.map((material) => <option key={material.id} value={material.id}>{material.sku} · {material.name}</option>)}</select></label><label className="form-field"><span>Працівник</span><input onChange={(event) => { setActor(event.target.value); }} placeholder="Ім’я або email" value={actor} /></label><label className="form-field"><span>Від дати</span><input max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); }} type="date" value={dateFrom} /></label><label className="form-field"><span>До дати</span><input min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); }} type="date" value={dateTo} /></label><div className="movement-filter-actions"><button aria-label="Скинути фільтри журналу" className="icon-button" disabled={!filtersActive} onClick={resetFilters} type="button"><Icon name="refresh" /></button><button className="button button--secondary" type="submit">Застосувати</button></div></form>
       {error === null ? null : <div className="form-message form-message--error movement-message" role="alert"><Icon name="warning" /><span>{error}</span><button className="text-action" onClick={() => void load(query)} type="button">Повторити</button></div>}
       {isLoading && movements.length === 0 ? <div className="inventory-empty" role="status"><span className="spinner" /><h3>Завантажуємо журнал…</h3></div> : null}
       {!isLoading && movements.length === 0 ? <div className="inventory-empty"><Icon name="empty" /><h3>Рухів не знайдено</h3><p>{filtersActive ? "Змініть критерії або скиньте фільтри." : "Проведені складські операції з’являться тут автоматично."}</p>{filtersActive ? <button className="button button--secondary" onClick={resetFilters} type="button">Скинути фільтри</button> : null}</div> : null}

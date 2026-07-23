@@ -9,10 +9,11 @@ import {
 } from "react";
 import { useSearchParams } from "react-router";
 
-import { apiClient } from "../api/client";
+import { apiClient, sessionAwareFetch } from "../api/client";
+import { attachmentFilename, downloadBlob, responseErrorMessage } from "../api/download";
 import type { components, operations } from "../api/schema";
 import { Icon } from "../app/Icon";
-import { csrfHeaders } from "../auth/AuthContext";
+import { csrfHeaders, useAuth } from "../auth/AuthContext";
 import { CashMovementDialog } from "./CashMovementDialog";
 import { useFinanceDialogLifecycle } from "./dialogLifecycle";
 import { getFinancePaymentOperation } from "./financeOperationApi";
@@ -37,6 +38,7 @@ import {
 import { RefundDialog } from "./RefundDialog";
 
 type GeneratedOperationQuery = NonNullable<operations["finance_operation_list"]["parameters"]["query"]>;
+type GeneratedOperationExportQuery = NonNullable<operations["finance_operation_export"]["parameters"]["query"]>;
 type OperationQuery = Omit<GeneratedOperationQuery, "type" | "status"> & {
   readonly type?: OperationType;
   readonly status?: OperationStatus;
@@ -49,6 +51,22 @@ type StatusFilter = "all" | OperationStatus;
 type MethodFilter = "all" | PaymentMethod;
 
 export type FinanceCashActionState = "loading" | "error" | "closed" | "ready";
+
+function financeOperationsExportUrl(query: OperationQuery): string {
+  const url = new URL("/api/v1/finance/operations/export", window.location.origin);
+  const exportQuery: GeneratedOperationExportQuery = {
+    ...(query.search === undefined ? {} : { search: query.search }),
+    ...(query.type === undefined ? {} : { type: query.type }),
+    ...(query.status === undefined ? {} : { status: query.status }),
+    ...(query.payment_method === undefined ? {} : { payment_method: query.payment_method }),
+    ...(query.date_from === undefined ? {} : { date_from: query.date_from }),
+    ...(query.date_to === undefined ? {} : { date_to: query.date_to }),
+  };
+  for (const [name, value] of Object.entries(exportQuery)) {
+    url.searchParams.set(name, value);
+  }
+  return url.toString();
+}
 
 const statusLabels: Readonly<Record<OperationStatus, string>> = {
   OPEN: "Очікує оплати",
@@ -581,6 +599,7 @@ interface FinanceOperationsProps {
 }
 
 export function FinanceOperations({ availableCashMinor, cashActionState, onOperationSuccess, refreshShift }: FinanceOperationsProps) {
+  const { state: authState } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [type, setType] = useState<TypeFilter>("all");
@@ -594,6 +613,9 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterError, setFilterError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [detail, setDetail] = useState<FinanceOperation | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<{ readonly message: string; readonly correlationId: string } | null>(null);
@@ -632,7 +654,11 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
     setNextCursor(data.next_cursor);
   }, []);
 
-  useEffect(() => { void load(query); }, [load, query]);
+  useEffect(() => {
+    setExportError(null);
+    setExportStatus(null);
+    void load(query);
+  }, [load, query]);
 
   const requestedOperation = searchParams.get("operation");
   const requestedPaymentId = requestedOperation?.match(/^PAYMENT:([0-9a-f-]{36})$/i)?.[1] ?? null;
@@ -682,6 +708,13 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
   const openCount = useMemo(() => operations.filter(isPayableOperation).length, [operations]);
   const effectiveCashActionState = isRefreshingAfterMutation ? "loading" : cashActionState;
   const mutationActionsAvailable = effectiveCashActionState === "ready";
+  const isAdmin = authState.status === "authenticated" && authState.session.user.role === "admin";
+  const draftDateInvalid = dateFrom !== "" && dateTo !== "" && dateFrom > dateTo;
+  const exportDisabled = isLoading
+    || error !== null
+    || filterError !== null
+    || draftDateInvalid
+    || isExporting;
 
   const applyFilters = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -709,6 +742,40 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
     setDateTo("");
     setFilterError(null);
     setQuery({});
+  };
+
+  const exportOperations = async () => {
+    if (!isAdmin || exportDisabled) return;
+    setIsExporting(true);
+    setExportError(null);
+    setExportStatus(null);
+    const response = await sessionAwareFetch(new Request(
+      financeOperationsExportUrl(query),
+      { headers: { Accept: "text/csv" } },
+    )).catch(() => null);
+    if (response === null) {
+      setExportError("Немає зв’язку із сервером. Не вдалося експортувати фінансові операції.");
+      setIsExporting(false);
+      return;
+    }
+    if (!response.ok) {
+      setExportError(await responseErrorMessage(
+        response,
+        "Не вдалося експортувати фінансові операції.",
+      ));
+      setIsExporting(false);
+      return;
+    }
+    const blob = await response.blob();
+    downloadBlob(
+      blob,
+      attachmentFilename(
+        response.headers.get("Content-Disposition"),
+        "finance-operations.csv",
+      ),
+    );
+    setIsExporting(false);
+    setExportStatus("Завантаження CSV фінансових операцій розпочато.");
   };
 
   const closeDetail = () => {
@@ -816,9 +883,13 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
           <div><p className="eyebrow">Оплати · Повернення · Каса</p><h2 id="finance-operations-title" ref={headingRef} tabIndex={-1}>Фінансові операції</h2><p>Завершені прийоми та всі незмінні касові операції в одному журналі.</p></div>
           <div className="finance-operations__header-meta">
             <span>{operations.length} {operationCountLabel(operations.length)}{openCount > 0 ? ` · ${String(openCount)} очікує` : ""}</span>
+            {isAdmin ? <button className="button button--secondary finance-operations__export" disabled={exportDisabled} onClick={() => { void exportOperations(); }} type="button">{isExporting ? "Готуємо CSV…" : "Експортувати CSV"}</button> : null}
             {mutationActionsAvailable ? <div className="finance-operation-actions"><button className="button button--primary" onClick={(event) => { openPayment(null, event.currentTarget); }} type="button"><Icon name="plus" />Провести оплату</button><button className="button button--secondary" onClick={(event) => { openRefund(null, event.currentTarget); }} type="button"><Icon name="refresh" />Повернення</button><button className="button button--secondary" onClick={(event) => { openCashMovement("DEPOSIT", event.currentTarget); }} type="button">+ Внесення</button><button className="button button--secondary" onClick={(event) => { openCashMovement("WITHDRAWAL", event.currentTarget); }} type="button">− Вилучення</button></div> : <span aria-label={effectiveCashActionState === "loading" ? "Оновлюємо касову зміну — операції тимчасово недоступні" : undefined} className="finance-operations__shift-note" role={effectiveCashActionState === "loading" ? "status" : undefined}><Icon name={effectiveCashActionState === "loading" ? "refresh" : "warning"} />{effectiveCashActionState === "loading" ? "Оновлюємо касову зміну — операції тимчасово недоступні" : effectiveCashActionState === "error" ? "Касові операції недоступні до успішного оновлення зміни" : "Для касових операцій відкрийте власну зміну"}</span>}
           </div>
         </header>
+
+        {exportError === null ? null : <div className="form-message form-message--error finance-operation-message finance-operation-export-message" role="alert"><Icon name="warning" /><span>{exportError}</span><button className="text-action" onClick={() => { void exportOperations(); }} type="button">Повторити export</button></div>}
+        {exportStatus === null ? null : <div className="form-message form-message--success finance-operation-message finance-operation-export-message" role="status"><Icon name="check" /><span>{exportStatus}</span></div>}
 
         <form className="finance-operation-filters" onSubmit={applyFilters}>
           <label className="form-field finance-operation-search"><span>Пошук</span><span className="input-with-icon"><Icon name="search" /><input maxLength={255} onChange={(event) => { setSearch(event.target.value); }} placeholder="Пацієнт, телефон або номер" value={search} /></span></label>

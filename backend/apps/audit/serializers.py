@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Any
 
 from drf_spectacular.utils import extend_schema_field
@@ -108,4 +109,26 @@ class AuditEventFilterSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"date_to": ["Кінцева дата не може бути раніше початкової."]}
             )
+        return attrs
+
+
+class AuditEventExportFilterSerializer(serializers.Serializer):
+    search = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    actor_id = serializers.IntegerField(required=False, min_value=1)
+    section = serializers.ChoiceField(required=False, choices=[item.value for item in AuditSection])
+    date_from = serializers.DateTimeField(required=False)
+    date_to = serializers.DateTimeField(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        date_from = attrs.get("date_from")
+        date_to = attrs.get("date_to")
+        if date_from is not None and date_to is not None:
+            if date_from > date_to:
+                raise serializers.ValidationError(
+                    {"date_to": ["Кінцева дата не може бути раніше початкової."]}
+                )
+            if date_to - date_from > timedelta(days=366):
+                raise serializers.ValidationError(
+                    {"date_to": ["Період експорту не може перевищувати 366 днів."]}
+                )
         return attrs

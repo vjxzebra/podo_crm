@@ -20,6 +20,16 @@ const apiFailure = {
   correlation_id: "audit-test",
 } as const;
 
+function auditCsvResponse(): Response {
+  return new Response("\ufeffrow_type,event_count\r\nREPORT_SUMMARY,1\r\n", {
+    status: 200,
+    headers: {
+      "Content-Disposition": 'attachment; filename="audit-events-20260723-100000.csv"',
+      "Content-Type": "text/csv; charset=utf-8",
+    },
+  });
+}
+
 const actorFixture = {
   id: 1,
   first_name: "Тест",
@@ -191,6 +201,109 @@ describe("admin audit journal", () => {
     });
   });
 
+  it("exports only applied filters with pending, server filename and content preservation", async () => {
+    let resolveFilteredList: ((response: Response) => void) | undefined;
+    let resolveExport: ((response: Response) => void) | undefined;
+    let downloadedFilename = "";
+    const exportRequests: Request[] = [];
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function captureDownload(this: HTMLAnchorElement) {
+        downloadedFilename = this.download;
+      });
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const url = new URL(request.url);
+      if (url.pathname === "/api/v1/session") return Promise.resolve(jsonResponse(adminSession));
+      if (url.pathname === "/api/v1/users") return Promise.resolve(jsonResponse({ users: [actorFixture] }));
+      if (url.pathname === "/api/v1/audit-events" && request.method === "GET") {
+        if (url.search === "") return Promise.resolve(jsonResponse(auditEventListFixture));
+        return new Promise<Response>((resolve) => { resolveFilteredList = resolve; });
+      }
+      if (url.pathname === "/api/v1/audit-events/export" && request.method === "GET") {
+        exportRequests.push(request);
+        return new Promise<Response>((resolve) => { resolveExport = resolve; });
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+    renderAudit();
+
+    await screen.findByRole("button", { name: /Скасовано запис/ });
+    const exportButton = screen.getByRole("button", { name: "Експортувати CSV" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Пошук у журналі" }), { target: { value: "Коваль" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Працівник" }), { target: { value: "1" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Розділ журналу" }), { target: { value: "scheduling" } });
+    fireEvent.change(screen.getByLabelText("Дата події"), { target: { value: "2026-07-22" } });
+    fireEvent.click(screen.getByRole("button", { name: "Застосувати" }));
+    expect(exportButton).toBeDisabled();
+    resolveFilteredList?.(jsonResponse(auditEventListFixture));
+    await waitFor(() => { expect(exportButton).toBeEnabled(); });
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Пошук у журналі" }), {
+      target: { value: "ще-не-застосовано" },
+    });
+    fireEvent.click(exportButton);
+    expect(screen.getByRole("button", { name: "Готуємо CSV…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Скасовано запис/ })).toBeInTheDocument();
+    resolveExport?.(auditCsvResponse());
+
+    expect(await screen.findByText("Завантаження CSV журналу дій розпочато.")).toBeInTheDocument();
+    expect(exportRequests).toHaveLength(1);
+    const exportUrl = new URL(exportRequests[0]?.url ?? "http://invalid");
+    expect([...exportUrl.searchParams.keys()].sort()).toEqual(
+      ["actor_id", "date_from", "date_to", "search", "section"],
+    );
+    expect(exportUrl.searchParams.get("search")).toBe("Коваль");
+    expect(exportUrl.searchParams.get("actor_id")).toBe("1");
+    expect(exportUrl.searchParams.get("section")).toBe("scheduling");
+    expect(exportUrl.searchParams.get("date_from")).toContain("2026-07-21T21:00:00.000Z");
+    expect(exportUrl.searchParams.get("date_to")).toContain("2026-07-22T20:59:59.999Z");
+    expect(exportUrl.href).not.toContain(encodeURIComponent("ще-не-застосовано"));
+    expect(exportRequests[0]?.headers.get("Accept")).toBe("text/csv");
+    expect(downloadedFilename).toBe("audit-events-20260723-100000.csv");
+    anchorClick.mockRestore();
+  });
+
+  it("keeps the journal visible after export error and retries the same query", async () => {
+    const exportRequests: Request[] = [];
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const url = new URL(request.url);
+      if (url.pathname === "/api/v1/session") return Promise.resolve(jsonResponse(adminSession));
+      if (url.pathname === "/api/v1/users") return Promise.resolve(jsonResponse({ users: [] }));
+      if (url.pathname === "/api/v1/audit-events") return Promise.resolve(jsonResponse(auditEventListFixture));
+      if (url.pathname === "/api/v1/audit-events/export") {
+        exportRequests.push(request);
+        return exportRequests.length === 1
+          ? Promise.resolve(jsonResponse({
+            code: "audit_export_too_large",
+            message: "Експорт містить забагато подій. Звузьте фільтри.",
+            fields: { filters: ["Максимум 5000 подій за один файл."] },
+            correlation_id: "tp-1007-test",
+          }, 422))
+          : Promise.resolve(auditCsvResponse());
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+    renderAudit();
+
+    await screen.findByRole("button", { name: /Скасовано запис/ });
+    fireEvent.click(screen.getByRole("button", { name: "Експортувати CSV" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Експорт містить забагато подій.");
+    expect(screen.getByRole("button", { name: /Скасовано запис/ })).toBeInTheDocument();
+    expect(anchorClick).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Повторити export" }));
+
+    expect(await screen.findByText("Завантаження CSV журналу дій розпочато.")).toBeInTheDocument();
+    expect(exportRequests).toHaveLength(2);
+    expect(new URL(exportRequests[0]?.url ?? "http://invalid").search).toBe(
+      new URL(exportRequests[1]?.url ?? "http://invalid").search,
+    );
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    anchorClick.mockRestore();
+  });
+
   it("keeps audit navigation and direct route unavailable to reception", async () => {
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
       const url = new URL(input instanceof Request ? input.url : input.toString());
@@ -202,6 +315,7 @@ describe("admin audit journal", () => {
 
     expect(await screen.findByRole("heading", { name: "Добрий день" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Журнал дій" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Експортувати CSV" })).not.toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([input]) => new URL(input instanceof Request ? input.url : input.toString()).pathname === "/api/v1/audit-events")).toBe(false);
   });
 });

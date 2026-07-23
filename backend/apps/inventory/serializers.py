@@ -15,6 +15,7 @@ from apps.inventory.models import (
     Stocktake,
     StocktakeDifferenceKind,
     StocktakeLine,
+    Supplier,
 )
 
 SKU_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9._/-]*$")
@@ -121,7 +122,97 @@ class MaterialUpdateSerializer(MaterialWriteSerializer):
         return attrs
 
 
+class SupplierSerializer(serializers.ModelSerializer):
+    lots_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Supplier
+        fields = (
+            "id",
+            "name",
+            "contact_name",
+            "phone",
+            "email",
+            "address",
+            "note",
+            "is_active",
+            "lots_count",
+            "version",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_lots_count(self, supplier: Supplier) -> int:
+        annotated = getattr(supplier, "lots_count", None)
+        return supplier.lots.count() if annotated is None else int(annotated)
+
+
+class SupplierListSerializer(serializers.Serializer):
+    suppliers = SupplierSerializer(many=True)
+
+
+class SupplierFilterSerializer(serializers.Serializer):
+    search = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    status = serializers.ChoiceField(
+        required=False,
+        choices=["all", "active", "inactive"],
+        default="all",
+    )
+
+
+class SupplierWriteSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=180, allow_blank=False, required=False)
+    contact_name = serializers.CharField(
+        max_length=180,
+        allow_blank=True,
+        required=False,
+    )
+    phone = serializers.CharField(max_length=32, allow_blank=True, required=False)
+    email = serializers.EmailField(allow_blank=True, required=False)
+    address = serializers.CharField(max_length=300, allow_blank=True, required=False)
+    note = serializers.CharField(max_length=2000, allow_blank=True, required=False)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate_name(self, value: str) -> str:
+        return value.strip()
+
+    def validate_contact_name(self, value: str) -> str:
+        return value.strip()
+
+    def validate_phone(self, value: str) -> str:
+        return value.strip()
+
+    def validate_email(self, value: str) -> str:
+        return value.strip().lower()
+
+    def validate_address(self, value: str) -> str:
+        return value.strip()
+
+    def validate_note(self, value: str) -> str:
+        return value.strip()
+
+
+class SupplierCreateSerializer(SupplierWriteSerializer):
+    name = serializers.CharField(max_length=180, allow_blank=False)
+    contact_name = serializers.CharField(max_length=180, allow_blank=True, default="")
+    phone = serializers.CharField(max_length=32, allow_blank=True, default="")
+    email = serializers.EmailField(allow_blank=True, default="")
+    address = serializers.CharField(max_length=300, allow_blank=True, default="")
+    note = serializers.CharField(max_length=2000, allow_blank=True, default="")
+    is_active = serializers.BooleanField(default=True)
+
+
+class SupplierUpdateSerializer(SupplierWriteSerializer):
+    version = serializers.IntegerField(min_value=1)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if len(attrs) == 1:
+            raise serializers.ValidationError("Укажіть хоча б одну зміну.")
+        return attrs
+
+
 class MaterialLotSerializer(serializers.ModelSerializer):
+    supplier_id = serializers.UUIDField(read_only=True, allow_null=True)
     is_expired = serializers.BooleanField(read_only=True)
     is_usable = serializers.BooleanField(read_only=True)
     status = serializers.CharField(read_only=True)
@@ -137,6 +228,7 @@ class MaterialLotSerializer(serializers.ModelSerializer):
             "initial_quantity",
             "current_quantity",
             "purchase_price_minor",
+            "supplier_id",
             "supplier_name",
             "is_expired",
             "is_usable",
@@ -169,6 +261,7 @@ class ReceiptLineSerializer(serializers.Serializer):
         default=None,
         min_value=0,
     )
+    supplier_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     supplier_name = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -182,6 +275,13 @@ class ReceiptLineSerializer(serializers.Serializer):
 
     def validate_supplier_name(self, value: str) -> str:
         return value.strip()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs.get("supplier_id") is not None and attrs.get("supplier_name", "") != "":
+            raise serializers.ValidationError(
+                "Оберіть supplier_id або передайте legacy supplier_name, але не обидва поля."
+            )
+        return attrs
 
 
 class ReceiptCreateSerializer(serializers.Serializer):
@@ -258,6 +358,8 @@ class StockMovementSerializer(serializers.ModelSerializer):
     material_name = serializers.CharField(source="lot.material.name", read_only=True)
     material_unit = serializers.CharField(source="lot.material.unit", read_only=True)
     lot_number = serializers.CharField(source="lot.lot_number", read_only=True)
+    supplier_id = serializers.UUIDField(source="lot.supplier_id", read_only=True, allow_null=True)
+    supplier_name = serializers.CharField(source="lot.supplier_name", read_only=True)
 
     class Meta:
         model = StockMovement
@@ -268,6 +370,8 @@ class StockMovementSerializer(serializers.ModelSerializer):
             "material_unit",
             "lot_id",
             "lot_number",
+            "supplier_id",
+            "supplier_name",
             "quantity_delta",
             "balance_after",
             "created_at",
@@ -498,6 +602,32 @@ class MovementFilterSerializer(serializers.Serializer):
             and (attrs["date_from"] > attrs["date_to"])
         ):
             raise serializers.ValidationError("Початкова дата не може бути пізніше кінцевої.")
+        return attrs
+
+
+class MovementExportFilterSerializer(serializers.Serializer):
+    search = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    kind = serializers.ChoiceField(
+        required=False,
+        choices=["all", *InventoryOperationKind.values],
+        default="all",
+    )
+    material_id = serializers.UUIDField(required=False)
+    actor = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        date_from = attrs.get("date_from")
+        date_to = attrs.get("date_to")
+        if date_from and date_to and date_from > date_to:
+            raise serializers.ValidationError(
+                {"date_to": ["Кінцева дата не може бути раніше початкової."]}
+            )
+        if date_from and date_to and (date_to - date_from).days > 365:
+            raise serializers.ValidationError(
+                {"date_to": ["Період експорту не може перевищувати 366 днів."]}
+            )
         return attrs
 
 

@@ -21,8 +21,10 @@ import {
   clinicStatuses,
   clinicWorkdays,
   healthyInventoryMaterial,
+  inactiveInventorySupplier,
   inventoryLots,
   inventoryMaterial,
+  inventorySupplier,
   inventoryReceiptOperation,
   inventoryWriteoffOperation,
   inventoryMovementJournal,
@@ -277,12 +279,85 @@ describe("TP-501 inventory material and lot catalog", () => {
   });
 });
 
+describe("TP-1001 supplier directory", () => {
+  it("filters suppliers and protects unsaved edits", async () => {
+    renderApp("/inventory");
+
+    await screen.findByText("Каполін, 1 см");
+    fireEvent.click(screen.getByRole("button", { name: "Постачальники" }));
+    expect(await screen.findByRole("heading", { name: "Постачальники" })).toBeInTheDocument();
+    expect(screen.getByText(inventorySupplier.name)).toBeInTheDocument();
+    expect(screen.getByText(inactiveInventorySupplier.name)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Статус"), { target: { value: "active" } });
+    expect(screen.getByText(inventorySupplier.name)).toBeInTheDocument();
+    expect(screen.queryByText(inactiveInventorySupplier.name)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: `Редагувати ${inventorySupplier.name}` }));
+
+    const editor = await screen.findByRole("dialog", { name: "Редагувати постачальника" });
+    fireEvent.change(within(editor).getByLabelText("Телефон"), { target: { value: "+380 50 000 00 00" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Скасувати" }));
+    expect(within(editor).getByRole("alert")).toHaveTextContent("Є незбережені зміни");
+    fireEvent.click(within(editor).getByRole("button", { name: "Відкинути" }));
+    expect(screen.queryByRole("dialog", { name: "Редагувати постачальника" })).not.toBeInTheDocument();
+  });
+
+  it("creates a typed supplier record", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const created = {
+      ...inventorySupplier,
+      id: "2ecab7cc-2762-4c82-87ac-09094335133e",
+      name: "Foot Care Supply",
+      contact_name: "Ірина Савчук",
+      email: "supply@example.test",
+      phone: "+380 50 555 55 55",
+      address: "Львів",
+      note: "",
+      lots_count: 0,
+    } as const;
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse({ materials: [inventoryMaterial] }))
+      .mockResolvedValueOnce(jsonResponse({ suppliers: [] }))
+      .mockResolvedValueOnce(jsonResponse(created, 201));
+    renderApp("/inventory");
+
+    await screen.findByText("Каполін, 1 см");
+    fireEvent.click(screen.getByRole("button", { name: "Постачальники" }));
+    expect(await screen.findByText("Постачальників ще немає")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Створити постачальника" }));
+    const editor = await screen.findByRole("dialog", { name: "Новий постачальник" });
+    fireEvent.change(within(editor).getByLabelText("Назва"), { target: { value: created.name } });
+    fireEvent.change(within(editor).getByLabelText("Контактна особа"), { target: { value: created.contact_name } });
+    fireEvent.change(within(editor).getByLabelText("Телефон"), { target: { value: created.phone } });
+    fireEvent.change(within(editor).getByLabelText("Email"), { target: { value: created.email } });
+    fireEvent.change(within(editor).getByLabelText("Адреса"), { target: { value: created.address } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Створити постачальника" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Постачальника додано");
+    expect(screen.getByText(created.name)).toBeInTheDocument();
+    const request = fetchMock.mock.calls.find(([input]) => input instanceof Request
+      && input.method === "POST"
+      && input.url.endsWith("/api/v1/inventory/suppliers"))?.[0] as Request;
+    expect(await request.clone().json()).toEqual({
+      name: created.name,
+      contact_name: created.contact_name,
+      phone: created.phone,
+      email: created.email,
+      address: created.address,
+      note: "",
+      is_active: true,
+    });
+  });
+});
+
 describe("TP-502 receipt and locked manual write-off", () => {
   it("posts a typed multi-line receipt with one stable idempotency key", async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(jsonResponse(adminSession))
       .mockResolvedValueOnce(jsonResponse({ materials: [inventoryMaterial, healthyInventoryMaterial] }))
+      .mockResolvedValueOnce(jsonResponse({ suppliers: [inventorySupplier] }))
       .mockResolvedValueOnce(jsonResponse(inventoryReceiptOperation, 201))
       .mockResolvedValueOnce(jsonResponse({ materials: [inventoryMaterial, healthyInventoryMaterial] }));
     renderApp("/inventory");
@@ -295,7 +370,7 @@ describe("TP-502 receipt and locked manual write-off", () => {
     fireEvent.change(within(dialog).getByLabelText("Номер партії 1"), { target: { value: "N-050" } });
     fireEvent.change(within(dialog).getByLabelText("Кількість 1"), { target: { value: "15" } });
     fireEvent.change(within(dialog).getByLabelText("Ціна 1"), { target: { value: "3.25" } });
-    fireEvent.change(within(dialog).getByLabelText("Постачальник 1"), { target: { value: "Podology Market" } });
+    fireEvent.change(within(dialog).getByLabelText("Постачальник 1"), { target: { value: inventorySupplier.id } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Додати рядок" }));
     fireEvent.change(within(dialog).getByLabelText("Матеріал 2"), { target: { value: healthyInventoryMaterial.id } });
     fireEvent.change(within(dialog).getByLabelText("Номер партії 2"), { target: { value: "G-118" } });
@@ -316,7 +391,8 @@ describe("TP-502 receipt and locked manual write-off", () => {
           lot_number: "N-050",
           quantity: "15",
           purchase_price_minor: 325,
-          supplier_name: "Podology Market",
+          supplier_id: inventorySupplier.id,
+          supplier_name: "",
           allow_existing_lot: false,
         },
         {
@@ -335,6 +411,7 @@ describe("TP-502 receipt and locked manual write-off", () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(adminSession))
       .mockResolvedValueOnce(jsonResponse({ materials: [inventoryMaterial] }))
+      .mockResolvedValueOnce(jsonResponse({ suppliers: [inventorySupplier] }))
       .mockResolvedValueOnce(jsonResponse({
         code: "material_lot_already_exists",
         message: "Партія з таким номером уже існує для матеріалу.",
@@ -353,7 +430,7 @@ describe("TP-502 receipt and locked manual write-off", () => {
     fireEvent.change(within(dialog).getByLabelText("Строк придатності 1"), { target: { value: inventoryLots[0].expires_on } });
     fireEvent.change(within(dialog).getByLabelText("Кількість 1"), { target: { value: "3" } });
     fireEvent.change(within(dialog).getByLabelText("Ціна 1"), { target: { value: "3.20" } });
-    fireEvent.change(within(dialog).getByLabelText("Постачальник 1"), { target: { value: inventoryLots[0].supplier_name } });
+    fireEvent.change(within(dialog).getByLabelText("Постачальник 1"), { target: { value: inventorySupplier.id } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Провести надходження" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Партія з таким номером уже існує");
@@ -536,6 +613,79 @@ describe("TP-503 stocktake and append-only movement journal", () => {
     expect(within(detail).getByText("Append-only записи")).toBeInTheDocument();
     expect(within(detail).getByText("Операцію та рухи неможливо змінити або видалити."))
       .toBeInTheDocument();
+  });
+
+  it("downloads the server-named CSV with only the last applied movement filters", async () => {
+    const fetchMock = vi.mocked(fetch);
+    let downloadedFilename = "";
+    let downloadedHref = "";
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function captureDownload(this: HTMLAnchorElement) {
+        downloadedFilename = this.download;
+        downloadedHref = this.href;
+      });
+    renderApp("/inventory");
+
+    await screen.findByText("Каполін, 1 см");
+    fireEvent.click(screen.getByRole("button", { name: "Журнал рухів" }));
+    await screen.findByText(inventoryMovementJournal.movements[0].operation_public_number);
+    fireEvent.change(screen.getByLabelText("Пошук"), { target: { value: "KAP-001" } });
+    fireEvent.change(screen.getByLabelText("Тип руху"), {
+      target: { value: "STOCKTAKE_ADJUSTMENT" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Застосувати" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input]) => input instanceof Request
+        && input.url.includes("/api/v1/inventory/movements?")
+        && input.url.includes("search=KAP-001"))).toBe(true);
+    });
+    fireEvent.change(screen.getByLabelText("Пошук"), {
+      target: { value: "ще-не-застосовано" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Експортувати CSV" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Завантаження CSV розпочато.",
+    );
+    const exportRequest = fetchMock.mock.calls
+      .map(([input]) => input)
+      .find((input): input is Request => input instanceof Request
+        && input.url.includes("/api/v1/inventory/movements/export"));
+    expect(exportRequest).toBeDefined();
+    expect(exportRequest?.headers.get("Accept")).toBe("text/csv");
+    expect(exportRequest?.url).toContain("search=KAP-001");
+    expect(exportRequest?.url).toContain("kind=STOCKTAKE_ADJUSTMENT");
+    expect(exportRequest?.url).not.toContain(encodeURIComponent("ще-не-застосовано"));
+    expect(downloadedFilename).toBe("inventory-movements-20260723-100000.csv");
+    expect(downloadedHref).toBe("blob:inventory-export");
+    anchorClick.mockRestore();
+  });
+
+  it("keeps journal rows and applied filters after an export error", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+    renderApp("/inventory");
+
+    await screen.findByText("Каполін, 1 см");
+    fireEvent.click(screen.getByRole("button", { name: "Журнал рухів" }));
+    await screen.findByText(inventoryMovementJournal.movements[0].operation_public_number);
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      code: "export_too_large",
+      message: "Експорт містить забагато рядків. Звузьте фільтри.",
+      fields: { filters: ["Максимум 5000 рядків за один файл."] },
+      correlation_id: "tp-1002-test",
+    }, 422));
+    fireEvent.click(screen.getByRole("button", { name: "Експортувати CSV" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Експорт містить забагато рядків. Звузьте фільтри.",
+    );
+    expect(screen.getByText(inventoryMovementJournal.movements[0].operation_public_number))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Повторити export" })).toBeInTheDocument();
+    expect(anchorClick).not.toHaveBeenCalled();
+    anchorClick.mockRestore();
   });
 });
 

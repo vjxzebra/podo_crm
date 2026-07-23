@@ -4,6 +4,7 @@ import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { csrfHeaders } from "../auth/AuthContext";
+import type { Supplier } from "./InventorySuppliers";
 
 type Material = components["schemas"]["Material"];
 type MaterialLot = components["schemas"]["MaterialLot"];
@@ -20,7 +21,7 @@ interface ReceiptLineForm {
   readonly expiresOn: string;
   readonly quantity: string;
   readonly purchasePrice: string;
-  readonly supplierName: string;
+  readonly supplierId: string;
   readonly allowExistingLot: boolean;
 }
 
@@ -33,7 +34,7 @@ function newReceiptLine(): ReceiptLineForm {
     expiresOn: "",
     quantity: "",
     purchasePrice: "",
-    supplierName: "",
+    supplierId: "",
     allowExistingLot: false,
   };
 }
@@ -67,6 +68,9 @@ export function ReceiptDialog({ materials, onClose, onPosted }: ReceiptDialogPro
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<ErrorFields>({});
   const [confirmClose, setConfirmClose] = useState(false);
+  const [suppliers, setSuppliers] = useState<readonly Supplier[]>([]);
+  const [supplierError, setSupplierError] = useState<string | null>(null);
+  const [suppliersLoading, setSuppliersLoading] = useState(true);
 
   const isDirty = receivedOn !== initialDate.current
     || comment !== ""
@@ -76,7 +80,7 @@ export function ReceiptDialog({ materials, onClose, onPosted }: ReceiptDialogPro
       || line.expiresOn !== ""
       || line.quantity !== ""
       || line.purchasePrice !== ""
-      || line.supplierName !== ""
+      || line.supplierId !== ""
       || line.allowExistingLot);
 
   const requestClose = useCallback(() => {
@@ -94,6 +98,20 @@ export function ReceiptDialog({ materials, onClose, onPosted }: ReceiptDialogPro
     document.addEventListener("keydown", closeOnEscape);
     return () => { document.removeEventListener("keydown", closeOnEscape); };
   }, [requestClose]);
+
+  const loadSuppliers = useCallback(async () => {
+    setSuppliersLoading(true);
+    setSupplierError(null);
+    const result = await apiClient.GET("/api/v1/inventory/suppliers", {
+      params: { query: { status: "active" } },
+    }).catch(() => null);
+    if (result === null) setSupplierError("Не вдалося завантажити довідник постачальників.");
+    else if (result.data === undefined) setSupplierError(result.error.message);
+    else setSuppliers(result.data.suppliers);
+    setSuppliersLoading(false);
+  }, []);
+
+  useEffect(() => { void loadSuppliers(); }, [loadSuppliers]);
 
   const updateLine = (key: string, changes: Partial<ReceiptLineForm>) => {
     setLines((current) => current.map((line) => line.key === key ? { ...line, ...changes } : line));
@@ -126,7 +144,8 @@ export function ReceiptDialog({ materials, onClose, onPosted }: ReceiptDialogPro
         purchase_price_minor: line.purchasePrice === ""
           ? null
           : Math.round(Number(line.purchasePrice) * 100),
-        supplier_name: line.supplierName,
+        supplier_id: line.supplierId || null,
+        supplier_name: "",
         allow_existing_lot: line.allowExistingLot,
       })),
     };
@@ -162,6 +181,7 @@ export function ReceiptDialog({ materials, onClose, onPosted }: ReceiptDialogPro
               <label className="form-field"><span>Дата надходження</span><input max={initialDate.current} onChange={(event) => { setReceivedOn(event.target.value); }} required type="date" value={receivedOn} /></label>
               <label className="form-field"><span>Коментар</span><input maxLength={2000} onChange={(event) => { setComment(event.target.value); }} placeholder="Необов’язково" value={comment} /></label>
             </div>
+            {supplierError === null ? null : <div className="form-message form-message--error"><Icon name="warning" /><span>{supplierError}</span><button className="text-action" onClick={() => void loadSuppliers()} type="button">Повторити</button></div>}
             <div className="receipt-lines-heading"><div><h3>Позиції надходження</h3><p>Матеріал і номер партії не можна повторювати в одному документі.</p></div><button className="button button--secondary" onClick={() => { setLines((current) => [...current, newReceiptLine()]); }} type="button"><Icon name="plus" />Додати рядок</button></div>
             <div className="receipt-lines">
               {lines.map((line, index) => {
@@ -172,7 +192,7 @@ export function ReceiptDialog({ materials, onClose, onPosted }: ReceiptDialogPro
                   || material.sku.toLocaleLowerCase("uk").includes(query)
                   || material.id === line.materialId
                 ));
-                return <fieldset className="receipt-line" key={line.key}><legend>Позиція {index + 1}</legend><div className="receipt-line__title"><span>Рядок {index + 1}</span>{lines.length === 1 ? null : <button aria-label={`Видалити позицію ${String(index + 1)}`} className="icon-button" onClick={() => { setLines((current) => current.filter((item) => item.key !== line.key)); }} type="button"><Icon name="close" /></button>}</div><div className="receipt-line__grid"><label className="form-field receipt-line__search"><span>Пошук матеріалу</span><span className="input-with-icon"><Icon name="search" /><input aria-label={`Пошук матеріалу ${String(index + 1)}`} onChange={(event) => { updateLine(line.key, { materialQuery: event.target.value }); }} placeholder="Назва або артикул" ref={index === 0 ? firstInput : undefined} value={line.materialQuery} /></span></label><label className="form-field receipt-line__material"><span>Матеріал</span><select aria-label={`Матеріал ${String(index + 1)}`} onChange={(event) => { updateLine(line.key, { materialId: event.target.value }); }} required value={line.materialId}><option value="">Оберіть матеріал</option>{options.map((material) => <option key={material.id} value={material.id}>{material.sku} · {material.name} · {material.unit}</option>)}</select>{fieldError(fields, `lines.${String(index)}.material_id`) ? <small className="field-error">{fieldError(fields, `lines.${String(index)}.material_id`)}</small> : null}</label><label className="form-field"><span>Номер партії</span><input aria-label={`Номер партії ${String(index + 1)}`} maxLength={80} onChange={(event) => { updateLine(line.key, { lotNumber: event.target.value }); }} required value={line.lotNumber} />{fieldError(fields, `lines.${String(index)}.lot_number`) ? <small className="field-error">{fieldError(fields, `lines.${String(index)}.lot_number`)}</small> : null}</label><label className="form-field"><span>Строк придатності</span><input aria-label={`Строк придатності ${String(index + 1)}`} onChange={(event) => { updateLine(line.key, { expiresOn: event.target.value }); }} type="date" value={line.expiresOn} /></label><label className="form-field"><span>Кількість</span><input aria-label={`Кількість ${String(index + 1)}`} min="0.001" onChange={(event) => { updateLine(line.key, { quantity: event.target.value }); }} required step="0.001" type="number" value={line.quantity} />{fieldError(fields, `lines.${String(index)}.quantity`) ? <small className="field-error">{fieldError(fields, `lines.${String(index)}.quantity`)}</small> : null}</label><label className="form-field"><span>Ціна, грн/од.</span><input aria-label={`Ціна ${String(index + 1)}`} min="0" onChange={(event) => { updateLine(line.key, { purchasePrice: event.target.value }); }} step="0.01" type="number" value={line.purchasePrice} /></label><label className="form-field receipt-line__supplier"><span>Постачальник</span><input aria-label={`Постачальник ${String(index + 1)}`} maxLength={180} onChange={(event) => { updateLine(line.key, { supplierName: event.target.value }); }} placeholder="Необов’язково" value={line.supplierName} /></label><label className="toggle-field receipt-line__existing"><input checked={line.allowExistingLot} onChange={(event) => { updateLine(line.key, { allowExistingLot: event.target.checked }); }} type="checkbox" /><span /><strong>Поповнити наявну партію</strong><small>Підтверджуйте лише якщо строк, ціна й постачальник збігаються.</small></label></div></fieldset>;
+                return <fieldset className="receipt-line" key={line.key}><legend>Позиція {index + 1}</legend><div className="receipt-line__title"><span>Рядок {index + 1}</span>{lines.length === 1 ? null : <button aria-label={`Видалити позицію ${String(index + 1)}`} className="icon-button" onClick={() => { setLines((current) => current.filter((item) => item.key !== line.key)); }} type="button"><Icon name="close" /></button>}</div><div className="receipt-line__grid"><label className="form-field receipt-line__search"><span>Пошук матеріалу</span><span className="input-with-icon"><Icon name="search" /><input aria-label={`Пошук матеріалу ${String(index + 1)}`} onChange={(event) => { updateLine(line.key, { materialQuery: event.target.value }); }} placeholder="Назва або артикул" ref={index === 0 ? firstInput : undefined} value={line.materialQuery} /></span></label><label className="form-field receipt-line__material"><span>Матеріал</span><select aria-label={`Матеріал ${String(index + 1)}`} onChange={(event) => { updateLine(line.key, { materialId: event.target.value }); }} required value={line.materialId}><option value="">Оберіть матеріал</option>{options.map((material) => <option key={material.id} value={material.id}>{material.sku} · {material.name} · {material.unit}</option>)}</select>{fieldError(fields, `lines.${String(index)}.material_id`) ? <small className="field-error">{fieldError(fields, `lines.${String(index)}.material_id`)}</small> : null}</label><label className="form-field"><span>Номер партії</span><input aria-label={`Номер партії ${String(index + 1)}`} maxLength={80} onChange={(event) => { updateLine(line.key, { lotNumber: event.target.value }); }} required value={line.lotNumber} />{fieldError(fields, `lines.${String(index)}.lot_number`) ? <small className="field-error">{fieldError(fields, `lines.${String(index)}.lot_number`)}</small> : null}</label><label className="form-field"><span>Строк придатності</span><input aria-label={`Строк придатності ${String(index + 1)}`} onChange={(event) => { updateLine(line.key, { expiresOn: event.target.value }); }} type="date" value={line.expiresOn} /></label><label className="form-field"><span>Кількість</span><input aria-label={`Кількість ${String(index + 1)}`} min="0.001" onChange={(event) => { updateLine(line.key, { quantity: event.target.value }); }} required step="0.001" type="number" value={line.quantity} />{fieldError(fields, `lines.${String(index)}.quantity`) ? <small className="field-error">{fieldError(fields, `lines.${String(index)}.quantity`)}</small> : null}</label><label className="form-field"><span>Ціна, грн/од.</span><input aria-label={`Ціна ${String(index + 1)}`} min="0" onChange={(event) => { updateLine(line.key, { purchasePrice: event.target.value }); }} step="0.01" type="number" value={line.purchasePrice} /></label><label className="form-field receipt-line__supplier"><span>Постачальник</span><select aria-label={`Постачальник ${String(index + 1)}`} disabled={suppliersLoading} onChange={(event) => { updateLine(line.key, { supplierId: event.target.value }); }} value={line.supplierId}><option value="">{suppliersLoading ? "Завантажуємо…" : "Не вказано"}</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select>{fieldError(fields, `lines.${String(index)}.supplier_id`) ? <small className="field-error">{fieldError(fields, `lines.${String(index)}.supplier_id`)}</small> : null}</label><label className="toggle-field receipt-line__existing"><input checked={line.allowExistingLot} onChange={(event) => { updateLine(line.key, { allowExistingLot: event.target.checked }); }} type="checkbox" /><span /><strong>Поповнити наявну партію</strong><small>Підтверджуйте лише якщо строк, ціна й постачальник збігаються.</small></label></div></fieldset>;
               })}
             </div>
             {error === null ? null : <div className="form-message form-message--error" role="alert"><Icon name="warning" /><span>{error}</span></div>}
