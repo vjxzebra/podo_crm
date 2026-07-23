@@ -1,0 +1,219 @@
+{
+  "packet": "TP-904",
+  "date": "2026-07-23",
+  "result": "verified",
+  "summary": {
+    "criteria_total": 23,
+    "criteria_verified": 23,
+    "roles": 3,
+    "viewports": 3
+  },
+  "release_gates": {
+    "canonical": {
+      "backend_tests": 364,
+      "frontend_tests": 198,
+      "component_axe_scenarios": 40,
+      "ruff_files": 246,
+      "mypy_source_files": 188,
+      "openapi_snapshot_current": true,
+      "production_build": true
+    },
+    "browser": {
+      "route_checks": 75,
+      "forbidden_redirect_checks": 11,
+      "serious_or_critical_axe_violations": 0,
+      "browser_warnings_or_errors": 0,
+      "evidence": "docs/evidence/tp-904/browser-gate.json"
+    },
+    "database": {
+      "migration_count": 53,
+      "pending_migrations": 0,
+      "invalid_constraints": 0,
+      "object_reference_count": 10,
+      "missing_objects": 0
+    },
+    "dependency_audit": {
+      "npm_known_vulnerabilities": 0,
+      "python_dependencies_audited": 43,
+      "python_known_vulnerabilities": 0
+    },
+    "runtime_images": {
+      "backend_image": "sha256:e221fce9f1c056b666a385844fa841d68dd78c560c5a91f08a821dd275d61f16",
+      "web_image": "sha256:4e278be7665a30f44cbdb379e926da3d1c03c1279a28fd1b480fca7b470cef91",
+      "backend_critical_or_high": 0,
+      "web_critical_or_high": 0,
+      "ops_critical_or_high": 0
+    },
+    "production_rehearsal": {
+      "recovery_manifest_preflight": true,
+      "migration_count": 53,
+      "deploy_check_completed": true,
+      "root_status": 200,
+      "readiness_status": 200,
+      "unauthenticated_session_status": 401,
+      "application_source_mounts": 0,
+      "candidate_service_count": 8,
+      "file_mounted_secrets": true
+    },
+    "tp903_operations": {
+      "evidence": "docs/evidence/tp-903/operations-gate.json",
+      "encrypted_restore_green": true,
+      "deployment_green": true,
+      "rollback_green": true
+    },
+    "cleanup": {
+      "uat_users": 0,
+      "uat_patients": 0,
+      "uat_appointments": 0,
+      "release_containers": 0,
+      "release_volumes": 0,
+      "release_networks": 0,
+      "temporary_secret_directories": 0
+    }
+  },
+  "accepted_nonblocking_advisories": [
+    "security.W008 is expected only in the HTTP rehearsal because SSL redirect is deliberately disabled for local smoke.",
+    "security.W021 remains an explicit no-preload decision until a production domain is enrolled.",
+    "The production JavaScript bundle exceeds Vite's advisory 500 kB threshold; correctness and accessibility gates are green."
+  ],
+  "acceptance": [
+    {
+      "id": "AC-01",
+      "criterion": "Кожна роль бачить лише дозволені розділи й дані.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-902", "docs/evidence/tp-904/browser-gate.json"]
+    },
+    {
+      "id": "AC-02",
+      "criterion": "Ресепшн та адмін можуть створити запис, а подолог — запис до себе.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-402", "backend/tests/scheduling/test_create_appointment.py"]
+    },
+    {
+      "id": "AC-03",
+      "criterion": "Неможливо створити запис на зайнятий час того самого спеціаліста.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-401", "docs/evidence/tp-403"]
+    },
+    {
+      "id": "AC-04",
+      "criterion": "Паралельні записи різних спеціалістів коректно відображаються.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-404", "frontend/scripts/tp404-browser-check.mjs"]
+    },
+    {
+      "id": "AC-05",
+      "criterion": "Пацієнта можна знайти або створити без виходу з форми запису.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-301", "docs/evidence/tp-402"]
+    },
+    {
+      "id": "AC-06",
+      "criterion": "Запис із картки пацієнта не дозволяє змінити цього пацієнта.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-402", "frontend/src/App.test.tsx"]
+    },
+    {
+      "id": "AC-07",
+      "criterion": "Скарги можна заповнити або явно вказати їх відсутність.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-601", "backend/tests/visits/test_visit_start_and_draft.py"]
+    },
+    {
+      "id": "AC-08",
+      "criterion": "Подолог може оформити всі чотири кроки прийому.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-601", "docs/evidence/tp-604", "docs/evidence/tp-605"]
+    },
+    {
+      "id": "AC-09",
+      "criterion": "Послуги й матеріали мають пошук, а послуги — кількість.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-602", "backend/tests/visits/test_visit_draft_lines.py"]
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Фото належать блоку До або Після конкретного відвідування.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-603", "docs/evidence/tp-605", "frontend/src/patients/PatientArchive.test.tsx"]
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Завершення прийому створює історію, списує матеріали та передає повну суму на оплату.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-604", "backend/tests/visits/test_visit_finish.py"]
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Наступний запис можна створити тільки на вільний час.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-604", "backend/tests/scheduling/test_calendar_and_availability.py"]
+    },
+    {
+      "id": "AC-13",
+      "criterion": "Часткова оплата ніде не пропонується.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-702", "frontend/src/finance/FinancePage.test.tsx"]
+    },
+    {
+      "id": "AC-14",
+      "criterion": "Ресепшн може провести оплату, повернення, внесення та вилучення готівки.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-701", "docs/evidence/tp-702", "docs/evidence/tp-703"]
+    },
+    {
+      "id": "AC-15",
+      "criterion": "Внесення й вилучення не містять полів пацієнта та способу оплати.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-703", "backend/tests/billing/test_refunds_and_cash_movements_api.py"]
+    },
+    {
+      "id": "AC-16",
+      "criterion": "Ресепшн може закрити власну касову зміну після звірки.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-704", "frontend/src/finance/CashShiftClose.test.tsx"]
+    },
+    {
+      "id": "AC-17",
+      "criterion": "Історія касових змін відкриває повний список операцій вибраної зміни.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-704", "frontend/src/finance/CashShiftHistoryPage.test.tsx"]
+    },
+    {
+      "id": "AC-18",
+      "criterion": "Завершення прийому автоматично створює складські рухи.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-604", "backend/tests/visits/test_visit_finish.py"]
+    },
+    {
+      "id": "AC-19",
+      "criterion": "Адмін може провести надходження, ручне списання та інвентаризацію.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-501", "docs/evidence/tp-502", "docs/evidence/tp-503"]
+    },
+    {
+      "id": "AC-20",
+      "criterion": "Критичні зміни фіксуються в журналі дій із деталями Було → Стало.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-803", "backend/tests/audit/test_audit_api.py"]
+    },
+    {
+      "id": "AC-21",
+      "criterion": "Пароль можна встановити, змінити та відновити через адміна.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-902", "backend/tests/accounts/test_provision_dev_user.py"]
+    },
+    {
+      "id": "AC-22",
+      "criterion": "Глобальний пошук і сповіщення дотримуються рольових обмежень.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-801", "docs/evidence/tp-802", "docs/evidence/tp-902"]
+    },
+    {
+      "id": "AC-23",
+      "criterion": "Основні сценарії працюють на комп'ютері, планшеті й телефоні.",
+      "status": "verified",
+      "evidence": ["docs/evidence/tp-901", "docs/evidence/tp-904/browser-gate.json"]
+    }
+  ]
+}

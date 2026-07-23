@@ -1,0 +1,686 @@
+{
+  "generated_at": "2026-07-22T19:01:51.310Z",
+  "browser": "Microsoft Edge (Playwright chromium channel via explicit executable)",
+  "base_url": "http://127.0.0.1:8088",
+  "route_count": 13,
+  "viewports": [
+    {
+      "name": "desktop",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "routes": [
+        {
+          "id": "overview",
+          "path": "/",
+          "heading": "Добрий день",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "calendar",
+          "path": "/calendar",
+          "heading": "Розклад клініки",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "patients",
+          "path": "/patients",
+          "heading": "Каталог пацієнтів",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "work-items",
+          "path": "/work-items",
+          "heading": "Внутрішні справи",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "finance",
+          "path": "/finance",
+          "heading": "Оплати та каса",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "finance-shifts",
+          "path": "/finance/shifts",
+          "heading": "Історія касових змін",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "inventory",
+          "path": "/inventory",
+          "heading": "Склад і матеріали",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "notifications",
+          "path": "/notifications",
+          "heading": "Сповіщення",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "audit",
+          "path": "/audit",
+          "heading": "Журнал дій",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "analytics",
+          "path": "/analytics",
+          "heading": "Аналітика клініки",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "team",
+          "path": "/team",
+          "heading": "Команда",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": [
+              {
+                "label": "Оновити список",
+                "selector": "icon-button",
+                "width": 42,
+                "height": 42
+              }
+            ]
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "settings",
+          "path": "/settings",
+          "heading": "Налаштування кабінету",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "password-resets",
+          "path": "/password-resets",
+          "heading": "Запити на відновлення доступу",
+          "metrics": {
+            "clientWidth": 1440,
+            "scrollWidth": 1440,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        }
+      ]
+    },
+    {
+      "name": "tablet",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "routes": [
+        {
+          "id": "overview",
+          "path": "/",
+          "heading": "Добрий день",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "calendar",
+          "path": "/calendar",
+          "heading": "Розклад клініки",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "patients",
+          "path": "/patients",
+          "heading": "Каталог пацієнтів",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "work-items",
+          "path": "/work-items",
+          "heading": "Внутрішні справи",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "finance",
+          "path": "/finance",
+          "heading": "Оплати та каса",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "finance-shifts",
+          "path": "/finance/shifts",
+          "heading": "Історія касових змін",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "inventory",
+          "path": "/inventory",
+          "heading": "Склад і матеріали",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "notifications",
+          "path": "/notifications",
+          "heading": "Сповіщення",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "audit",
+          "path": "/audit",
+          "heading": "Журнал дій",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "analytics",
+          "path": "/analytics",
+          "heading": "Аналітика клініки",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "team",
+          "path": "/team",
+          "heading": "Команда",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": [
+              {
+                "label": "Оновити список",
+                "selector": "icon-button",
+                "width": 42,
+                "height": 42
+              }
+            ]
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "settings",
+          "path": "/settings",
+          "heading": "Налаштування кабінету",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "password-resets",
+          "path": "/password-resets",
+          "heading": "Запити на відновлення доступу",
+          "metrics": {
+            "clientWidth": 1024,
+            "scrollWidth": 1024,
+            "mainId": "main-content",
+            "sidebarDisplay": "flex",
+            "mobileNavigationDisplay": "none",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        }
+      ]
+    },
+    {
+      "name": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "routes": [
+        {
+          "id": "overview",
+          "path": "/",
+          "heading": "Добрий день",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "calendar",
+          "path": "/calendar",
+          "heading": "Розклад клініки",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "patients",
+          "path": "/patients",
+          "heading": "Каталог пацієнтів",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "work-items",
+          "path": "/work-items",
+          "heading": "Внутрішні справи",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "finance",
+          "path": "/finance",
+          "heading": "Оплати та каса",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "finance-shifts",
+          "path": "/finance/shifts",
+          "heading": "Історія касових змін",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "inventory",
+          "path": "/inventory",
+          "heading": "Склад і матеріали",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "notifications",
+          "path": "/notifications",
+          "heading": "Сповіщення",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "audit",
+          "path": "/audit",
+          "heading": "Журнал дій",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "analytics",
+          "path": "/analytics",
+          "heading": "Аналітика клініки",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "team",
+          "path": "/team",
+          "heading": "Команда",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "settings",
+          "path": "/settings",
+          "heading": "Налаштування кабінету",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        },
+        {
+          "id": "password-resets",
+          "path": "/password-resets",
+          "heading": "Запити на відновлення доступу",
+          "metrics": {
+            "clientWidth": 390,
+            "scrollWidth": 390,
+            "mainId": "main-content",
+            "sidebarDisplay": "none",
+            "mobileNavigationDisplay": "grid",
+            "undersizedTouchTargets": []
+          },
+          "axe_violations": [],
+          "browser_errors": []
+        }
+      ]
+    }
+  ],
+  "keyboard": {
+    "skipLinkText": "До основного вмісту",
+    "skipDestination": {
+      "hash": "#main-content",
+      "activeId": "main-content"
+    },
+    "searchOpenState": {
+      "inputFocused": true,
+      "bodyOverflow": "hidden"
+    },
+    "searchCloseState": {
+      "triggerFocused": true,
+      "bodyOverflow": ""
+    },
+    "journey": [
+      [
+        "Календар",
+        "Розклад клініки"
+      ],
+      [
+        "Пацієнти",
+        "Каталог пацієнтів"
+      ],
+      [
+        "Фінанси",
+        "Оплати та каса"
+      ],
+      [
+        "Склад",
+        "Склад і матеріали"
+      ],
+      [
+        "Аналітика",
+        "Аналітика клініки"
+      ],
+      [
+        "Журнал дій",
+        "Журнал дій"
+      ]
+    ]
+  },
+  "mobile_more": {
+    "openState": {
+      "activeLabel": "Закрити додаткове меню",
+      "bodyOverflow": "hidden"
+    },
+    "closeState": {
+      "triggerFocused": true,
+      "bodyOverflow": ""
+    },
+    "navigated_to": "/analytics"
+  }
+}

@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep the Podoria CRM Caddy route attached after WordPress deploys
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+Unit=podoria-caddy-reconcile.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,135 @@
+services:
+  backup-ops:
+    profiles: ["ops"]
+    image: podoria-crm-ops
+    build:
+      context: ./infra/ops
+    command: ["backup"]
+    environment:
+      PGHOST: ${BACKUP_POSTGRES_HOST:-postgres}
+      PGPORT: ${BACKUP_POSTGRES_PORT:-5432}
+      PGDATABASE: ${POSTGRES_DB:-podoria}
+      PGUSER: ${BACKUP_POSTGRES_USER:-podoria}
+      MINIO_ENDPOINT: ${BACKUP_MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_BUCKET: ${MINIO_BUCKET_NAME:-podoria-private}
+      BACKUP_TARGET_IS_OFFHOST: ${BACKUP_TARGET_IS_OFFHOST:-0}
+      ALLOW_LOCAL_BACKUP_TARGET: ${ALLOW_LOCAL_BACKUP_TARGET:-0}
+      BACKUP_PROMOTE_MONTHLY: ${BACKUP_PROMOTE_MONTHLY:-0}
+      BACKUP_DAILY_KEEP: ${BACKUP_DAILY_KEEP:-30}
+      BACKUP_MONTHLY_KEEP: ${BACKUP_MONTHLY_KEEP:-12}
+      RECOVERY_POINT_ID: ${RECOVERY_POINT_ID:-}
+    volumes:
+      - ${BACKUP_TARGET_PATH:?BACKUP_TARGET_PATH is required}:/backups
+      - ${BACKUP_SECRET_DIR:?BACKUP_SECRET_DIR is required}:/run/secrets:ro
+    restart: "no"
+
+  retention-ops:
+    profiles: ["ops"]
+    image: podoria-crm-ops
+    build:
+      context: ./infra/ops
+    command: ["retention"]
+    environment:
+      BACKUP_DAILY_KEEP: ${BACKUP_DAILY_KEEP:-30}
+      BACKUP_MONTHLY_KEEP: ${BACKUP_MONTHLY_KEEP:-12}
+      RETENTION_DRY_RUN: ${RETENTION_DRY_RUN:-0}
+    volumes:
+      - ${BACKUP_TARGET_PATH:?BACKUP_TARGET_PATH is required}:/backups
+    restart: "no"
+
+  restore-postgres:
+    profiles: ["ops"]
+    image: postgres:17.10-alpine
+    environment:
+      POSTGRES_DB: podoria_restore
+      POSTGRES_USER: podoria_restore
+      POSTGRES_PASSWORD: restore-drill-password-not-for-production
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U podoria_restore -d podoria_restore"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+
+  restore-minio:
+    profiles: ["ops"]
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: podoria_restore
+      MINIO_ROOT_PASSWORD: restore-drill-password-not-for-production
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9000/minio/health/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+
+  restore-minio-init:
+    profiles: ["ops"]
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z-cpuv1
+    depends_on:
+      restore-minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set restore http://restore-minio:9000 podoria_restore
+        restore-drill-password-not-for-production >/dev/null &&
+        mc mb --ignore-existing restore/podoria-private >/dev/null
+    restart: "no"
+
+  restore-ops:
+    profiles: ["ops"]
+    image: podoria-crm-ops
+    build:
+      context: ./infra/ops
+    command: ["restore"]
+    depends_on:
+      restore-postgres:
+        condition: service_healthy
+      restore-minio-init:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: restore-postgres
+      PGPORT: 5432
+      PGDATABASE: podoria_restore
+      PGUSER: podoria_restore
+      MINIO_ENDPOINT: http://restore-minio:9000
+      MINIO_BUCKET: podoria-private
+      RECOVERY_POINT_FILE: ${RECOVERY_POINT_FILE:-}
+      RESTORE_CONFIRM: ${RESTORE_CONFIRM:-}
+    volumes:
+      - ${BACKUP_TARGET_PATH:?BACKUP_TARGET_PATH is required}:/backups:ro
+      - ${BACKUP_SECRET_DIR:?BACKUP_SECRET_DIR is required}:/run/secrets:ro
+    restart: "no"
+
+  restore-backend-check:
+    profiles: ["ops"]
+    image: ${RESTORE_BACKEND_IMAGE:-podoria-crm-backend}
+    command: ["python", "manage.py", "verify_restore", "--json"]
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: restore-drill-django-secret-not-for-production
+      DJANGO_SECURE_SSL_REDIRECT: "0"
+      DJANGO_CACHE_BACKEND: django.core.cache.backends.locmem.LocMemCache
+      POSTGRES_DB: podoria_restore
+      POSTGRES_USER: podoria_restore
+      POSTGRES_PASSWORD: restore-drill-password-not-for-production
+      POSTGRES_HOST: restore-postgres
+      POSTGRES_PORT: 5432
+      MINIO_HEALTH_URL: http://restore-minio:9000/minio/health/ready
+      MINIO_ENDPOINT: http://restore-minio:9000
+      MINIO_ACCESS_KEY: podoria_restore
+      MINIO_SECRET_KEY: restore-drill-password-not-for-production
+      MINIO_BUCKET_NAME: podoria-private
+    depends_on:
+      restore-postgres:
+        condition: service_healthy
+      restore-minio-init:
+        condition: service_completed_successfully
+    restart: "no"

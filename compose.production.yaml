@@ -1,0 +1,222 @@
+name: ${COMPOSE_PROJECT_NAME:-podoria-production}
+
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-podoria}
+      POSTGRES_USER: ${POSTGRES_USER:-podoria}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_app_password
+      POSTGRES_INITDB_ARGS: --data-checksums
+    secrets:
+      - postgres_app_password
+      - postgres_backup_user
+      - postgres_backup_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/production/init-backup-role.sh:/docker-entrypoint-initdb.d/20-backup-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.9-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    secrets:
+      - minio_root_user
+      - minio_root_password
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z-cpuv1
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-podoria-private}
+    secrets:
+      - minio_root_user
+      - minio_root_password
+      - minio_app_access_key
+      - minio_app_secret_key
+      - minio_backup_access_key
+      - minio_backup_secret_key
+    volumes:
+      - ./infra/production/minio-app-policy.json:/policies/app.json:ro
+      - ./infra/production/minio-backup-policy.json:/policies/backup.json:ro
+    entrypoint: ["/bin/sh", "/scripts/minio-init.sh"]
+    configs:
+      - source: minio_init_script
+        target: /scripts/minio-init.sh
+    restart: "no"
+
+  migrate:
+    profiles: ["deploy"]
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be an immutable reference}
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    environment: &backend_environment
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY_FILE: /run/secrets/django_secret_key
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?DJANGO_ALLOWED_HOSTS is required}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:?DJANGO_CSRF_TRUSTED_ORIGINS is required}
+      DJANGO_COOKIE_SECURE: "1"
+      DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-1}
+      DJANGO_SECURE_HSTS_SECONDS: ${DJANGO_SECURE_HSTS_SECONDS:-31536000}
+      DJANGO_SECURE_HSTS_PRELOAD: ${DJANGO_SECURE_HSTS_PRELOAD:-0}
+      SESSION_IDLE_TIMEOUT_SECONDS: ${SESSION_IDLE_TIMEOUT_SECONDS:-1800}
+      SESSION_ABSOLUTE_TIMEOUT_SECONDS: ${SESSION_ABSOLUTE_TIMEOUT_SECONDS:-43200}
+      LOGIN_RATE_LIMIT_WINDOW_SECONDS: ${LOGIN_RATE_LIMIT_WINDOW_SECONDS:-900}
+      LOGIN_RATE_LIMIT_EMAIL_ATTEMPTS: ${LOGIN_RATE_LIMIT_EMAIL_ATTEMPTS:-5}
+      LOGIN_RATE_LIMIT_IP_ATTEMPTS: ${LOGIN_RATE_LIMIT_IP_ATTEMPTS:-30}
+      POSTGRES_DB: ${POSTGRES_DB:-podoria}
+      POSTGRES_USER: ${POSTGRES_USER:-podoria}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_app_password
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      MINIO_HEALTH_URL: http://minio:9000/minio/health/ready
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY_FILE: /run/secrets/minio_app_access_key
+      MINIO_SECRET_KEY_FILE: /run/secrets/minio_app_secret_key
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-podoria-private}
+    secrets: &backend_secrets
+      - django_secret_key
+      - postgres_app_password
+      - minio_app_access_key
+      - minio_app_secret_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    restart: "no"
+
+  backend:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be an immutable reference}
+    command:
+      - gunicorn
+      - config.wsgi:application
+      - --bind=0.0.0.0:8000
+      - --workers=${WEB_CONCURRENCY:-2}
+      - --timeout=60
+    environment: *backend_environment
+    secrets: *backend_secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be an immutable reference}
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO", "--concurrency=${CELERY_WORKER_CONCURRENCY:-2}"]
+    environment: *backend_environment
+    secrets: *backend_secrets
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  beat:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be an immutable reference}
+    command: ["celery", "-A", "config", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    environment: *backend_environment
+    secrets: *backend_secrets
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    image: ${WEB_IMAGE:?WEB_IMAGE must be an immutable reference}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  proxy:
+    image: ${WEB_IMAGE:?WEB_IMAGE must be an immutable reference}
+    ports:
+      - ${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8088}:80
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+secrets:
+  django_secret_key:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/django_secret_key
+  postgres_app_password:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/postgres_app_password
+  postgres_backup_user:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/postgres_backup_user
+  postgres_backup_password:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/postgres_backup_password
+  minio_root_user:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/minio_root_user
+  minio_root_password:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/minio_root_password
+  minio_app_access_key:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/minio_app_access_key
+  minio_app_secret_key:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/minio_app_secret_key
+  minio_backup_access_key:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/minio_backup_access_key
+  minio_backup_secret_key:
+    file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/minio_backup_secret_key
+
+configs:
+  minio_init_script:
+    file: ./infra/production/minio-init.sh
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

@@ -1,0 +1,98 @@
+{
+  "packet": "TP-903",
+  "date": "2026-07-22",
+  "quality_gates": {
+    "backend_tests": 357,
+    "frontend_tests": 198,
+    "component_axe_scenarios": 40,
+    "ruff_files": 243,
+    "mypy_source_files": 187,
+    "openapi_current": true,
+    "production_build": true
+  },
+  "ops_image_security": {
+    "image_digest": "sha256:2ea777756e71135c0e0f0f9b649f284d8c330349f5ddac13f17dc4f6979fa98f",
+    "image_size_mb": 38,
+    "indexed_packages": 81,
+    "age_version": "1.3.1",
+    "postgres_client_version": "17.10",
+    "python_version": "3.14.6",
+    "minio_sdk_version": "7.2.20",
+    "scout_critical": 0,
+    "scout_high": 0,
+    "scout_medium": 0,
+    "scout_low": 0
+  },
+  "backup": {
+    "recovery_point": "20260722T214238Z",
+    "encrypted": true,
+    "archive_bytes": 921212,
+    "archive_sha256": "56f2ff60e6e92e23d84266ce7bd89453e5e4219dd179fe61f5fc68053a8483be",
+    "postgres_dump_bytes": 229798,
+    "migration_count": 53,
+    "object_count": 10,
+    "object_bytes": 937233,
+    "plaintext_stage_retained": false,
+    "daily_and_monthly_sidecars_present": true
+  },
+  "negative_restore_gates": {
+    "invalid_confirmation_rejected": true,
+    "corrupt_ciphertext_rejected_before_target_connection": true
+  },
+  "retention": {
+    "dry_run_removals": 5,
+    "daily_archives_after_prune": 30,
+    "monthly_archives_after_prune": 12,
+    "sidecar_complete_files": 126
+  },
+  "isolated_restore": {
+    "duration_seconds": 8.3,
+    "migration_count": 53,
+    "object_count": 10,
+    "object_reference_count": 10,
+    "missing_objects": 0,
+    "pending_migrations": 0,
+    "invalid_constraints": 0,
+    "ephemeral_targets_cleaned": true
+  },
+  "deployment": {
+    "candidate_backend_image": "sha256:3de1d88fd9b4645c1fb98e8ef5bc2a50f75d8fc082bb1f0c4e69c586dcaeae4e",
+    "candidate_web_image": "sha256:a861aac5d009c6a1afc5ee1892c2164946cbfbab2d6531f3134561fb895657fc",
+    "root_status": 200,
+    "readiness_status": 200,
+    "unauthenticated_session_status": 401,
+    "migration_count": 53,
+    "file_mounted_secrets": true,
+    "source_bind_mounts": 0,
+    "recovery_manifest_preflight": true
+  },
+  "rollback": {
+    "previous_backend_image": "sha256:3c9e66c197107875645cabf7ebe3c551736ad30c86e6335698051e8e9cb023b5",
+    "previous_web_image": "sha256:f531ca258fcd4736515bf350a081de03d03c06e45d5c6c2796c53ae71b0feef2",
+    "reverse_migrations_run": false,
+    "root_status": 200,
+    "readiness_status": 200,
+    "unauthenticated_session_status": 401,
+    "migration_count_after": 53,
+    "seed_invariant_after": 1
+  },
+  "credential_separation": {
+    "postgres_backup_select": true,
+    "postgres_backup_insert": false,
+    "postgres_backup_delete": false,
+    "minio_backup_policy_read_only": true,
+    "application_has_backup_target_credentials": false,
+    "application_has_age_identity": false
+  },
+  "cleanup": {
+    "isolated_release_containers_remaining": 0,
+    "isolated_release_volumes_remaining": 0,
+    "ephemeral_age_identity_removed": true,
+    "encrypted_drill_fixture_removed": true
+  },
+  "objectives": {
+    "rpo_hours": 24,
+    "rto_hours": 4,
+    "measured_restore_seconds": 8.3
+  }
+}
