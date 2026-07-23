@@ -22,6 +22,7 @@ INITIAL_ADMIN_CREDENTIALS_FILE=${INITIAL_ADMIN_CREDENTIALS_FILE:-}
 for required_file in \
   scripts/operations/deploy-production.sh \
   scripts/operations/reset-production-database.sh \
+  scripts/operations/seed-production-demo-data.sh \
   scripts/operations/reconcile-caddy.sh \
   infra/production/podoria-caddy-reconcile.service \
   infra/production/podoria-caddy-reconcile.timer \
@@ -62,6 +63,9 @@ install -m 0755 -o root -g root \
 install -m 0750 -o root -g root \
   "$SOURCE_ROOT/scripts/operations/reset-production-database.sh" \
   "$BASE_DIR/bin/reset-production-database.sh"
+install -m 0750 -o root -g root \
+  "$SOURCE_ROOT/scripts/operations/seed-production-demo-data.sh" \
+  "$BASE_DIR/bin/seed-production-demo-data.sh"
 install -m 0755 -o root -g root \
   "$SOURCE_ROOT/scripts/operations/reconcile-caddy.sh" \
   /usr/local/sbin/podoria-caddy-reconcile

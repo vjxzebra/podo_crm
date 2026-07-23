@@ -2,6 +2,10 @@
 
 Дата фіксації: 2026-07-23
 
+Повний перелік bootstrap, autodeploy, admin, demo seed, reset, Caddy і
+діагностичних команд зібрано в
+[production command reference](production-command-reference.md).
+
 ## Межі deployment
 
 - WordPress `rozhenko.km.ua` лишається у Compose-проєкті `podo` в `/opt/podo`.
@@ -68,7 +72,7 @@ INITIAL_ADMIN_CREDENTIALS_FILE=/root/bootstrap/initial-admin.env \
 
 Bootstrap створює `podoria-deploy`, додає його до Docker group, генерує
 production secrets з `openssl`, встановлює root-owned deploy/reset/reconcile
-entrypoints і не виводить secret values.
+та demo-seed entrypoints і не виводить secret values.
 
 ## Перший адміністратор
 
@@ -107,6 +111,28 @@ sudo /opt/podoria-crm/bin/reset-production-database.sh \
 
 `--with-admin` спрацює лише після повного reset, бо command відмовляється
 працювати, якщо вже існує будь-який користувач.
+
+## Великий demo dataset
+
+Після створення initial admin порожню domain database можна наповнити
+детермінованими тестовими даними для всіх CRM-розділів:
+
+```sh
+sudo /opt/podoria-crm/bin/seed-production-demo-data.sh \
+  --confirm SEED_PODORIA_DEMO_DATA \
+  --scale large
+```
+
+`large` створює 140 пацієнтів, 360 записів, 36 матеріалів, 10
+постачальників, 12 послуг, 4 кабінети, 90 справ, 20 візитів із фото, 4
+подологів та 3 працівників рецепції, а також пов’язані медичні, складські,
+фінансові, notification й audit записи.
+
+Seed відмовляється працювати в уже заповненій domain database, має resumable
+transaction phases і є idempotent для тієї самої версії/scale. Створені
+demo-користувачі мають unusable passwords; для роботи з fixture
+використовується initial admin. Деталі та повний reset → admin → seed цикл
+наведено в [command reference](production-command-reference.md#demo-fixtures).
 
 ## Rollback і перевірка
 

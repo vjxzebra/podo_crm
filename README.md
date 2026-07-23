@@ -90,6 +90,10 @@ isolated restore verification та image-only deployment rollback. Production HS
 explicit operator decision після підтвердження HTTPS для домену й усіх subdomains; звичайні
 HTTPS redirect, one-year HSTS і subdomains лишаються обов'язковими.
 
+Production CRM на спільному WordPress-сервері, autodeploy із `main`, guarded reset,
+створення initial admin і великий cross-domain demo seed задокументовані в
+[production command reference](docs/operations/production-command-reference.md).
+
 Password lifecycle з TP-202 додає примусовий first-login для тимчасових паролів, зміну власного пароля з перевіркою поточного, enumeration-safe reset request та admin-only чергу відновлення. Тимчасовий пароль за замовчуванням діє 24 години (`TEMPORARY_PASSWORD_TTL_HOURS`); його встановлення відкликає всі сесії працівника, а зміна власного пароля зберігає лише поточну сесію.
 
 Audit foundation з TP-207 надає admin-only `GET /api/v1/audit-events` і `GET /api/v1/audit-events/{id}`, стабільну cursor pagination, пошук/фільтри та redacted «Було → Стало». Domain services записують лише зареєстровані event types усередині `transaction.atomic()`; application API та PostgreSQL trigger забороняють update/delete. Password change, reset request і temporary password уже інтегровані з аудитом.
