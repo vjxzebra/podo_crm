@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from uuid import UUID
 
 import pytest
 from django.db import IntegrityError, transaction
@@ -65,8 +66,15 @@ def test_normalize_phone_rejects_invalid_length():
 @pytest.mark.django_db
 def test_admin_searches_by_name_full_name_phone_and_public_number():
     admin = create_user(email="admin@example.test", role=UserRole.ADMIN)
-    maria = create_patient(first_name="Марія", last_name="Бондар", phone="067 111 22 33")
-    create_patient(first_name="Ірина", last_name="Савчук", phone="050 999 88 77")
+    maria = Patient.objects.create(
+        id=UUID("12345678-90ab-cdef-1234-567890abcdef"),
+        first_name="Марія",
+        last_name="Бондар",
+        phone="067 111 22 33",
+    )
+    # The digits embedded in Maria's public number are also present in this
+    # phone. A full public-number query must still resolve only the exact card.
+    create_patient(first_name="Ірина", last_name="Савчук", phone="+12345678901")
     client = authenticated_client(admin)
 
     by_full_name = client.get("/api/v1/patients", {"search": "Марія Бондар"})
