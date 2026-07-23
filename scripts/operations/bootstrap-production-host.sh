@@ -39,7 +39,7 @@ fi
 usermod -aG docker "$DEPLOY_USER"
 DEPLOY_GROUP=$(id -gn "$DEPLOY_USER")
 
-install -d -m 0755 -o root -g root "$BASE_DIR"
+install -d -m 0775 -o root -g "$DEPLOY_GROUP" "$BASE_DIR"
 for directory in incoming releases state; do
   install -d -m 0750 -o "$DEPLOY_USER" -g "$DEPLOY_GROUP" "$BASE_DIR/$directory"
 done
@@ -74,7 +74,7 @@ install -m 0644 -o root -g root \
 install -m 0640 -o root -g "$DEPLOY_GROUP" \
   "$SOURCE_ROOT/infra/production/crm.Caddyfile" \
   "$BASE_DIR/shared/crm.Caddyfile"
-install -m 0640 -o root -g "$DEPLOY_GROUP" \
+install -m 0444 -o root -g "$DEPLOY_GROUP" \
   "$INITIAL_ADMIN_CREDENTIALS_FILE" \
   "$BASE_DIR/secrets/initial_admin_credentials"
 
@@ -87,7 +87,11 @@ generate_secret() {
     printf '\n' >> "$path"
   fi
   chown "root:$DEPLOY_GROUP" "$path"
-  chmod 0640 "$path"
+  # Local Docker Compose bind-mounts file-backed secrets without changing their
+  # ownership. The protected 0750 parent directory prevents host access, while
+  # world-readable file mode lets non-root container users read only the
+  # individual secret mounted into /run/secrets.
+  chmod 0444 "$path"
 }
 
 generate_secret "$BASE_DIR/secrets/django_secret_key" 64
@@ -96,27 +100,27 @@ if [ ! -s "$BASE_DIR/secrets/postgres_backup_user" ]; then
   printf 'podoria_backup\n' > "$BASE_DIR/secrets/postgres_backup_user"
 fi
 chown "root:$DEPLOY_GROUP" "$BASE_DIR/secrets/postgres_backup_user"
-chmod 0640 "$BASE_DIR/secrets/postgres_backup_user"
+chmod 0444 "$BASE_DIR/secrets/postgres_backup_user"
 generate_secret "$BASE_DIR/secrets/postgres_backup_password" 36
 if [ ! -s "$BASE_DIR/secrets/minio_root_user" ]; then
   printf 'podoria_minio_root\n' > "$BASE_DIR/secrets/minio_root_user"
 fi
 chown "root:$DEPLOY_GROUP" "$BASE_DIR/secrets/minio_root_user"
-chmod 0640 "$BASE_DIR/secrets/minio_root_user"
+chmod 0444 "$BASE_DIR/secrets/minio_root_user"
 generate_secret "$BASE_DIR/secrets/minio_root_password" 40
 if [ ! -s "$BASE_DIR/secrets/minio_app_access_key" ]; then
   printf 'podoria-app-%s\n' "$(openssl rand -hex 8)" \
     > "$BASE_DIR/secrets/minio_app_access_key"
 fi
 chown "root:$DEPLOY_GROUP" "$BASE_DIR/secrets/minio_app_access_key"
-chmod 0640 "$BASE_DIR/secrets/minio_app_access_key"
+chmod 0444 "$BASE_DIR/secrets/minio_app_access_key"
 generate_secret "$BASE_DIR/secrets/minio_app_secret_key" 40
 if [ ! -s "$BASE_DIR/secrets/minio_backup_access_key" ]; then
   printf 'podoria-backup-%s\n' "$(openssl rand -hex 8)" \
     > "$BASE_DIR/secrets/minio_backup_access_key"
 fi
 chown "root:$DEPLOY_GROUP" "$BASE_DIR/secrets/minio_backup_access_key"
-chmod 0640 "$BASE_DIR/secrets/minio_backup_access_key"
+chmod 0444 "$BASE_DIR/secrets/minio_backup_access_key"
 generate_secret "$BASE_DIR/secrets/minio_backup_secret_key" 40
 
 if [ ! -s "$BASE_DIR/shared/production.env" ]; then

@@ -27,7 +27,7 @@
   shared/
     production.env      # non-secret production settings
     crm.Caddyfile       # isolated subdomain route
-  secrets/              # root/deploy-group readable secret files
+  secrets/              # 0750 root/deploy directory; read-only file mounts for non-root containers
   state/                # deployment result JSON
   resets/               # root-only pre-reset pg_dump snapshots
 ```
