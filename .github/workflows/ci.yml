@@ -25,3 +25,78 @@ jobs:
       - name: Clean up containers
         if: always()
         run: docker compose --profile test down --volumes --remove-orphans
+
+  deploy-production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test-profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    concurrency:
+      group: podoria-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - name: Build immutable production images
+        run: |
+          docker build --pull -t "podoria-crm-backend:${GITHUB_SHA}" backend
+          docker build --pull -t "podoria-crm-web:${GITHUB_SHA}" -f frontend/Dockerfile .
+      - name: Package release
+        run: |
+          git archive --format=tar.gz --output="/tmp/podoria-source-${GITHUB_SHA}.tar.gz" "${GITHUB_SHA}"
+          docker save \
+            "podoria-crm-backend:${GITHUB_SHA}" \
+            "podoria-crm-web:${GITHUB_SHA}" \
+            | gzip -1 > "/tmp/podoria-images-${GITHUB_SHA}.tar.gz"
+          (
+            cd /tmp
+            sha256sum "podoria-source-${GITHUB_SHA}.tar.gz" \
+              > "podoria-source-${GITHUB_SHA}.tar.gz.sha256"
+            sha256sum "podoria-images-${GITHUB_SHA}.tar.gz" \
+              > "podoria-images-${GITHUB_SHA}.tar.gz.sha256"
+          )
+      - name: Configure pinned production SSH identity
+        env:
+          PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          PROD_SSH_KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "${HOME}/.ssh"
+          printf '%s\n' "${PROD_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/podoria-production"
+          printf '%s\n' "${PROD_SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          chmod 600 "${HOME}/.ssh/podoria-production" "${HOME}/.ssh/known_hosts"
+      - name: Upload release
+        env:
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+        run: |
+          scp -i "${HOME}/.ssh/podoria-production" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "/tmp/podoria-source-${GITHUB_SHA}.tar.gz" \
+            "/tmp/podoria-source-${GITHUB_SHA}.tar.gz.sha256" \
+            "/tmp/podoria-images-${GITHUB_SHA}.tar.gz" \
+            "/tmp/podoria-images-${GITHUB_SHA}.tar.gz.sha256" \
+            "${PROD_SSH_USER}@${PROD_SSH_HOST}:/opt/podoria-crm/incoming/"
+      - name: Deploy release
+        env:
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+        run: |
+          ssh -i "${HOME}/.ssh/podoria-production" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "${PROD_SSH_USER}@${PROD_SSH_HOST}" \
+            "/opt/podoria-crm/bin/deploy-production.sh '${GITHUB_SHA}' \
+            '/opt/podoria-crm/incoming/podoria-source-${GITHUB_SHA}.tar.gz' \
+            '/opt/podoria-crm/incoming/podoria-images-${GITHUB_SHA}.tar.gz'"
+      - name: Verify public CRM and existing WordPress
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+            https://crm.rozhenko.km.ua/health/ready
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 \
+            https://rozhenko.km.ua/ >/dev/null
+      - name: Remove SSH material
+        if: always()
+        run: rm -f "${HOME}/.ssh/podoria-production" "${HOME}/.ssh/known_hosts"

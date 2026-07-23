@@ -1,0 +1,4 @@
+crm.rozhenko.km.ua {
+	encode gzip zstd
+	reverse_proxy podoria-crm-proxy:80
+}

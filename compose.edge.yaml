@@ -1,0 +1,12 @@
+services:
+  proxy:
+    networks:
+      default: {}
+      podoria_edge:
+        aliases:
+          - podoria-crm-proxy
+
+networks:
+  podoria_edge:
+    name: ${EDGE_NETWORK_NAME:-podoria-edge}
+    external: true
