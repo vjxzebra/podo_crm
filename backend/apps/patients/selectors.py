@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Case, Exists, IntegerField, OuterRef, Q, QuerySet, Value, When
 from django.db.models.functions import Concat, Greatest
@@ -5,6 +7,8 @@ from django.db.models.functions import Concat, Greatest
 from apps.accounts.models import User, UserRole
 from apps.patients.models import Patient
 from apps.patients.normalization import phone_digits
+
+PUBLIC_NUMBER_PATTERN = re.compile(r"^P-[0-9A-F]{12}$", re.IGNORECASE)
 
 
 def patients_visible_to(user: User) -> QuerySet[Patient]:
@@ -28,6 +32,8 @@ def search_patients(queryset: QuerySet[Patient], search: str) -> QuerySet[Patien
     term = search.strip()
     if not term:
         return queryset
+    if PUBLIC_NUMBER_PATTERN.fullmatch(term):
+        return queryset.filter(public_number__iexact=term)
     digits = phone_digits(term)
     criteria = (
         Q(first_name__icontains=term)
