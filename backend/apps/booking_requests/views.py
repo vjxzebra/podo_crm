@@ -1,6 +1,10 @@
+import hmac
+import json
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
+from django.conf import settings
+from django.db import transaction
 from django.db.models import Count, Q
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -32,8 +36,20 @@ from apps.booking_requests.serializers import (
     BookingRequestSerializer,
     ExternalBookingRequestResponseSerializer,
     ExternalBookingRequestSerializer,
+    TelegramLinkIntentSerializer,
+    TelegramSubscriptionEmptySerializer,
+    TelegramSubscriptionSerializer,
 )
 from apps.booking_requests.services import process_booking_request
+from apps.booking_requests.telegram_services import (
+    MAX_WEBHOOK_BYTES,
+    create_telegram_link_intent,
+    disconnect_telegram_subscription,
+    get_telegram_subscription_for,
+    process_start_payload_update,
+    process_telegram_update,
+    store_telegram_update,
+)
 from apps.patients.normalization import phone_digits
 from config.api.exceptions import ApiProblem
 from config.api.serializers import ErrorEnvelopeSerializer
@@ -303,3 +319,157 @@ class ExternalBookingRequestCreateView(APIView):
             status=status.HTTP_200_OK if replayed else status.HTTP_201_CREATED,
             headers=headers,
         )
+
+
+class TelegramSubscriptionView(APIView):
+    permission_classes = [HasBookingRequestAccess]
+
+    @extend_schema(
+        operation_id="telegram_subscription_retrieve",
+        summary="Return current user's Telegram subscription status",
+        responses={
+            status.HTTP_200_OK: TelegramSubscriptionSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+        },
+        tags=["telegram"],
+    )
+    def get(self, request: Request) -> Response:
+        subscription = get_telegram_subscription_for(_actor(request))
+        if subscription is None:
+            return Response(
+                TelegramSubscriptionEmptySerializer(
+                    {
+                        "is_linked": False,
+                        "is_enabled": False,
+                        "username": "",
+                        "first_name": "",
+                        "linked_at": None,
+                        "disabled_at": None,
+                        "last_seen_at": None,
+                    }
+                ).data,
+                headers={"Cache-Control": "no-store"},
+            )
+        return Response(
+            TelegramSubscriptionSerializer(subscription).data,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @extend_schema(
+        operation_id="telegram_subscription_disconnect",
+        summary="Disable current user's Telegram subscription",
+        request=None,
+        responses={
+            status.HTTP_204_NO_CONTENT: None,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+        },
+        tags=["telegram"],
+    )
+    def delete(self, request: Request) -> Response:
+        disconnect_telegram_subscription(
+            actor=_actor(request),
+            correlation_id=get_request_id(request),
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
+
+
+class TelegramLinkIntentView(APIView):
+    permission_classes = [HasBookingRequestAccess]
+
+    @extend_schema(
+        operation_id="telegram_link_intent_create",
+        summary="Create a one-time Telegram deep link for current user",
+        request=None,
+        responses={
+            status.HTTP_201_CREATED: TelegramLinkIntentSerializer,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+        },
+        tags=["telegram"],
+    )
+    def post(self, request: Request) -> Response:
+        payload, intent = create_telegram_link_intent(actor=_actor(request))
+        username = str(settings.TELEGRAM_BOT_USERNAME).strip().lstrip("@")
+        return Response(
+            {
+                "url": f"https://t.me/{username}?start={payload}",
+                "expires_at": intent.expires_at,
+            },
+            status=status.HTTP_201_CREATED,
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+class TelegramWebhookView(APIView):
+    authentication_classes: list[type] = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="telegram_webhook_receive",
+        summary="Receive Telegram webhook updates",
+        request=dict,
+        responses={
+            status.HTTP_200_OK: None,
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+            status.HTTP_503_SERVICE_UNAVAILABLE: ErrorEnvelopeSerializer,
+        },
+        tags=["telegram"],
+    )
+    def post(self, request: Request) -> Response:
+        expected_secret = settings.TELEGRAM_WEBHOOK_SECRET
+        provided_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if not expected_secret:
+            raise ApiProblem(
+                code="telegram_webhook_not_configured",
+                message="Telegram webhook не налаштовано.",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        if not hmac.compare_digest(provided_secret, expected_secret):
+            raise ApiProblem(
+                code="permission_denied",
+                message="Недостатньо прав для цієї дії.",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        content_length = int(request.headers.get("Content-Length") or 0)
+        if content_length > MAX_WEBHOOK_BYTES:
+            raise ApiProblem(
+                code="request_entity_too_large",
+                message="Тіло запиту завелике.",
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        body = request.body
+        if len(body) > MAX_WEBHOOK_BYTES:
+            raise ApiProblem(
+                code="request_entity_too_large",
+                message="Тіло запиту завелике.",
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        try:
+            update = json.loads(body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ApiProblem(
+                code="validation_error",
+                message="Дані запиту не пройшли перевірку.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            ) from exc
+        if not isinstance(update, dict):
+            raise ApiProblem(
+                code="validation_error",
+                message="Дані запиту не пройшли перевірку.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        message_value = update.get("message")
+        message = message_value if isinstance(message_value, dict) else {}
+        text_value = message.get("text")
+        text = text_value if isinstance(text_value, str) else ""
+        if text.startswith("/start"):
+            process_start_payload_update(update=update)
+            return Response(status=status.HTTP_200_OK, headers={"Cache-Control": "no-store"})
+        item, created = store_telegram_update(update)
+        if created:
+            transaction.on_commit(lambda: process_telegram_update(item.update_id))
+        return Response(status=status.HTTP_200_OK, headers={"Cache-Control": "no-store"})

@@ -332,3 +332,186 @@ class BookingRequestSubmission(models.Model):
 
     def __str__(self) -> str:
         return f"{self.booking_request.public_number} · {self.idempotency_key}"
+
+
+class TelegramUpdateType(models.TextChoices):
+    MESSAGE = "MESSAGE", "Message"
+    CALLBACK_QUERY = "CALLBACK_QUERY", "Callback query"
+    UNKNOWN = "UNKNOWN", "Unknown"
+
+
+class TelegramUpdateState(models.TextChoices):
+    RECEIVED = "RECEIVED", "Received"
+    PROCESSED = "PROCESSED", "Processed"
+    IGNORED = "IGNORED", "Ignored"
+    FAILED = "FAILED", "Failed"
+
+
+class TelegramDeliveryStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    SENT = "SENT", "Sent"
+    RETRY = "RETRY", "Retry"
+    PERMANENT_FAILURE = "PERMANENT_FAILURE", "Permanent failure"
+
+
+class TelegramLinkIntent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="telegram_link_intents",
+    )
+    payload_digest = models.CharField(max_length=64, unique=True, editable=False)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        indexes = [
+            models.Index(fields=("user", "-created_at"), name="telegram_intent_user_time_idx"),
+            models.Index(fields=("expires_at",), name="telegram_intent_expiry_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(payload_digest=""),
+                name="telegram_intent_digest_not_empty",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Telegram link intent · user {self.user_id}"
+
+
+class TelegramSubscription(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        primary_key=True,
+        on_delete=models.CASCADE,
+        related_name="telegram_subscription",
+    )
+    telegram_user_id = models.BigIntegerField(unique=True)
+    chat_id = models.BigIntegerField(unique=True)
+    username = models.CharField(max_length=100, blank=True)
+    first_name = models.CharField(max_length=160, blank=True)
+    is_enabled = models.BooleanField(default=True)
+    linked_at = models.DateTimeField()
+    disabled_at = models.DateTimeField(blank=True, null=True)
+    last_seen_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    class Meta:
+        ordering = ("user_id",)
+        indexes = [
+            models.Index(
+                fields=("is_enabled", "chat_id"),
+                name="telegram_sub_enabled_chat_idx",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(is_enabled=True, disabled_at__isnull=True)
+                    | models.Q(is_enabled=False, disabled_at__isnull=False)
+                ),
+                name="telegram_sub_enabled_consistent",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Telegram subscription · user {self.user_id}"
+
+
+class TelegramUpdate(models.Model):
+    update_id = models.BigIntegerField(primary_key=True)
+    update_type = models.CharField(
+        max_length=16,
+        choices=TelegramUpdateType.choices,
+        default=TelegramUpdateType.UNKNOWN,
+    )
+    telegram_user_id = models.BigIntegerField(blank=True, null=True)
+    chat_id = models.BigIntegerField(blank=True, null=True)
+    chat_type = models.CharField(max_length=16, blank=True)
+    message_id = models.BigIntegerField(blank=True, null=True)
+    command = models.CharField(max_length=32, blank=True)
+    callback_query_id = models.CharField(max_length=128, blank=True)
+    callback_data = models.CharField(max_length=64, blank=True)
+    state = models.CharField(
+        max_length=16,
+        choices=TelegramUpdateState.choices,
+        default=TelegramUpdateState.RECEIVED,
+    )
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    error_code = models.CharField(max_length=64, blank=True)
+    error_message = models.CharField(max_length=255, blank=True)
+    received_at = models.DateTimeField(auto_now_add=True, editable=False)
+    processed_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    class Meta:
+        ordering = ("-update_id",)
+        indexes = [
+            models.Index(fields=("state", "received_at"), name="telegram_update_state_time_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Telegram update {self.update_id}"
+
+
+class TelegramDelivery(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    booking_request = models.ForeignKey(
+        BookingRequest,
+        on_delete=models.PROTECT,
+        related_name="telegram_deliveries",
+    )
+    subscription = models.ForeignKey(
+        TelegramSubscription,
+        on_delete=models.PROTECT,
+        related_name="booking_request_deliveries",
+    )
+    chat_id = models.BigIntegerField()
+    message_id = models.BigIntegerField(blank=True, null=True)
+    status = models.CharField(
+        max_length=32,
+        choices=TelegramDeliveryStatus.choices,
+        default=TelegramDeliveryStatus.PENDING,
+    )
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(blank=True, null=True)
+    error_code = models.CharField(max_length=64, blank=True)
+    error_message = models.CharField(max_length=255, blank=True)
+    last_synced_request_version = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        indexes = [
+            models.Index(
+                fields=("status", "next_attempt_at", "created_at"),
+                name="telegram_delivery_due_idx",
+            ),
+            models.Index(
+                fields=("booking_request", "status"),
+                name="telegram_delivery_request_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("booking_request", "subscription"),
+                name="telegram_delivery_request_subscription_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(attempt_count__gte=0),
+                name="telegram_delivery_attempt_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_synced_request_version__gte=0),
+                name="telegram_delivery_synced_version_nonnegative",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.booking_request.public_number} · Telegram delivery"

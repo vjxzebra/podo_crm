@@ -111,7 +111,7 @@ Bot token у settings, browser-side secret, OAuth/multiple credentials, Telegram
 
 ## 4. TP-1010 — Telegram authorization та доставка нових заявок
 
-Статус: `planned`, залежить від TP-1009.
+Статус: `done` 2026-07-28.
 
 ### Результат
 
@@ -145,7 +145,7 @@ Process callback, cross-chat edit, group chats, production enablement.
 
 ## 5. TP-1011 — process callback, cross-chat sync і release gate
 
-Статус: `planned`, залежить від TP-1010.
+Статус: `done` 2026-07-28.
 
 ### Результат
 
@@ -205,6 +205,15 @@ TP-1008 і TP-1009 завершені. Bearer token lifecycle, зовнішні�
 OpenAPI, integration guide та admin settings перевірені автоматично, живим
 локальним HTTP викликом і responsive browser gate.
 
-Наступний packet — TP-1010: one-time private Telegram authorization, verified
-webhook і durable fan-out. Новий Telegram bot token потрібен лише для production
-частини TP-1011.
+TP-1010 завершено локально без реального Telegram token: one-time private
+authorization, verified webhook і durable fan-out покриті fake Bot API gates та
+живим CRM dialog browser gate.
+
+TP-1011 завершено локально без реального Telegram token: authorized inline
+callback, first-actor idempotency, cross-chat edit synchronization,
+retry/permanent-failure isolation і production rollout runbook покриті fake Bot
+API та runtime gates.
+
+Наступний етап — production rollout за
+[Telegram runbook](../operations/telegram-rollout-runbook.md) тільки після
+rotation скомпрометованого bot token.

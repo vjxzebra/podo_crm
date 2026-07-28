@@ -49,6 +49,11 @@ def create_booking_request(
         after=booking_request_audit_snapshot(item),
         description="Створено заявку на запис.",
     )
+    from apps.booking_requests.telegram_services import (
+        enqueue_booking_request_telegram_delivery_on_commit,
+    )
+
+    enqueue_booking_request_telegram_delivery_on_commit(item)
     return item
 
 
@@ -73,6 +78,9 @@ def process_booking_request(
             status_code=status.HTTP_404_NOT_FOUND,
         )
     if item.status == BookingRequestStatus.PROCESSED:
+        from apps.booking_requests.telegram_services import dispatch_telegram_delivery_on_commit
+
+        dispatch_telegram_delivery_on_commit(item)
         return item
     if item.version != requested_version:
         raise ApiProblem(
@@ -109,4 +117,7 @@ def process_booking_request(
         after=booking_request_audit_snapshot(item),
         description="Заявку на запис позначено обробленою.",
     )
+    from apps.booking_requests.telegram_services import dispatch_telegram_delivery_on_commit
+
+    dispatch_telegram_delivery_on_commit(item)
     return item

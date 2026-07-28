@@ -4,7 +4,8 @@
 тому самому сервері, що й WordPress `rozhenko.km.ua`. Архітектурні межі та
 пояснення deployment наведені у
 [production CRM runbook](production-crm-runbook.md), а backup/restore —
-у [backup runbook](backup-deployment-runbook.md).
+у [backup runbook](backup-deployment-runbook.md). Telegram rollout після
+TP-1011 описаний в [Telegram runbook](telegram-rollout-runbook.md).
 
 ## Правила безпеки
 

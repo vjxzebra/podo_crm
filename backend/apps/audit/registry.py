@@ -20,6 +20,8 @@ class AuditAction(StrEnum):
     PASSWORD_CHANGED = "accounts.password_changed"  # noqa: S105
     PASSWORD_RESET_REQUESTED = "accounts.password_reset_requested"  # noqa: S105
     TEMPORARY_PASSWORD_SET = "accounts.temporary_password_set"  # noqa: S105
+    TELEGRAM_SUBSCRIPTION_LINKED = "accounts.telegram_subscription_linked"
+    TELEGRAM_SUBSCRIPTION_UNLINKED = "accounts.telegram_subscription_unlinked"
 
     USER_CREATED = "team.user_created"
     USER_UPDATED = "team.user_updated"
@@ -97,6 +99,8 @@ EVENT_SECTIONS: dict[str, AuditSection] = {
     AuditAction.PASSWORD_CHANGED: AuditSection.ACCOUNTS,
     AuditAction.PASSWORD_RESET_REQUESTED: AuditSection.ACCOUNTS,
     AuditAction.TEMPORARY_PASSWORD_SET: AuditSection.ACCOUNTS,
+    AuditAction.TELEGRAM_SUBSCRIPTION_LINKED: AuditSection.ACCOUNTS,
+    AuditAction.TELEGRAM_SUBSCRIPTION_UNLINKED: AuditSection.ACCOUNTS,
     AuditAction.USER_CREATED: AuditSection.TEAM,
     AuditAction.USER_UPDATED: AuditSection.TEAM,
     AuditAction.USER_ROLE_CHANGED: AuditSection.TEAM,

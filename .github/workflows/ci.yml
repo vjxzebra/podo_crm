@@ -83,14 +83,26 @@ jobs:
         env:
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
           PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
         run: |
-          ssh -i "${HOME}/.ssh/podoria-production" \
+          {
+            if [ -n "${TELEGRAM_BOT_TOKEN}" ] && [ -n "${TELEGRAM_WEBHOOK_SECRET}" ]; then
+              printf 'export TELEGRAM_BOT_TOKEN=%q\n' "${TELEGRAM_BOT_TOKEN}"
+              printf 'export TELEGRAM_WEBHOOK_SECRET=%q\n' "${TELEGRAM_WEBHOOK_SECRET}"
+              printf 'export CONFIGURE_TELEGRAM_WEBHOOK=1\n'
+            else
+              printf 'export CONFIGURE_TELEGRAM_WEBHOOK=0\n'
+            fi
+            printf 'exec /opt/podoria-crm/bin/deploy-production.sh %q %q %q\n' \
+              "${GITHUB_SHA}" \
+              "/opt/podoria-crm/incoming/podoria-source-${GITHUB_SHA}.tar.gz" \
+              "/opt/podoria-crm/incoming/podoria-images-${GITHUB_SHA}.tar.gz"
+          } | ssh -i "${HOME}/.ssh/podoria-production" \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             "${PROD_SSH_USER}@${PROD_SSH_HOST}" \
-            "/opt/podoria-crm/bin/deploy-production.sh '${GITHUB_SHA}' \
-            '/opt/podoria-crm/incoming/podoria-source-${GITHUB_SHA}.tar.gz' \
-            '/opt/podoria-crm/incoming/podoria-images-${GITHUB_SHA}.tar.gz'"
+            "bash -se"
       - name: Verify public CRM and existing WordPress
         run: |
           curl --fail --silent --show-error --retry 10 --retry-delay 3 \

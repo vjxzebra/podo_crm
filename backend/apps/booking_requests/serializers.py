@@ -7,6 +7,7 @@ from apps.booking_requests.models import (
     BookingRequestApiCredential,
     BookingRequestSource,
     BookingRequestStatus,
+    TelegramSubscription,
 )
 from apps.patients.normalization import InvalidPhoneError, normalize_phone
 
@@ -201,3 +202,37 @@ class ExternalBookingRequestResponseSerializer(serializers.ModelSerializer[Booki
     class Meta:
         model = BookingRequest
         fields = ("id", "public_number", "status", "created_at")
+
+
+class TelegramSubscriptionSerializer(serializers.ModelSerializer[TelegramSubscription]):
+    is_linked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TelegramSubscription
+        fields = (
+            "is_linked",
+            "is_enabled",
+            "username",
+            "first_name",
+            "linked_at",
+            "disabled_at",
+            "last_seen_at",
+        )
+
+    def get_is_linked(self, obj: TelegramSubscription) -> bool:
+        return obj.is_enabled
+
+
+class TelegramSubscriptionEmptySerializer(serializers.Serializer[Any]):
+    is_linked = serializers.BooleanField(default=False)
+    is_enabled = serializers.BooleanField(default=False)
+    username = serializers.CharField(allow_blank=True, default="")
+    first_name = serializers.CharField(allow_blank=True, default="")
+    linked_at = serializers.DateTimeField(allow_null=True, default=None)
+    disabled_at = serializers.DateTimeField(allow_null=True, default=None)
+    last_seen_at = serializers.DateTimeField(allow_null=True, default=None)
+
+
+class TelegramLinkIntentSerializer(serializers.Serializer[Any]):
+    url = serializers.URLField()
+    expires_at = serializers.DateTimeField()

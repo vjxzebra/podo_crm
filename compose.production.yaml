@@ -104,11 +104,17 @@ services:
       MINIO_ACCESS_KEY_FILE: /run/secrets/minio_app_access_key
       MINIO_SECRET_KEY_FILE: /run/secrets/minio_app_secret_key
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-podoria-private}
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TELEGRAM_WEBHOOK_SECRET_FILE: /run/secrets/telegram_webhook_secret
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-podo_crm_pod_bot}
+      CRM_PUBLIC_URL: ${CRM_PUBLIC_URL:-https://crm.rozhenko.km.ua}
     secrets: &backend_secrets
       - django_secret_key
       - postgres_app_password
       - minio_app_access_key
       - minio_app_secret_key
+      - telegram_bot_token
+      - telegram_webhook_secret
     depends_on:
       postgres:
         condition: service_healthy
@@ -211,6 +217,10 @@ secrets:
     file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/minio_backup_access_key
   minio_backup_secret_key:
     file: ${PODORIA_SECRET_DIR:?PODORIA_SECRET_DIR is required}/minio_backup_secret_key
+  telegram_bot_token:
+    environment: TELEGRAM_BOT_TOKEN
+  telegram_webhook_secret:
+    environment: TELEGRAM_WEBHOOK_SECRET
 
 configs:
   minio_init_script:

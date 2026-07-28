@@ -185,6 +185,10 @@ session_status=$(curl -sS -o /dev/null -w '%{http_code}' \
   exit 1
 }
 
+if [ "${CONFIGURE_TELEGRAM_WEBHOOK:-0}" = "1" ]; then
+  compose run --rm --no-deps backend python manage.py configure_telegram_webhook
+fi
+
 ln -sfn "$RELEASE_DIR" "$BASE_DIR/current.next"
 mv -Tf "$BASE_DIR/current.next" "$BASE_DIR/current"
 write_state deployed

@@ -7,6 +7,9 @@ from apps.booking_requests.views import (
     BookingRequestListView,
     BookingRequestProcessView,
     ExternalBookingRequestCreateView,
+    TelegramLinkIntentView,
+    TelegramSubscriptionView,
+    TelegramWebhookView,
 )
 
 urlpatterns = [
@@ -25,6 +28,13 @@ urlpatterns = [
         ExternalBookingRequestCreateView.as_view(),
         name="external-booking-request-create",
     ),
+    path(
+        "integrations/telegram/webhook",
+        TelegramWebhookView.as_view(),
+        name="telegram-webhook",
+    ),
+    path("telegram/subscription", TelegramSubscriptionView.as_view(), name="telegram-subscription"),
+    path("telegram/link-intents", TelegramLinkIntentView.as_view(), name="telegram-link-intent"),
     path(
         "booking-requests",
         BookingRequestListView.as_view(),
