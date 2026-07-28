@@ -4364,6 +4364,14 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
 .booking-request-source--instagram { color: #8a3ab9; background: #f5eefa; }
 .booking-request-source--facebook { color: #315ea8; background: #edf3fc; }
 .booking-request-source--website { color: var(--color-sage-dark); background: var(--color-sage-soft); }
+.booking-request-source > span[aria-hidden="true"] {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+.booking-request-source > span:last-child { min-width: max-content; }
 .booking-request-status--new { color: #995b08; background: #fff2d8; }
 .booking-request-status--processed { color: var(--color-sage-dark); background: var(--color-sage-soft); }
 .booking-request-status > span {

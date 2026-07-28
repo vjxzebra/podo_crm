@@ -106,7 +106,8 @@ function SourceBadge({
 }) {
   return (
     <span className={`booking-request-source booking-request-source--${source.toLocaleLowerCase()}`}>
-      {label}
+      <span aria-hidden="true" />
+      <span>{label}</span>
     </span>
   );
 }

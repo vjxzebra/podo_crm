@@ -31,6 +31,11 @@ describe("BookingRequestsPage", () => {
     expect(within(summary).getByText("3")).toBeInTheDocument();
     expect(screen.getAllByText(bookingRequestFixture.public_number).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Instagram").length).toBeGreaterThan(0);
+    const sourceHeader = screen.getByRole("columnheader", { name: "Джерело" });
+    const table = sourceHeader.closest("table");
+    expect(table).not.toBeNull();
+    if (table === null) throw new Error("Booking request table is missing.");
+    expect(within(table).getByRole("cell", { name: bookingRequestFixture.source_label })).toBeVisible();
     expect(screen.getAllByText("Нова").length).toBeGreaterThan(0);
 
     const listRequest = vi.mocked(fetch).mock.calls.find(([input]) =>
