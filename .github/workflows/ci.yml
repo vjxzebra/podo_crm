@@ -103,6 +103,44 @@ jobs:
             -o StrictHostKeyChecking=yes \
             "${PROD_SSH_USER}@${PROD_SSH_HOST}" \
             "bash -se"
+      - name: Configure Telegram webhook
+        env:
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_WEBHOOK_SECRET}" ]; then
+            echo "Telegram production secrets are not configured; skipping webhook setup."
+            exit 0
+          fi
+          {
+            printf 'export TELEGRAM_BOT_TOKEN=%q\n' "${TELEGRAM_BOT_TOKEN}"
+            printf 'export TELEGRAM_WEBHOOK_SECRET=%q\n' "${TELEGRAM_WEBHOOK_SECRET}"
+            cat <<'REMOTE_SCRIPT'
+          set -eu
+          BASE_DIR=/opt/podoria-crm
+          ENV_FILE="$BASE_DIR/shared/production.env"
+          CURRENT_RELEASE=$(readlink -f "$BASE_DIR/current")
+          set -a
+          . "$ENV_FILE"
+          set +a
+          export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-podoria-production}"
+          export EDGE_NETWORK_NAME="${EDGE_NETWORK_NAME:-podoria-edge}"
+          export PODORIA_SECRET_DIR="$BASE_DIR/secrets"
+          export BACKEND_IMAGE=$(docker inspect "${COMPOSE_PROJECT_NAME}-backend-1" --format '{{.Image}}')
+          export WEB_IMAGE=$(docker inspect "${COMPOSE_PROJECT_NAME}-web-1" --format '{{.Image}}')
+          docker compose \
+            --env-file "$ENV_FILE" \
+            -f "$CURRENT_RELEASE/compose.production.yaml" \
+            -f "$CURRENT_RELEASE/compose.edge.yaml" \
+            run --rm --no-deps backend python manage.py configure_telegram_webhook
+          REMOTE_SCRIPT
+          } | ssh -i "${HOME}/.ssh/podoria-production" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "${PROD_SSH_USER}@${PROD_SSH_HOST}" \
+            "bash -se"
       - name: Verify public CRM and existing WordPress
         run: |
           curl --fail --silent --show-error --retry 10 --retry-delay 3 \
