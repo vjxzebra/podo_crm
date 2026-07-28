@@ -4,6 +4,7 @@ export type IconName =
   | "patients"
   | "team"
   | "tasks"
+  | "inbox"
   | "finance"
   | "inventory"
   | "analytics"
@@ -58,6 +59,12 @@ const iconPaths: Record<IconName, React.ReactNode> = {
     <>
       <rect x="4" y="3" width="16" height="18" rx="3" />
       <path d="m8 9 1.5 1.5L12 8M8 15h8" />
+    </>
+  ),
+  inbox: (
+    <>
+      <path d="M4 5h16v14H4z" />
+      <path d="M4 14h4l2 3h4l2-3h4M7 9h10" />
     </>
   ),
   finance: (

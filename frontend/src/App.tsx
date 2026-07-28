@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router";
 import { AnalyticsPage } from "./analytics/AnalyticsPage";
 import { OverviewPage } from "./analytics/OverviewPage";
 import { AuditPage } from "./audit/AuditPage";
+import { BookingRequestsPage } from "./booking-requests/BookingRequestsPage";
 import { AppShell } from "./app/AppShell";
 import { AuthBoundary } from "./app/AuthBoundary";
 import { ContractLabPage, ModulePreviewPage } from "./app/pages";
@@ -39,6 +40,9 @@ function pageForRoute(route: AppRouteDefinition) {
   }
   if (route.id === "work-items") {
     return <WorkItemsPage />;
+  }
+  if (route.id === "booking-requests") {
+    return <BookingRequestsPage />;
   }
   if (route.id === "calendar") {
     return <CalendarPage />;

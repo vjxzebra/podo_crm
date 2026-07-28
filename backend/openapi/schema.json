@@ -1134,6 +1134,7 @@
                                 "settings",
                                 "patients",
                                 "work_items",
+                                "booking_requests",
                                 "scheduling",
                                 "medical",
                                 "visits",
@@ -1144,7 +1145,7 @@
                             "type": "string",
                             "minLength": 1
                         },
-                        "description": "* `accounts` - accounts\n* `team` - team\n* `settings` - settings\n* `patients` - patients\n* `work_items` - work_items\n* `scheduling` - scheduling\n* `medical` - medical\n* `visits` - visits\n* `billing` - billing\n* `cash` - cash\n* `inventory` - inventory"
+                        "description": "* `accounts` - accounts\n* `team` - team\n* `settings` - settings\n* `patients` - patients\n* `work_items` - work_items\n* `booking_requests` - booking_requests\n* `scheduling` - scheduling\n* `medical` - medical\n* `visits` - visits\n* `billing` - billing\n* `cash` - cash\n* `inventory` - inventory"
                     }
                 ],
                 "tags": [
@@ -1334,6 +1335,7 @@
                                 "settings",
                                 "patients",
                                 "work_items",
+                                "booking_requests",
                                 "scheduling",
                                 "medical",
                                 "visits",
@@ -1344,7 +1346,7 @@
                             "type": "string",
                             "minLength": 1
                         },
-                        "description": "* `accounts` - accounts\n* `team` - team\n* `settings` - settings\n* `patients` - patients\n* `work_items` - work_items\n* `scheduling` - scheduling\n* `medical` - medical\n* `visits` - visits\n* `billing` - billing\n* `cash` - cash\n* `inventory` - inventory"
+                        "description": "* `accounts` - accounts\n* `team` - team\n* `settings` - settings\n* `patients` - patients\n* `work_items` - work_items\n* `booking_requests` - booking_requests\n* `scheduling` - scheduling\n* `medical` - medical\n* `visits` - visits\n* `billing` - billing\n* `cash` - cash\n* `inventory` - inventory"
                     }
                 ],
                 "tags": [
@@ -1686,6 +1688,418 @@
                 "responses": {
                     "204": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/booking-request-integration": {
+            "get": {
+                "operationId": "booking_request_integration_retrieve",
+                "summary": "Return safe booking-request API credential metadata",
+                "tags": [
+                    "booking-request-integration"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BookingRequestApiCredential"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/booking-request-integration/token/rotate": {
+            "post": {
+                "operationId": "booking_request_integration_token_rotate",
+                "summary": "Generate or rotate the booking-request API token",
+                "tags": [
+                    "booking-request-integration"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BookingRequestApiCredentialRotateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BookingRequestApiCredentialRotateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BookingRequestApiCredentialRotateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BookingRequestApiCredentialRotated"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/booking-requests": {
+            "get": {
+                "operationId": "booking_request_list",
+                "summary": "List booking requests visible to admin and reception",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "cursor",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "source",
+                        "schema": {
+                            "enum": [
+                                "ALL",
+                                "INSTAGRAM",
+                                "FACEBOOK",
+                                "WEBSITE"
+                            ],
+                            "type": "string",
+                            "default": "ALL",
+                            "minLength": 1
+                        },
+                        "description": "* `ALL` - ALL\n* `INSTAGRAM` - INSTAGRAM\n* `FACEBOOK` - FACEBOOK\n* `WEBSITE` - WEBSITE"
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "enum": [
+                                "ALL",
+                                "NEW",
+                                "PROCESSED"
+                            ],
+                            "type": "string",
+                            "default": "NEW",
+                            "minLength": 1
+                        },
+                        "description": "* `ALL` - ALL\n* `NEW` - NEW\n* `PROCESSED` - PROCESSED"
+                    }
+                ],
+                "tags": [
+                    "booking-requests"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BookingRequestListResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/booking-requests/{booking_request_id}": {
+            "get": {
+                "operationId": "booking_request_retrieve",
+                "summary": "Retrieve one booking request",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "booking_request_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "booking-requests"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BookingRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/booking-requests/{booking_request_id}/process": {
+            "post": {
+                "operationId": "booking_request_process",
+                "summary": "Idempotently mark one booking request as processed",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "booking_request_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "booking-requests"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BookingRequestProcessRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BookingRequestProcessRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BookingRequestProcessRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BookingRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -3459,6 +3873,124 @@
                                 }
                             },
                             "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/integrations/booking-requests": {
+            "post": {
+                "operationId": "external_booking_request_create",
+                "summary": "Create a booking request from a server-side integration",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "Idempotency-Key",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Stable unique value for one logical form submission.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "booking-request-integration"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ExternalBookingRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ExternalBookingRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ExternalBookingRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bookingRequestBearerAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ExternalBookingRequestResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ExternalBookingRequestResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": "Rate limit exceeded; Retry-After is included."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorEnvelope"
                                 }
@@ -9852,6 +10384,250 @@
                     "starts_at"
                 ]
             },
+            "BookingRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "public_number": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "source": {
+                        "$ref": "#/components/schemas/SourceEnum"
+                    },
+                    "source_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/BookingRequestStatusEnum"
+                    },
+                    "status_label": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "client_name": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "phone": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "service": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "contact_handle": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "message": {
+                        "type": "string",
+                        "maxLength": 2000
+                    },
+                    "preferred_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "external_reference": {
+                        "type": "string",
+                        "maxLength": 160
+                    },
+                    "processed_by_display_name": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "processed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "public_number",
+                    "source",
+                    "source_label",
+                    "status_label",
+                    "updated_at"
+                ]
+            },
+            "BookingRequestApiCredential": {
+                "type": "object",
+                "properties": {
+                    "is_configured": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "token_hint": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "rotated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "rotated_by_display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "is_configured",
+                    "rotated_at",
+                    "rotated_by_display_name",
+                    "token_hint",
+                    "version"
+                ]
+            },
+            "BookingRequestApiCredentialRotateRequest": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "confirm": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "confirm",
+                    "version"
+                ]
+            },
+            "BookingRequestApiCredentialRotated": {
+                "type": "object",
+                "properties": {
+                    "is_configured": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "token_hint": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "rotated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "rotated_by_display_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "token": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "is_configured",
+                    "rotated_at",
+                    "rotated_by_display_name",
+                    "token",
+                    "token_hint",
+                    "version"
+                ]
+            },
+            "BookingRequestCounts": {
+                "type": "object",
+                "properties": {
+                    "new": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "processed": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "new",
+                    "processed",
+                    "total"
+                ]
+            },
+            "BookingRequestListResponse": {
+                "type": "object",
+                "properties": {
+                    "booking_requests": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/BookingRequest"
+                        }
+                    },
+                    "counts": {
+                        "$ref": "#/components/schemas/BookingRequestCounts"
+                    },
+                    "next_cursor": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "booking_requests",
+                    "counts",
+                    "next_cursor"
+                ]
+            },
+            "BookingRequestProcessRequest": {
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "version"
+                ]
+            },
+            "BookingRequestStatusEnum": {
+                "enum": [
+                    "NEW",
+                    "PROCESSED"
+                ],
+                "type": "string",
+                "description": "* `NEW` - Нова\n* `PROCESSED` - Оброблена"
+            },
             "BucketEnum": {
                 "enum": [
                     "day",
@@ -10902,6 +11678,79 @@
                     "correlation_id",
                     "fields",
                     "message"
+                ]
+            },
+            "ExternalBookingRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "$ref": "#/components/schemas/SourceEnum"
+                    },
+                    "client_name": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 160
+                    },
+                    "phone": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 32
+                    },
+                    "service": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 160
+                    },
+                    "contact_handle": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 100
+                    },
+                    "message": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 2000
+                    },
+                    "preferred_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "external_reference": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 160
+                    }
+                },
+                "required": [
+                    "source"
+                ]
+            },
+            "ExternalBookingRequestResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "public_number": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/BookingRequestStatusEnum"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "public_number"
                 ]
             },
             "FinanceCashAdjustment": {
@@ -14412,6 +15261,15 @@
                     "role"
                 ]
             },
+            "SourceEnum": {
+                "enum": [
+                    "INSTAGRAM",
+                    "FACEBOOK",
+                    "WEBSITE"
+                ],
+                "type": "string",
+                "description": "* `INSTAGRAM` - Instagram\n* `FACEBOOK` - Facebook\n* `WEBSITE` - Сайт"
+            },
             "SpecialistSummary": {
                 "type": "object",
                 "properties": {
@@ -16196,6 +17054,11 @@
             }
         },
         "securitySchemes": {
+            "bookingRequestBearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "opaque"
+            },
             "cookieAuth": {
                 "type": "apiKey",
                 "in": "cookie",

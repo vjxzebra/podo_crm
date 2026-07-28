@@ -4,6 +4,7 @@ import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { csrfHeaders } from "../auth/AuthContext";
+import { BookingRequestIntegrationSettings } from "./BookingRequestIntegrationSettings";
 import { ScheduleSettings } from "./ScheduleSettings";
 import { ServiceEditorDialog, type ServiceEditor } from "./ServiceEditorDialog";
 import { StatusSettings } from "./StatusSettings";
@@ -12,7 +13,7 @@ type ClinicProfile = components["schemas"]["ClinicProfile"];
 type Room = components["schemas"]["Room"];
 type Service = components["schemas"]["Service"];
 type FieldErrors = Readonly<Record<string, readonly string[]>>;
-type SettingsSection = "profile" | "rooms" | "services" | "statuses" | "schedule";
+type SettingsSection = "profile" | "rooms" | "services" | "statuses" | "schedule" | "integrations";
 type RoomEditor = { readonly mode: "create" } | { readonly mode: "edit"; readonly room: Room };
 type ServiceStatus = "all" | "active" | "inactive";
 
@@ -288,6 +289,7 @@ export function SettingsPage() {
         <button className={section === "services" ? "active" : undefined} data-testid="settings-services-tab" onClick={() => { setSection("services"); setSuccess(null); if (services === null) void loadServices(); }} type="button"><Icon name="finance" /><span><strong>Послуги</strong><small>{services === null ? "Каталог" : <>{activeServiceCount} активних</>}</small></span></button>
         <button className={section === "statuses" ? "active" : undefined} data-testid="settings-statuses-tab" onClick={() => { setSection("statuses"); setSuccess(null); }} type="button"><Icon name="tasks" /><span><strong>Статуси</strong><small>8 системних</small></span></button>
         <button className={section === "schedule" ? "active" : undefined} data-testid="settings-schedule-tab" onClick={() => { setSection("schedule"); setSuccess(null); }} type="button"><Icon name="calendar" /><span><strong>Робочий час</strong><small>Спільний графік</small></span></button>
+        <button className={section === "integrations" ? "active" : undefined} data-testid="settings-integrations-tab" onClick={() => { setSection("integrations"); setSuccess(null); }} type="button"><Icon name="code" /><span><strong>Інтеграції</strong><small>API заявок</small></span></button>
       </nav>
 
       {isLoading ? <section className="panel settings-state"><span className="spinner" /><p>Завантажуємо налаштування…</p></section> : null}
@@ -356,6 +358,7 @@ export function SettingsPage() {
 
       {!isLoading && section === "statuses" ? <StatusSettings /> : null}
       {!isLoading && section === "schedule" ? <ScheduleSettings /> : null}
+      {!isLoading && section === "integrations" ? <BookingRequestIntegrationSettings /> : null}
 
       {editor === null ? null : <RoomEditorDialog editor={editor} onClose={() => { setEditor(null); }} onSaved={replaceRoom} />}
       {serviceEditor === null ? null : <ServiceEditorDialog editor={serviceEditor} onClose={() => { setServiceEditor(null); }} onSaved={replaceService} />}

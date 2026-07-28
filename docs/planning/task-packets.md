@@ -72,6 +72,10 @@
 | TP-1005 | `done` | Aggregate admin analytics CSV; 395 backend/208 frontend/40 axe, live HTTP і responsive browser evidence green; [evidence](../evidence/tp-1005/README.md) |
 | TP-1006 | `done` | Filtered admin finance-operation CSV; 401 backend/211 frontend/40 axe, live HTTP і responsive browser evidence green; [evidence](../evidence/tp-1006/README.md) |
 | TP-1007 | `done` | Filtered admin audit journal CSV; 407 backend/213 frontend/40 axe, live HTTP і responsive browser evidence green; [evidence](../evidence/tp-1007/README.md) |
+| TP-1008 | `done` | Role-scoped CRM register і idempotent process workflow; optional client name/phone/service/comment; 426 backend/223 frontend/42 axe, role/responsive/optional-field browser QA green; [evidence](../evidence/tp-1008/README.md) |
+| TP-1009 | `done` | Digest-only Bearer token rotation, external idempotent create API та [integration guide](../integrations/booking-requests-api.md); 434 backend/225 frontend/42 axe, live HTTP і responsive browser gates green; [evidence](../evidence/tp-1009/README.md) |
+| TP-1010 | `planned` | Додати one-time Telegram linking, verified webhook і durable fan-out; залежить від TP-1009 |
+| TP-1011 | `planned` | Додати authorized process callback, cross-chat message sync/retry та production rollout; залежить від TP-1010 і нового bot token |
 
 ## 3. Володіння модулями
 
@@ -87,6 +91,7 @@
 | Billing | `backend/apps/billing` | `frontend/src/features/finance` | ledger/concurrency/API/e2e |
 | Search/notifications | `backend/apps/search`, `notifications` | відповідні feature modules | role-scope/task idempotency/e2e |
 | Audit/analytics | `backend/apps/audit`, `analytics` | відповідні feature modules | immutability/totals/API/e2e |
+| Booking requests/Telegram | `backend/apps/booking_requests` | `frontend/src/booking-requests`, profile/settings integration UI | RBAC/idempotency/webhook/delivery/a11y/e2e |
 
 Лише інтегратор змінює root Compose/CI та регенерує TypeScript client. Агент не змінює сусідній домен без явної залежності в packet.
 
@@ -186,6 +191,15 @@
 | TP-1006 | Filtered CSV журналу фінансових операцій; prototype `data-finance-admin`; GAP-18; [frozen contract](../architecture/tp-1006-finance-operation-export-contract.md) | Admin-only `GET /finance/operations/export`; exact six main-list filters без cursor, summary-first stable 41-column UTF-8 BOM CSV, 5000 rows/366 days, no phone/internal UUID/raw ledger/audit/clinical fields, no-store | `Експортувати CSV` лише admin у operations header: applied query only, pending/disabled, server filename, success/error/retry, shift/filters/rows лишаються видимими, 44px target | `done` 2026-07-23: 6 focused backend, 28 focused frontend, 401 canonical backend, 211 canonical frontend і 40 axe; live HTTP bytes/headers та desktop/tablet/mobile gates green. [Evidence](../evidence/tp-1006/README.md). Не входить: reception export, audit, receipt print/send, PDF/XLSX/jobs |
 | TP-1007 | Filtered CSV журналу дій; prototype `#exportAuditLog`; GAP-18; [frozen contract](../architecture/tp-1007-audit-export-contract.md) | Admin-only `GET /audit-events/export`; exact five list filters без cursor, summary-first stable 28-column UTF-8 BOM CSV, 5000 rows/366 days, no before/after/note/correlation/actor-email/object-ID/clinical/security payload, no-store | `Експортувати CSV` у `/audit` heading: applied query only, pending/disabled, server filename, success/error/retry, filters/list/detail лишаються видимими, 44px target | `done` 2026-07-23: 6 focused backend, 8 AuditPage scenarios, 407 canonical backend, 213 frontend і 40 axe; live HTTP bytes/headers та desktop/tablet/mobile gates green. [Evidence](../evidence/tp-1007/README.md). Не входить: non-admin export, full snapshots, legal archive, retention, PDF/XLSX/jobs |
 
+### Етап 11 — заявки та інтеграції
+
+| ID | Вертикальний результат і джерела | API та інваріанти | UI, доступ і стани | Залежності, доказ і «не входить» |
+|---|---|---|---|---|
+| TP-1008 | Role-scoped реєстр заявок; [frozen contract](../architecture/tp-1008-1011-booking-requests-telegram-contract.md) | `GET /booking-requests`, `GET /booking-requests/{id}`, `POST /booking-requests/{id}/process`; immutable contact payload з optional client name/phone/service/comment, NEW→PROCESSED, row lock/version, repeated process idempotent, same-transaction audit | `/booking-requests` для admin/reception: counts, status/source/search/cursor, desktop table/mobile cards, reload-stable detail, explicit empty-field fallbacks, process/conflict/already states | `done` 2026-07-28: 11 focused backend, 8 focused frontend, 426 canonical backend, 223 frontend і 42 axe; role/responsive/optional-field browser gates green. [Evidence](../evidence/tp-1008/README.md). Не входить: external create, token, Telegram, edit/delete, patient/appointment conversion |
+| TP-1009 | Server-to-server прийом заявок і admin token lifecycle; [API guide](../integrations/booking-requests-api.md) | `GET /booking-request-integration`, `POST /booking-request-integration/token/rotate`, `POST /integrations/booking-requests`; digest-only Bearer, one-time plaintext, strict payload, rate limit, Idempotency-Key/payload hash | `/settings` integration tab: generate/rotate warning/copy-once; external guide/OpenAPI placeholder-only | `done` 2026-07-28: 8 focused backend, 2 focused frontend, 434 canonical backend, 225 frontend і 42 axe; live create/replay/mismatch та responsive browser gates green. [Evidence](../evidence/tp-1009/README.md). Не входить: browser secret, multiple tokens, Telegram |
+| TP-1010 | Private Telegram authorization і durable fan-out | `GET /telegram/subscription`, `POST /telegram/link-intents`, `DELETE /telegram/subscription`, verified Telegram webhook; one-time link, private-chat/role checks, update dedupe, delivery outbox/retry | Personal profile connect/disconnect; нова заявка надходить усім enabled eligible admin/reception chats | `planned`; TP-1009. Fake Bot API/link/webhook/fan-out/retry gates. Не входить: callback/process sync, groups, real production token |
+| TP-1011 | Inline process і синхронізація всіх Telegram copies | Authorized `br:p:<uuid>` callback викликає той самий domain service; answerCallbackQuery, stale-version delivery edit, 429/backoff/permanent-failure isolation | `✅ Оброблено` в боті; після CRM або bot action доступні messages best-effort змінюють status, прибирають action і зберігають CRM link | `planned`; TP-1010 + rotated production bot token. Race/replay/cross-chat/production gates. Не входить: гарантія edit видалених/blocked messages, client chatbot |
+
 ## 5. Покриття acceptance criteria
 
 | AC | Primary packet | Обов’язковий інтеграційний gate |
@@ -216,4 +230,4 @@
 
 ## 6. Порядок найближчого запуску
 
-ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201—TP-207, TP-301—TP-303, TP-401—TP-404, TP-501—TP-503, TP-601—TP-605, TP-701—TP-704, TP-801—TP-804, TP-901—TP-904 і post-MVP TP-1001—TP-1007 завершено. TP-904 закрив MVP із `23/23 verified`; TP-1001 закрив GAP-11 supplier directory, TP-1002—TP-1007 — усі погоджені safe CSV slices та GAP-18.
+ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201—TP-207, TP-301—TP-303, TP-401—TP-404, TP-501—TP-503, TP-601—TP-605, TP-701—TP-704, TP-801—TP-804, TP-901—TP-904 і post-MVP TP-1001—TP-1009 завершено. TP-904 закрив MVP із `23/23 verified`; TP-1001 закрив GAP-11 supplier directory, TP-1002—TP-1007 — safe CSV slices та GAP-18, TP-1008 — role-scoped CRM register заявок, TP-1009 — Bearer token lifecycle та external create API. Наступний packet — `TP-1010 planned`: private Telegram authorization і durable fan-out за [планом TP-1008—TP-1011](booking-requests-telegram-implementation-plan.md).

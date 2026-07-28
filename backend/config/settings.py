@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     "apps.clinic",
     "apps.patients",
     "apps.work_items",
+    "apps.booking_requests",
     "apps.scheduling",
     "apps.inventory",
     "apps.visits",
@@ -194,6 +195,26 @@ LOGIN_RATE_LIMIT_WINDOW_SECONDS = env_int("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 15 
 LOGIN_RATE_LIMIT_EMAIL_ATTEMPTS = env_int("LOGIN_RATE_LIMIT_EMAIL_ATTEMPTS", 5)
 LOGIN_RATE_LIMIT_IP_ATTEMPTS = env_int("LOGIN_RATE_LIMIT_IP_ATTEMPTS", 30)
 LOGIN_RATE_LIMIT_TRUSTED_PROXY_COUNT = env_int("LOGIN_RATE_LIMIT_TRUSTED_PROXY_COUNT", 1)
+BOOKING_REQUEST_API_RATE_LIMIT_ATTEMPTS = env_int(
+    "BOOKING_REQUEST_API_RATE_LIMIT_ATTEMPTS",
+    60,
+)
+BOOKING_REQUEST_API_RATE_LIMIT_WINDOW_SECONDS = env_int(
+    "BOOKING_REQUEST_API_RATE_LIMIT_WINDOW_SECONDS",
+    60,
+)
+BOOKING_REQUEST_API_INVALID_ATTEMPTS = env_int(
+    "BOOKING_REQUEST_API_INVALID_ATTEMPTS",
+    30,
+)
+BOOKING_REQUEST_API_INVALID_WINDOW_SECONDS = env_int(
+    "BOOKING_REQUEST_API_INVALID_WINDOW_SECONDS",
+    15 * 60,
+)
+BOOKING_REQUEST_API_TRUSTED_PROXY_COUNT = env_int(
+    "BOOKING_REQUEST_API_TRUSTED_PROXY_COUNT",
+    LOGIN_RATE_LIMIT_TRUSTED_PROXY_COUNT,
+)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 CACHE_BACKEND = os.getenv(
@@ -230,6 +251,7 @@ SPECTACULAR_SETTINGS = {
         "CashMovementTypeEnum": "apps.billing.serializers.CASH_MOVEMENT_TYPES",
         "CashShiftStatusEnum": "apps.billing.models.CashShiftStatus",
         "InventoryOperationKindEnum": "apps.inventory.models.InventoryOperationKind",
+        "BookingRequestStatusEnum": "apps.booking_requests.models.BookingRequestStatus",
         "PaymentMethodEnum": "apps.billing.models.PaymentMethod",
         "PostedFinanceStatusEnum": "apps.billing.serializers.POSTED_FINANCE_STATUSES",
         "ReceivableStatusEnum": "apps.billing.models.ReceivableStatus",
