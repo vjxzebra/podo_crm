@@ -7,12 +7,14 @@ import { GlobalSearchOverlay } from "../search/GlobalSearchOverlay";
 import { NOTIFICATION_COUNT_EVENT } from "../notifications/notificationApi";
 import { Icon } from "./Icon";
 import { findRouteByPath } from "./routes";
+import { TelegramDialog } from "../telegram/TelegramDialog";
 
 export function AppShell() {
   const location = useLocation();
   const currentRoute = findRouteByPath(location.pathname);
   const { state } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isTelegramOpen, setIsTelegramOpen] = useState(false);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const searchTriggerRef = useRef<HTMLElement | null>(null);
   const desktopSearchRef = useRef<HTMLButtonElement>(null);
@@ -66,6 +68,7 @@ export function AppShell() {
     return null;
   }
   const showForbiddenNotice = new URLSearchParams(location.search).get("notice") === "forbidden";
+  const canUseTelegram = state.session.route_ids.includes("booking-requests");
 
   return (
     <div className="app-shell">
@@ -97,6 +100,16 @@ export function AppShell() {
               <span className="session-role__dot" />
               {roleLabels[state.session.user.role]}
             </span>
+            {canUseTelegram ? (
+              <button
+                aria-label="Telegram-сповіщення"
+                className="icon-button topbar__telegram"
+                onClick={() => { setIsTelegramOpen(true); }}
+                type="button"
+              >
+                <Icon name="inbox" />
+              </button>
+            ) : null}
             <Link
               aria-label={notificationUnreadCount === 0
                 ? "Сповіщення: немає непрочитаних"
@@ -129,6 +142,7 @@ export function AppShell() {
       </div>
       <MobileNavigation onSearchOpen={openSearch} />
       {isSearchOpen ? <GlobalSearchOverlay onClose={() => { closeSearch(true); }} onNavigate={() => { closeSearch(false); }} /> : null}
+      {isTelegramOpen ? <TelegramDialog onClose={() => { setIsTelegramOpen(false); }} /> : null}
     </div>
   );
 }

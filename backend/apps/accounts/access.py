@@ -10,6 +10,7 @@ class AccessScope(StrEnum):
     PATIENT_SAFE = "patient:safe"
     MEDICAL = "medical"
     WORK_ITEMS = "work-items"
+    BOOKING_REQUESTS = "booking-requests"
     FINANCE = "finance"
     CASH_SHIFT = "cash-shift"
     INVENTORY = "inventory"
@@ -37,6 +38,7 @@ ROLE_SCOPES: dict[str, frozenset[AccessScope]] = {
             AccessScope.CALENDAR_SHARED,
             AccessScope.PATIENT_SAFE,
             AccessScope.WORK_ITEMS,
+            AccessScope.BOOKING_REQUESTS,
             AccessScope.FINANCE,
             AccessScope.CASH_SHIFT,
         }
@@ -57,6 +59,7 @@ ROLE_ROUTE_IDS: dict[str, tuple[str, ...]] = {
         "calendar",
         "patients",
         "work-items",
+        "booking-requests",
         "finance",
         "notifications",
     ),
@@ -65,6 +68,7 @@ ROLE_ROUTE_IDS: dict[str, tuple[str, ...]] = {
         "calendar",
         "patients",
         "work-items",
+        "booking-requests",
         "finance",
         "inventory",
         "analytics",

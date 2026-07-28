@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     "apps.clinic",
     "apps.patients",
     "apps.work_items",
+    "apps.booking_requests",
     "apps.scheduling",
     "apps.inventory",
     "apps.visits",
@@ -194,6 +195,36 @@ LOGIN_RATE_LIMIT_WINDOW_SECONDS = env_int("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 15 
 LOGIN_RATE_LIMIT_EMAIL_ATTEMPTS = env_int("LOGIN_RATE_LIMIT_EMAIL_ATTEMPTS", 5)
 LOGIN_RATE_LIMIT_IP_ATTEMPTS = env_int("LOGIN_RATE_LIMIT_IP_ATTEMPTS", 30)
 LOGIN_RATE_LIMIT_TRUSTED_PROXY_COUNT = env_int("LOGIN_RATE_LIMIT_TRUSTED_PROXY_COUNT", 1)
+BOOKING_REQUEST_API_RATE_LIMIT_ATTEMPTS = env_int(
+    "BOOKING_REQUEST_API_RATE_LIMIT_ATTEMPTS",
+    60,
+)
+BOOKING_REQUEST_API_RATE_LIMIT_WINDOW_SECONDS = env_int(
+    "BOOKING_REQUEST_API_RATE_LIMIT_WINDOW_SECONDS",
+    60,
+)
+BOOKING_REQUEST_API_INVALID_ATTEMPTS = env_int(
+    "BOOKING_REQUEST_API_INVALID_ATTEMPTS",
+    30,
+)
+BOOKING_REQUEST_API_INVALID_WINDOW_SECONDS = env_int(
+    "BOOKING_REQUEST_API_INVALID_WINDOW_SECONDS",
+    15 * 60,
+)
+BOOKING_REQUEST_API_TRUSTED_PROXY_COUNT = env_int(
+    "BOOKING_REQUEST_API_TRUSTED_PROXY_COUNT",
+    LOGIN_RATE_LIMIT_TRUSTED_PROXY_COUNT,
+)
+TELEGRAM_BOT_TOKEN = env_secret("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_WEBHOOK_SECRET = env_secret("TELEGRAM_WEBHOOK_SECRET", "")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "podo_crm_pod_bot")
+TELEGRAM_API_BASE_URL = os.getenv("TELEGRAM_API_BASE_URL", "https://api.telegram.org")
+TELEGRAM_REQUEST_TIMEOUT_SECONDS = env_int("TELEGRAM_REQUEST_TIMEOUT_SECONDS", 5)
+TELEGRAM_LINK_INTENT_TTL_SECONDS = env_int("TELEGRAM_LINK_INTENT_TTL_SECONDS", 10 * 60)
+TELEGRAM_DELIVERY_RETRY_BASE_SECONDS = env_int("TELEGRAM_DELIVERY_RETRY_BASE_SECONDS", 60)
+TELEGRAM_DELIVERY_RETRY_MAX_SECONDS = env_int("TELEGRAM_DELIVERY_RETRY_MAX_SECONDS", 60 * 60)
+TELEGRAM_DELIVERY_MAX_ATTEMPTS = env_int("TELEGRAM_DELIVERY_MAX_ATTEMPTS", 8)
+CRM_PUBLIC_URL = os.getenv("CRM_PUBLIC_URL", "http://localhost:8088")
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 CACHE_BACKEND = os.getenv(
@@ -230,6 +261,7 @@ SPECTACULAR_SETTINGS = {
         "CashMovementTypeEnum": "apps.billing.serializers.CASH_MOVEMENT_TYPES",
         "CashShiftStatusEnum": "apps.billing.models.CashShiftStatus",
         "InventoryOperationKindEnum": "apps.inventory.models.InventoryOperationKind",
+        "BookingRequestStatusEnum": "apps.booking_requests.models.BookingRequestStatus",
         "PaymentMethodEnum": "apps.billing.models.PaymentMethod",
         "PostedFinanceStatusEnum": "apps.billing.serializers.POSTED_FINANCE_STATUSES",
         "ReceivableStatusEnum": "apps.billing.models.ReceivableStatus",
@@ -277,6 +309,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "dispatch-due-notification-reminders": {
         "task": "apps.notifications.tasks.dispatch_due_notification_reminders",
+        "schedule": 60,
+    },
+    "dispatch-telegram-booking-request-deliveries": {
+        "task": "apps.booking_requests.tasks.dispatch_telegram_booking_request_deliveries",
         "schedule": 60,
     },
 }

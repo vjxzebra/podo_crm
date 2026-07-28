@@ -25,6 +25,10 @@ class HasWorkItemAccess(HasScope):
     required_scope = AccessScope.WORK_ITEMS
 
 
+class HasBookingRequestAccess(HasScope):
+    required_scope = AccessScope.BOOKING_REQUESTS
+
+
 class HasFinanceAccess(HasScope):
     required_scope = AccessScope.FINANCE
 

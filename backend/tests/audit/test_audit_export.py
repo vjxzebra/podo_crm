@@ -82,7 +82,7 @@ def test_export_is_summary_first_ordered_minimal_and_read_only():
 
     columns, rows = parsed_rows(response)
     assert columns == list(AUDIT_EXPORT_COLUMNS)
-    assert len(columns) == 28
+    assert len(columns) == 29
     assert [row["row_type"] for row in rows] == [
         "REPORT_SUMMARY",
         "AUDIT_EVENT",
@@ -91,6 +91,7 @@ def test_export_is_summary_first_ordered_minimal_and_read_only():
     assert rows[0]["event_count"] == "2"
     assert rows[0]["team_count"] == "1"
     assert rows[0]["settings_count"] == "1"
+    assert rows[0]["booking_requests_count"] == "0"
     assert rows[0]["inventory_count"] == "0"
     assert (
         [row["event_id"] for row in rows[1:]]

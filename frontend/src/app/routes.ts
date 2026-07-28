@@ -66,6 +66,17 @@ export const routeRegistry = [
     requiresSession: true,
   },
   {
+    id: "booking-requests",
+    path: "/booking-requests",
+    label: "Заявки",
+    shortLabel: "Заявки",
+    description: "Звернення на запис із сайту та соцмереж",
+    icon: "inbox",
+    group: "workspace",
+    surface: "module",
+    requiresSession: true,
+  },
+  {
     id: "finance",
     path: "/finance",
     label: "Фінанси",

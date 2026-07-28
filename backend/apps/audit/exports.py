@@ -25,6 +25,7 @@ AUDIT_EXPORT_COLUMNS = (
     "settings_count",
     "patients_count",
     "work_items_count",
+    "booking_requests_count",
     "scheduling_count",
     "medical_count",
     "visits_count",

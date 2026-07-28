@@ -290,6 +290,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/booking-request-integration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return safe booking-request API credential metadata */
+        get: operations["booking_request_integration_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/booking-request-integration/token/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate or rotate the booking-request API token */
+        post: operations["booking_request_integration_token_rotate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/booking-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List booking requests visible to admin and reception */
+        get: operations["booking_request_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/booking-requests/{booking_request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve one booking request */
+        get: operations["booking_request_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/booking-requests/{booking_request_id}/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Idempotently mark one booking request as processed */
+        post: operations["booking_request_process"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/calendar": {
         parameters: {
             query?: never;
@@ -560,6 +645,40 @@ export interface paths {
         get: operations["finance_operation_export"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/booking-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a booking request from a server-side integration */
+        post: operations["external_booking_request_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/telegram/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Telegram webhook updates */
+        post: operations["telegram_webhook_receive"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1120,6 +1239,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/telegram/link-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a one-time Telegram deep link for current user */
+        post: operations["telegram_link_intent_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/telegram/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return current user's Telegram subscription status */
+        get: operations["telegram_subscription_retrieve"];
+        put?: never;
+        post?: never;
+        /** Disable current user's Telegram subscription */
+        delete: operations["telegram_subscription_disconnect"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -1657,6 +1811,71 @@ export interface components {
             /** Format: date-time */
             starts_at: string;
         };
+        BookingRequest: {
+            client_name?: string;
+            contact_handle?: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            external_reference?: string;
+            /** Format: uuid */
+            readonly id: string;
+            message?: string;
+            phone?: string;
+            /** Format: date-time */
+            preferred_at?: string | null;
+            /** Format: date-time */
+            processed_at?: string | null;
+            processed_by_display_name?: string;
+            readonly public_number: string;
+            service?: string;
+            source: components["schemas"]["SourceEnum"];
+            readonly source_label: string;
+            status?: components["schemas"]["BookingRequestStatusEnum"];
+            readonly status_label: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            version?: number;
+        };
+        BookingRequestApiCredential: {
+            readonly is_configured: boolean;
+            /** Format: date-time */
+            readonly rotated_at: string | null;
+            readonly rotated_by_display_name: string;
+            readonly token_hint: string;
+            readonly version: number;
+        };
+        BookingRequestApiCredentialRotated: {
+            readonly is_configured: boolean;
+            /** Format: date-time */
+            readonly rotated_at: string | null;
+            readonly rotated_by_display_name: string;
+            readonly token: string;
+            readonly token_hint: string;
+            readonly version: number;
+        };
+        BookingRequestApiCredentialRotateRequest: {
+            confirm: boolean;
+            version: number;
+        };
+        BookingRequestCounts: {
+            new: number;
+            processed: number;
+            total: number;
+        };
+        BookingRequestListResponse: {
+            booking_requests: components["schemas"]["BookingRequest"][];
+            counts: components["schemas"]["BookingRequestCounts"];
+            next_cursor: string | null;
+        };
+        BookingRequestProcessRequest: {
+            version: number;
+        };
+        /**
+         * @description * `NEW` - Нова
+         *     * `PROCESSED` - Оброблена
+         * @enum {string}
+         */
+        BookingRequestStatusEnum: "NEW" | "PROCESSED";
         /**
          * @description * `day` - day
          *     * `week` - week
@@ -1966,6 +2185,31 @@ export interface components {
                 [key: string]: string[];
             };
             message: string;
+        };
+        ExternalBookingRequestRequest: {
+            /** @default  */
+            client_name: string;
+            /** @default  */
+            contact_handle: string;
+            /** @default  */
+            external_reference: string;
+            /** @default  */
+            message: string;
+            /** @default  */
+            phone: string;
+            /** Format: date-time */
+            preferred_at?: string | null;
+            /** @default  */
+            service: string;
+            source: components["schemas"]["SourceEnum"];
+        };
+        ExternalBookingRequestResponse: {
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: uuid */
+            readonly id: string;
+            readonly public_number: string;
+            status?: components["schemas"]["BookingRequestStatusEnum"];
         };
         FinanceCashAdjustment: {
             actor: components["schemas"]["FinancePaymentActor"];
@@ -2929,6 +3173,13 @@ export interface components {
             id: number;
             role: components["schemas"]["RoleEnum"];
         };
+        /**
+         * @description * `INSTAGRAM` - Instagram
+         *     * `FACEBOOK` - Facebook
+         *     * `WEBSITE` - Сайт
+         * @enum {string}
+         */
+        SourceEnum: "INSTAGRAM" | "FACEBOOK" | "WEBSITE";
         SpecialistSummary: {
             display_name: string;
             id: number;
@@ -3113,6 +3364,24 @@ export interface components {
         };
         TeamUserList: {
             users: components["schemas"]["TeamUser"][];
+        };
+        TelegramLinkIntent: {
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uri */
+            url: string;
+        };
+        TelegramSubscription: {
+            /** Format: date-time */
+            disabled_at?: string | null;
+            first_name?: string;
+            is_enabled?: boolean;
+            readonly is_linked: boolean;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** Format: date-time */
+            linked_at: string;
+            username?: string;
         };
         TemporaryPasswordRequestRequest: {
             temporary_password: string;
@@ -4091,6 +4360,7 @@ export interface operations {
                  *     * `settings` - settings
                  *     * `patients` - patients
                  *     * `work_items` - work_items
+                 *     * `booking_requests` - booking_requests
                  *     * `scheduling` - scheduling
                  *     * `medical` - medical
                  *     * `visits` - visits
@@ -4098,7 +4368,7 @@ export interface operations {
                  *     * `cash` - cash
                  *     * `inventory` - inventory
                  */
-                section?: "accounts" | "team" | "settings" | "patients" | "work_items" | "scheduling" | "medical" | "visits" | "billing" | "cash" | "inventory";
+                section?: "accounts" | "team" | "settings" | "patients" | "work_items" | "booking_requests" | "scheduling" | "medical" | "visits" | "billing" | "cash" | "inventory";
             };
             header?: never;
             path?: never;
@@ -4207,6 +4477,7 @@ export interface operations {
                  *     * `settings` - settings
                  *     * `patients` - patients
                  *     * `work_items` - work_items
+                 *     * `booking_requests` - booking_requests
                  *     * `scheduling` - scheduling
                  *     * `medical` - medical
                  *     * `visits` - visits
@@ -4214,7 +4485,7 @@ export interface operations {
                  *     * `cash` - cash
                  *     * `inventory` - inventory
                  */
-                section?: "accounts" | "team" | "settings" | "patients" | "work_items" | "scheduling" | "medical" | "visits" | "billing" | "cash" | "inventory";
+                section?: "accounts" | "team" | "settings" | "patients" | "work_items" | "booking_requests" | "scheduling" | "medical" | "visits" | "billing" | "cash" | "inventory";
             };
             header?: never;
             path?: never;
@@ -4446,6 +4717,269 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    booking_request_integration_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingRequestApiCredential"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    booking_request_integration_token_rotate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingRequestApiCredentialRotateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BookingRequestApiCredentialRotateRequest"];
+                "multipart/form-data": components["schemas"]["BookingRequestApiCredentialRotateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingRequestApiCredentialRotated"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    booking_request_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                search?: string;
+                /**
+                 * @description * `ALL` - ALL
+                 *     * `INSTAGRAM` - INSTAGRAM
+                 *     * `FACEBOOK` - FACEBOOK
+                 *     * `WEBSITE` - WEBSITE
+                 */
+                source?: "ALL" | "INSTAGRAM" | "FACEBOOK" | "WEBSITE";
+                /**
+                 * @description * `ALL` - ALL
+                 *     * `NEW` - NEW
+                 *     * `PROCESSED` - PROCESSED
+                 */
+                status?: "ALL" | "NEW" | "PROCESSED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingRequestListResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    booking_request_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingRequest"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    booking_request_process: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingRequestProcessRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BookingRequestProcessRequest"];
+                "multipart/form-data": components["schemas"]["BookingRequestProcessRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingRequest"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
             };
         };
     };
@@ -5494,6 +6028,145 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                     "text/csv": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    external_booking_request_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable unique value for one logical form submission. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalBookingRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExternalBookingRequestRequest"];
+                "multipart/form-data": components["schemas"]["ExternalBookingRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalBookingRequestResponse"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalBookingRequestResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Rate limit exceeded; Retry-After is included. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    telegram_webhook_receive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -7646,6 +8319,110 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    telegram_link_intent_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramLinkIntent"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    telegram_subscription_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramSubscription"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    telegram_subscription_disconnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -7,6 +7,7 @@ class AuditSection(StrEnum):
     SETTINGS = "settings"
     PATIENTS = "patients"
     WORK_ITEMS = "work_items"
+    BOOKING_REQUESTS = "booking_requests"
     SCHEDULING = "scheduling"
     MEDICAL = "medical"
     VISITS = "visits"
@@ -19,6 +20,8 @@ class AuditAction(StrEnum):
     PASSWORD_CHANGED = "accounts.password_changed"  # noqa: S105
     PASSWORD_RESET_REQUESTED = "accounts.password_reset_requested"  # noqa: S105
     TEMPORARY_PASSWORD_SET = "accounts.temporary_password_set"  # noqa: S105
+    TELEGRAM_SUBSCRIPTION_LINKED = "accounts.telegram_subscription_linked"
+    TELEGRAM_SUBSCRIPTION_UNLINKED = "accounts.telegram_subscription_unlinked"
 
     USER_CREATED = "team.user_created"
     USER_UPDATED = "team.user_updated"
@@ -39,6 +42,7 @@ class AuditAction(StrEnum):
     SERVICE_REACTIVATED = "settings.service_reactivated"
     APPOINTMENT_STATUS_CONFIG_UPDATED = "settings.appointment_status_config_updated"
     CLINIC_SCHEDULE_UPDATED = "settings.clinic_schedule_updated"
+    BOOKING_REQUEST_API_TOKEN_ROTATED = "settings.booking_request_api_token_rotated"  # noqa: S105
 
     PATIENT_CREATED = "patients.patient_created"
     PATIENT_UPDATED = "patients.patient_updated"
@@ -48,6 +52,9 @@ class AuditAction(StrEnum):
     WORK_ITEM_UPDATED = "work_items.work_item_updated"
     WORK_ITEM_COMPLETED = "work_items.work_item_completed"
     WORK_ITEM_REOPENED = "work_items.work_item_reopened"
+
+    BOOKING_REQUEST_CREATED = "booking_requests.request_created"
+    BOOKING_REQUEST_PROCESSED = "booking_requests.request_processed"
 
     APPOINTMENT_CREATED = "scheduling.appointment_created"
     APPOINTMENT_UPDATED = "scheduling.appointment_updated"
@@ -92,6 +99,8 @@ EVENT_SECTIONS: dict[str, AuditSection] = {
     AuditAction.PASSWORD_CHANGED: AuditSection.ACCOUNTS,
     AuditAction.PASSWORD_RESET_REQUESTED: AuditSection.ACCOUNTS,
     AuditAction.TEMPORARY_PASSWORD_SET: AuditSection.ACCOUNTS,
+    AuditAction.TELEGRAM_SUBSCRIPTION_LINKED: AuditSection.ACCOUNTS,
+    AuditAction.TELEGRAM_SUBSCRIPTION_UNLINKED: AuditSection.ACCOUNTS,
     AuditAction.USER_CREATED: AuditSection.TEAM,
     AuditAction.USER_UPDATED: AuditSection.TEAM,
     AuditAction.USER_ROLE_CHANGED: AuditSection.TEAM,
@@ -110,6 +119,7 @@ EVENT_SECTIONS: dict[str, AuditSection] = {
     AuditAction.SERVICE_REACTIVATED: AuditSection.SETTINGS,
     AuditAction.APPOINTMENT_STATUS_CONFIG_UPDATED: AuditSection.SETTINGS,
     AuditAction.CLINIC_SCHEDULE_UPDATED: AuditSection.SETTINGS,
+    AuditAction.BOOKING_REQUEST_API_TOKEN_ROTATED: AuditSection.SETTINGS,
     AuditAction.PATIENT_CREATED: AuditSection.PATIENTS,
     AuditAction.PATIENT_UPDATED: AuditSection.PATIENTS,
     AuditAction.MEDICAL_RECORD_UPDATED: AuditSection.MEDICAL,
@@ -117,6 +127,8 @@ EVENT_SECTIONS: dict[str, AuditSection] = {
     AuditAction.WORK_ITEM_UPDATED: AuditSection.WORK_ITEMS,
     AuditAction.WORK_ITEM_COMPLETED: AuditSection.WORK_ITEMS,
     AuditAction.WORK_ITEM_REOPENED: AuditSection.WORK_ITEMS,
+    AuditAction.BOOKING_REQUEST_CREATED: AuditSection.BOOKING_REQUESTS,
+    AuditAction.BOOKING_REQUEST_PROCESSED: AuditSection.BOOKING_REQUESTS,
     AuditAction.APPOINTMENT_CREATED: AuditSection.SCHEDULING,
     AuditAction.APPOINTMENT_UPDATED: AuditSection.SCHEDULING,
     AuditAction.APPOINTMENT_RESCHEDULED: AuditSection.SCHEDULING,

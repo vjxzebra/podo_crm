@@ -147,6 +147,8 @@ if [ ! -s "$BASE_DIR/shared/production.env" ]; then
     printf 'POSTGRES_DB=podoria\n'
     printf 'POSTGRES_USER=podoria\n'
     printf 'MINIO_BUCKET_NAME=podoria-private\n'
+    printf 'TELEGRAM_BOT_USERNAME=podo_crm_pod_bot\n'
+    printf 'CRM_PUBLIC_URL=https://crm.rozhenko.km.ua\n'
     printf 'WEB_CONCURRENCY=2\n'
     printf 'CELERY_WORKER_CONCURRENCY=1\n'
   } > "$BASE_DIR/shared/production.env"

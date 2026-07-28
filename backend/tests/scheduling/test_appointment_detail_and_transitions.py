@@ -1,9 +1,10 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from threading import Barrier
 
 import pytest
 from django.db import close_old_connections, connections
+from django.utils import timezone
 from drf_spectacular.generators import SchemaGenerator
 
 from apps.accounts.models import User, UserRole
@@ -19,6 +20,16 @@ from tests.scheduling.test_create_appointment import (
     create_user,
     scheduling_fixture,
 )
+
+
+def next_monday_at_ten() -> datetime:
+    local_now = timezone.localtime()
+    days_until_monday = 7 - local_now.weekday()
+    return datetime.combine(
+        (local_now + timedelta(days=days_until_monday)).date(),
+        time(10, 0),
+        tzinfo=KYIV,
+    )
 
 
 def create_appointment_response(
@@ -60,6 +71,7 @@ def test_detail_is_role_scoped_and_describes_allowed_actions() -> None:
         service=service,
         room=room,
         patient=patient,
+        starts_at=next_monday_at_ten(),
     )
     url = f"/api/v1/appointments/{created['id']}"
 
@@ -248,6 +260,7 @@ def test_no_show_requires_past_start_and_terminal_record_is_locked() -> None:
         service=service,
         room=room,
         patient=patient,
+        starts_at=next_monday_at_ten(),
     )
     past = create_appointment_response(
         actor=admin,

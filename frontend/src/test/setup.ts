@@ -14,6 +14,7 @@ export const adminSession = {
     "calendar",
     "patients",
     "work-items",
+    "booking-requests",
     "finance",
     "inventory",
     "analytics",
@@ -37,7 +38,7 @@ export const receptionSession = {
     display_name: "Тест Рецепція",
     role: "reception",
   },
-  route_ids: ["overview", "calendar", "patients", "work-items", "finance", "notifications"],
+  route_ids: ["overview", "calendar", "patients", "work-items", "booking-requests", "finance", "notifications"],
   notification_unread_count: 0,
   must_change_password: false,
   temporary_password_expires_at: null,
@@ -1306,6 +1307,33 @@ export const analyticsFixture = {
   ],
 } as const;
 
+export const bookingRequestFixture = {
+  id: "6b5b8b8a-2f79-4df6-8aba-6ab7a64091b8",
+  public_number: "REQ-A1B2C3D4E5",
+  source: "INSTAGRAM",
+  source_label: "Instagram",
+  status: "NEW",
+  status_label: "Нова",
+  client_name: "Ірина Шевченко",
+  phone: "+380 67 555 12 34",
+  service: "Консультація подолога",
+  contact_handle: "@iryna.care",
+  message: "Хочу записатися на консультацію після 16:00.",
+  preferred_at: "2026-07-30T16:30:00+03:00",
+  external_reference: "instagram-lead-104",
+  processed_by_display_name: "",
+  processed_at: null,
+  version: 1,
+  created_at: "2026-07-28T09:15:00+03:00",
+  updated_at: "2026-07-28T09:15:00+03:00",
+} as const;
+
+export const bookingRequestListFixture = {
+  booking_requests: [bookingRequestFixture],
+  counts: { new: 1, processed: 2, total: 3 },
+  next_cursor: null,
+} as const;
+
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -1352,6 +1380,12 @@ beforeEach(() => {
           unread_count: 0,
           next_cursor: null,
         }));
+      }
+      if (/\/api\/v1\/booking-requests\/[0-9a-f-]+$/.test(new URL(url).pathname) && method === "GET") {
+        return Promise.resolve(jsonResponse(bookingRequestFixture));
+      }
+      if (new URL(url).pathname === "/api/v1/booking-requests" && method === "GET") {
+        return Promise.resolve(jsonResponse(bookingRequestListFixture));
       }
       if (url.includes("/api/v1/clinic-profile") && method === "GET") {
         return Promise.resolve(jsonResponse(clinicProfile));

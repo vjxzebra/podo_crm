@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import {
   adminSession,
+  bookingRequestFixture,
   clinicService,
   financeOperationsFixture,
   financePaidOperation,
@@ -37,7 +38,7 @@ describe("application shell accessibility", () => {
     expect(results.violations).toEqual([]);
   });
 
-  it.each(["/", "/calendar", "/calendar?compose=appointment", "/patients", "/patients/c49d72c2-689d-4f54-91df-9a63845a02e7/overview", "/patients/c49d72c2-689d-4f54-91df-9a63845a02e7/visits", "/patients/c49d72c2-689d-4f54-91df-9a63845a02e7/photos", "/patients/c49d72c2-689d-4f54-91df-9a63845a02e7/recommendations", "/work-items", "/notifications", "/audit", "/analytics", "/finance", "/inventory", `/visits/${visitFixture.id}`, "/team", "/settings", "/previews/empty", "/previews/error", "/previews/forbidden", "/missing-route"])(
+  it.each(["/", "/calendar", "/calendar?compose=appointment", "/patients", "/patients/c49d72c2-689d-4f54-91df-9a63845a02e7/overview", "/patients/c49d72c2-689d-4f54-91df-9a63845a02e7/visits", "/patients/c49d72c2-689d-4f54-91df-9a63845a02e7/photos", "/patients/c49d72c2-689d-4f54-91df-9a63845a02e7/recommendations", "/work-items", "/booking-requests", `/booking-requests?request=${bookingRequestFixture.id}`, "/notifications", "/audit", "/analytics", "/finance", "/inventory", `/visits/${visitFixture.id}`, "/team", "/settings", "/previews/empty", "/previews/error", "/previews/forbidden", "/missing-route"])(
     "has no detectable accessibility violations at %s",
     async (path) => {
       const { container } = render(
@@ -67,6 +68,12 @@ describe("application shell accessibility", () => {
       }
       if (path === "/work-items") {
         await screen.findByText("Уточнити самопочуття після візиту");
+      }
+      if (path.startsWith("/booking-requests")) {
+        await screen.findAllByText("Ірина Шевченко");
+      }
+      if (path.includes("?request=")) {
+        await screen.findByRole("dialog", { name: bookingRequestFixture.public_number });
       }
       if (path === "/notifications") {
         await screen.findByRole("heading", { name: "Сповіщень ще немає" });

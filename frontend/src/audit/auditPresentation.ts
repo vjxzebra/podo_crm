@@ -6,6 +6,7 @@ export const auditSectionOptions: readonly { readonly value: AuditSection; reado
   { value: "settings", label: "Налаштування" },
   { value: "patients", label: "Пацієнти" },
   { value: "work_items", label: "Справи" },
+  { value: "booking_requests", label: "Заявки" },
   { value: "scheduling", label: "Записи" },
   { value: "medical", label: "Медична картка" },
   { value: "visits", label: "Прийоми" },
@@ -40,6 +41,7 @@ const actionLabels: Readonly<Record<string, string>> = {
   "settings.service_reactivated": "Відновлено послугу",
   "settings.appointment_status_config_updated": "Оновлено статус запису",
   "settings.clinic_schedule_updated": "Оновлено графік клініки",
+  "settings.booking_request_api_token_rotated": "Оновлено API-токен заявок",
   "patients.patient_created": "Створено пацієнта",
   "patients.patient_updated": "Оновлено пацієнта",
   "medical.record_updated": "Оновлено медичну картку",
@@ -49,6 +51,8 @@ const actionLabels: Readonly<Record<string, string>> = {
   "work_items.work_item_updated": "Оновлено справу",
   "work_items.work_item_completed": "Завершено справу",
   "work_items.work_item_reopened": "Повторно відкрито справу",
+  "booking_requests.request_created": "Створено заявку",
+  "booking_requests.request_processed": "Оброблено заявку",
   "scheduling.appointment_created": "Створено запис",
   "scheduling.appointment_updated": "Оновлено запис",
   "scheduling.appointment_rescheduled": "Перенесено запис",
@@ -107,6 +111,10 @@ const fieldLabels: Readonly<Record<string, string>> = {
   actual_cash_minor: "Фактична готівка",
   discrepancy_minor: "Розбіжність",
   completed_at: "Час завершення",
+  public_number: "Номер",
+  source: "Джерело",
+  processed_at: "Час обробки",
+  processed_by_display_name: "Обробив(-ла)",
   version: "Версія",
 };
 
@@ -179,10 +187,11 @@ export function auditObjectLink(object: AuditEventDetail["object"]): string | nu
   if (object.type === "appointment") return `/calendar?appointment=${encodedId}`;
   if (object.type === "visit") return `/visits/${encodedId}`;
   if (object.type === "work_item") return `/work-items?item=${encodedId}`;
+  if (object.type === "booking_request") return `/booking-requests?request=${encodedId}`;
   if (object.type === "material") return `/inventory?material=${encodedId}`;
   if (object.type === "supplier") return "/inventory?section=suppliers";
   if (object.type === "cash_shift") return `/finance/shifts?shift=${encodedId}`;
   if (object.type === "payment") return `/finance?operation=PAYMENT:${encodedId}`;
-  if (["clinic_profile", "room", "service", "appointment_status_config", "clinic_schedule"].includes(object.type)) return "/settings";
+  if (["clinic_profile", "room", "service", "appointment_status_config", "clinic_schedule", "booking_request_api_credential"].includes(object.type)) return "/settings";
   return null;
 }

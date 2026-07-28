@@ -102,7 +102,7 @@ describe("authenticated application shell", () => {
   });
 
   it("keeps authorization claims out of the route registry", () => {
-    expect(routeRegistry).toHaveLength(13);
+    expect(routeRegistry).toHaveLength(14);
     for (const route of routeRegistry) {
       expect(route.requiresSession).toBe(true);
       expect(Object.keys(route)).not.toContain("roles");
@@ -2435,6 +2435,95 @@ describe("session boundary and role-safe routes", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent("Профіль кабінету збережено");
     expect(screen.getByDisplayValue("Podoria Подологія")).toBeInTheDocument();
+  });
+
+  it("generates the first booking-request API token and clears it on dialog close", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const token = "podo_br_example-one-time-token";
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [clinicRoom] }))
+      .mockResolvedValueOnce(jsonResponse({
+        is_configured: false,
+        token_hint: "",
+        rotated_at: null,
+        rotated_by_display_name: "",
+        version: 0,
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        is_configured: true,
+        token_hint: "token",
+        rotated_at: "2026-07-28T10:00:00Z",
+        rotated_by_display_name: "Тест Адміністратор",
+        version: 1,
+        token,
+      }));
+    renderApp("/settings");
+
+    await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    fireEvent.click(screen.getByTestId("settings-integrations-tab"));
+    expect(await screen.findByRole("heading", { name: "API заявок на запис" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Згенерувати токен" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Новий API-токен" });
+    expect(within(dialog).getByDisplayValue(token)).toBeInTheDocument();
+    const rotateRequest = fetchMock.mock.calls.at(-1)?.[0];
+    expect(rotateRequest).toBeInstanceOf(Request);
+    expect(await (rotateRequest as Request).clone().json()).toEqual({ version: 0, confirm: true });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Я зберіг токен" }));
+
+    expect(screen.queryByDisplayValue(token)).not.toBeInTheDocument();
+    expect(screen.getByText("••••••token")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Згенерувати новий" })).toHaveFocus();
+    });
+  });
+
+  it("warns before token rotation and supports one-time clipboard copy", async () => {
+    const fetchMock = vi.mocked(fetch);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const token = "podo_br_rotated-example-token";
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse(clinicProfile))
+      .mockResolvedValueOnce(jsonResponse({ rooms: [clinicRoom] }))
+      .mockResolvedValueOnce(jsonResponse({
+        is_configured: true,
+        token_hint: "before",
+        rotated_at: "2026-07-28T09:00:00Z",
+        rotated_by_display_name: "Тест Адміністратор",
+        version: 2,
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        is_configured: true,
+        token_hint: "token",
+        rotated_at: "2026-07-28T10:00:00Z",
+        rotated_by_display_name: "Тест Адміністратор",
+        version: 3,
+        token,
+      }));
+    renderApp("/settings");
+
+    await screen.findByRole("heading", { name: "Налаштування кабінету" });
+    fireEvent.click(screen.getByTestId("settings-integrations-tab"));
+    await screen.findByRole("heading", { name: "API заявок на запис" });
+    fireEvent.click(screen.getByRole("button", { name: "Згенерувати новий" }));
+    const confirmation = screen.getByRole("alertdialog", { name: "Згенерувати новий токен?" });
+    expect(confirmation).toHaveTextContent("Поточний токен припинить діяти негайно");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Згенерувати новий" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Новий API-токен" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Копіювати токен" }));
+    expect(await within(dialog).findByRole("status")).toHaveTextContent("Токен скопійовано");
+    expect(writeText).toHaveBeenCalledWith(token);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Я зберіг токен" }));
+    expect(screen.queryByDisplayValue(token)).not.toBeInTheDocument();
   });
 
   it("creates a room from the empty state and preserves a duplicate-name conflict", async () => {

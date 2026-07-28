@@ -253,4 +253,39 @@ event, а production web image успішно зібрано ізольован�
 підтвердили відновлення без видалення volumes. Browser viewport скинуто,
 вкладки закрито, credentials лишилися тільки у Git-ignored `.env.local`.
 
-Post-MVP TP-1001—TP-1007 завершені; GAP-11 і GAP-18 мають статус `resolved`.
+Post-MVP TP-1001—TP-1009 завершені; GAP-11 і GAP-18 мають статус `resolved`.
+
+## Наступний етап — заявки та Telegram
+
+2026-07-28 зафіксовано
+[контракт TP-1008—TP-1011](../architecture/tp-1008-1011-booking-requests-telegram-contract.md)
+і [план реалізації](booking-requests-telegram-implementation-plan.md):
+
+- TP-1008 `done`: role-scoped домен/CRM-розділ заявок і idempotent
+  `NEW → PROCESSED`; ім’я, телефон, послуга й коментар клієнта необов’язкові;
+  canonical `426/426` backend, `223/223` frontend, role/responsive/optional-field
+  browser QA і [evidence](../evidence/tp-1008/README.md);
+- TP-1009 `done`: admin rotation digest-only Bearer token, external
+  server-to-server create API, Idempotency-Key і
+  [integration guide](../integrations/booking-requests-api.md); canonical
+  `434/434` backend, `225/225` frontend, `42/42` axe, live create/replay/mismatch,
+  responsive browser QA і [evidence](../evidence/tp-1009/README.md);
+- TP-1010 `done`: one-time private Telegram authorization, verified webhook,
+  `/start`/`/stop`, subscription dialog і durable fan-out усім enabled
+  admin/reception subscriptions; focused `25/25` booking-request backend,
+  canonical `440/440` backend, `227/227` frontend, OpenAPI/types/contracts,
+  production web image check і live desktop/mobile Telegram dialog QA green;
+  [evidence](../evidence/tp-1010/README.md);
+- TP-1011 `done`: authorized inline process callback через той самий domain
+  service, `answerCallbackQuery`, first-actor idempotency, best-effort cross-chat
+  `editMessageText` sync/retry, operations status command і
+  [production rollout runbook](../operations/telegram-rollout-runbook.md);
+  focused `29/29` booking-request backend, canonical `444/444` backend,
+  `227/227` frontend, contracts/typecheck/lint/build/runtime readiness green;
+  [evidence](../evidence/tp-1011/README.md).
+
+Оприлюднений у запиті Telegram bot token вважається скомпрометованим і не
+перенесений у tracked files. Перед production TP-1011 його потрібно відкликати
+через BotFather, створити новий і зберегти лише у production env/file secret.
+Новий bot token не потрібен для завершених TP-1008—TP-1011 локальних gates,
+але є обов'язковим перед production rollout.
