@@ -315,6 +315,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.booking_requests.tasks.dispatch_telegram_booking_request_deliveries",
         "schedule": 60,
     },
+    "dispatch-telegram-work-item-deliveries": {
+        "task": "apps.booking_requests.tasks.dispatch_telegram_work_item_deliveries",
+        "schedule": 60,
+    },
 }
 
 LOGGING = {

@@ -19,6 +19,7 @@ from apps.booking_requests.models import (
     TelegramLinkIntent,
     TelegramSubscription,
     TelegramUpdate,
+    WorkItemTelegramDelivery,
 )
 from apps.booking_requests.services import create_booking_request, process_booking_request
 from apps.booking_requests.telegram_services import (
@@ -27,6 +28,7 @@ from apps.booking_requests.telegram_services import (
     store_telegram_update,
 )
 from apps.booking_requests.telegram_transport import TelegramMessageResult, TelegramTransportError
+from apps.work_items.models import WorkItem, WorkItemKind
 
 PASSWORD = "correct horse battery staple"  # noqa: S105
 WEBHOOK_SECRET = "unit-test-webhook-secret"  # noqa: S105
@@ -135,6 +137,13 @@ class FakeTelegramClient:
 @pytest.mark.django_db
 def test_personal_link_intent_is_one_time_private_and_digest_only() -> None:
     admin = create_user(email="admin@example.test", role=UserRole.ADMIN)
+    existing_work_item = WorkItem.objects.create(
+        kind=WorkItemKind.OTHER,
+        title="Existing assigned work item",
+        due_at=timezone.now() + timedelta(hours=1),
+        assignee=admin,
+        created_by=admin,
+    )
     client = authenticated_client(admin)
 
     response = client.post("/api/v1/telegram/link-intents", {}, format="json")
@@ -166,6 +175,10 @@ def test_personal_link_intent_is_one_time_private_and_digest_only() -> None:
     assert subscription.is_enabled is True
     assert subscription.telegram_user_id == 1001
     assert subscription.chat_id == 2002
+    assert WorkItemTelegramDelivery.objects.filter(
+        work_item=existing_work_item,
+        subscription=subscription,
+    ).exists()
     assert TelegramUpdate.objects.count() == 1
     intent.refresh_from_db()
     assert intent.used_at is not None
@@ -181,14 +194,14 @@ def test_personal_link_intent_is_one_time_private_and_digest_only() -> None:
 
 
 @pytest.mark.django_db
-def test_link_rejects_podologist_expired_group_and_taken_identity() -> None:
+def test_link_allows_podologist_and_rejects_expired_group_and_taken_identity() -> None:
     admin = create_user(email="admin@example.test", role=UserRole.ADMIN)
     other = create_user(email="other@example.test", role=UserRole.RECEPTION)
     podologist = create_user(email="podologist@example.test", role=UserRole.PODOLOGIST)
-    forbidden = authenticated_client(podologist).post(
+    podologist_link = authenticated_client(podologist).post(
         "/api/v1/telegram/link-intents", {}, format="json"
     )
-    assert forbidden.status_code == 403
+    assert podologist_link.status_code == 201
 
     response = authenticated_client(admin).post("/api/v1/telegram/link-intents", {}, format="json")
     payload = parse_qs(urlparse(response.json()["url"]).query)["start"][0]

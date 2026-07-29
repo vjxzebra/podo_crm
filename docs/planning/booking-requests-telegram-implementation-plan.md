@@ -15,6 +15,8 @@ TP-1009 Bearer API, token rotation і документація
 TP-1010 Telegram authorization та fan-out
     ↓
 TP-1011 callback, cross-chat sync і production gate
+    ↓
+TP-1012 assigned work-item delivery, status sync і completion callback
 ```
 
 Кожен packet завершується окремою перевірюваною вертикаллю і не покладається на
@@ -184,7 +186,43 @@ projection. Зміна status у CRM запускає ту саму синхро
 - full backend/frontend/OpenAPI/migration/runtime/security gates green;
 - production evidence не містить token, chat id, phone, message або customer PII.
 
-## 6. Ризики та запобіжники
+## 6. TP-1012 — призначені справи у Telegram
+
+Статус: `done` 2026-07-29.
+
+Authoritative contract:
+[TP-1012](../architecture/tp-1012-work-item-telegram-contract.md).
+
+### Результат
+
+Кожний active працівник зі scope `work-items`, включно з podologist, може
+підключити private Telegram. Відкрита справа durable доставляється лише
+поточному відповідальному, показує open/overdue/completed/reassigned status і
+має кнопки завершення та exact CRM deep link.
+
+### Backend/UI
+
+1. Додати durable `WorkItemTelegramDelivery` зі stale-version та overdue
+   projection state.
+2. Записувати delivery у create/update transaction і підбирати пропущені rows
+   periodic dispatcher.
+3. Синхронізувати completion, reopen, reassignment і due transition через
+   `editMessageText`.
+4. Авторизувати `wi:c:<uuid>` callback лише для current assignee і викликати
+   той самий `update_work_item`, що CRM.
+5. Дозволити personal Telegram linking усім ролям із `work-items`, не
+   розширюючи booking-request fan-out beyond admin/reception.
+6. Показати Telegram control podologist у shell і оновити dialog copy.
+
+### Definition of done
+
+- assignee-only, callback/audit, unauthorized, reassignment й overdue tests;
+- migration forward/reverse/reapply;
+- canonical backend/frontend, lint, types, OpenAPI/contracts і build;
+- local migration/runtime readiness;
+- secrets і Telegram/customer identifiers відсутні у tracked evidence.
+
+## 7. Ризики та запобіжники
 
 | Ризик | Запобіжник |
 |---|---|
@@ -198,8 +236,11 @@ projection. Зміна status у CRM запускає ту саму синхро
 | Працівника деактивовано | eligibility recheck перед кожною delivery/callback |
 | PII або secrets у logs | allowlisted logging/audit, redaction regression tests |
 | Масова ротація request token ламає інтеграцію | confirm warning, hint/timestamp, documented rollout |
+| Справу бачить не той працівник | delivery лише current assignee; callback повторно перевіряє exact private identity та assignment |
+| Термін минув без domain mutation | periodic dispatcher окремо синхронізує overdue projection |
+| Перепризначення лишає активну стару кнопку | стара копія редагується на `Перепризначено` без inline actions |
 
-## 7. Готовність
+## 8. Готовність
 
 TP-1008 і TP-1009 завершені. Bearer token lifecycle, зовнішній idempotent API,
 OpenAPI, integration guide та admin settings перевірені автоматично, живим
@@ -214,6 +255,11 @@ callback, first-actor idempotency, cross-chat edit synchronization,
 retry/permanent-failure isolation і production rollout runbook покриті fake Bot
 API та runtime gates.
 
-Наступний етап — production rollout за
-[Telegram runbook](../operations/telegram-rollout-runbook.md) тільки після
-rotation скомпрометованого bot token.
+TP-1012 завершено локально без реального Telegram token: assignee-only
+work-item delivery, podologist linking, completion callback, reassignment і
+overdue projection покриті `450/450` backend, `227/227` frontend, migration,
+periodic dispatcher та runtime readiness gates.
+
+Наступний етап — окремо погоджений production deploy TP-1012 за
+[Telegram runbook](../operations/telegram-rollout-runbook.md). Bot token має
+бути rotated до rollout, якщо це ще не виконано.

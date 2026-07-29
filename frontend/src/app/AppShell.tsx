@@ -68,7 +68,7 @@ export function AppShell() {
     return null;
   }
   const showForbiddenNotice = new URLSearchParams(location.search).get("notice") === "forbidden";
-  const canUseTelegram = state.session.route_ids.includes("booking-requests");
+  const canUseTelegram = state.session.route_ids.includes("work-items");
 
   return (
     <div className="app-shell">

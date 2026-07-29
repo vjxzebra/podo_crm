@@ -127,6 +127,23 @@ describe("application shell accessibility", () => {
     expect(results.violations).toEqual([]);
   });
 
+  it("has no detectable violations in the open calendar date picker", async () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/calendar"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("heading", { name: "Розклад клініки" });
+    fireEvent.click(screen.getByRole("button", { name: /Обрати дату:/ }));
+    await screen.findByRole("dialog", { name: "Вибір дати календаря" });
+
+    const results = await axe.run(container, {
+      rules: { "color-contrast": { enabled: false } },
+    });
+
+    expect(results.violations).toEqual([]);
+  });
+
   it("has no detectable violations in the open cash-shift confirmation", async () => {
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const request = input instanceof Request ? input : new Request(input, init);
