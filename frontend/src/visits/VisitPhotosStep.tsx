@@ -70,15 +70,21 @@ export function VisitPhotosStep({
   editable,
   onPhotosChange,
 }: VisitPhotosStepProps) {
-  const beforeInput = useRef<HTMLInputElement>(null);
-  const afterInput = useRef<HTMLInputElement>(null);
+  const beforeFileInput = useRef<HTMLInputElement>(null);
+  const afterFileInput = useRef<HTMLInputElement>(null);
+  const beforeCameraInput = useRef<HTMLInputElement>(null);
+  const afterCameraInput = useRef<HTMLInputElement>(null);
   const [uploads, setUploads] = useState<Record<VisitPhotoKind, UploadState>>({
     BEFORE: EMPTY_UPLOAD,
     AFTER: EMPTY_UPLOAD,
   });
+  const [photoSourceKind, setPhotoSourceKind] = useState<VisitPhotoKind | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const photoSourceDialogRef = useRef<HTMLElement>(null);
+  const photoSourceFirstActionRef = useRef<HTMLButtonElement>(null);
+  const photoSourceTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [viewerPhotoId, setViewerPhotoId] = useState<string | null>(null);
   const viewerDialogRef = useRef<HTMLElement>(null);
   const viewerCloseRef = useRef<HTMLButtonElement>(null);
@@ -89,6 +95,21 @@ export function VisitPhotosStep({
     : orderedPhotos.findIndex((photo) => photo.id === viewerPhotoId);
   const viewerPhoto = viewerPhotoIndex === -1 ? null : (orderedPhotos[viewerPhotoIndex] ?? null);
   const viewerOpen = viewerPhoto !== null;
+  const photoSourceOpen = photoSourceKind !== null;
+  const selectedSourceTitle = photoSourceKind === "BEFORE" ? "До процедури" : "Після процедури";
+  const selectedFileInput = photoSourceKind === "BEFORE" ? beforeFileInput : afterFileInput;
+  const selectedCameraInput = photoSourceKind === "BEFORE" ? beforeCameraInput : afterCameraInput;
+
+  const closePhotoSource = useCallback((restoreFocus = true) => {
+    const trigger = photoSourceTriggerRef.current;
+    setPhotoSourceKind(null);
+    if (restoreFocus) window.setTimeout(() => { trigger?.focus(); }, 0);
+  }, []);
+
+  const choosePhotoSource = (inputRef: RefObject<HTMLInputElement | null>) => {
+    inputRef.current?.click();
+    closePhotoSource(false);
+  };
 
   const closeViewer = useCallback(() => {
     const trigger = viewerTriggerRef.current;
@@ -113,6 +134,41 @@ export function VisitPhotosStep({
     viewerCloseRef.current?.focus();
     return () => { document.body.style.overflow = previousOverflow; };
   }, [viewerOpen]);
+
+  useEffect(() => {
+    if (!photoSourceOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    photoSourceFirstActionRef.current?.focus();
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [photoSourceOpen]);
+
+  useEffect(() => {
+    if (!photoSourceOpen) return undefined;
+    const handlePhotoSourceKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePhotoSource();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = photoSourceDialogRef.current?.querySelectorAll<HTMLButtonElement>(
+        "button:not(:disabled)",
+      );
+      if (focusable === undefined || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener("keydown", handlePhotoSourceKeyDown);
+    return () => { document.removeEventListener("keydown", handlePhotoSourceKeyDown); };
+  }, [closePhotoSource, photoSourceOpen]);
 
   useEffect(() => {
     if (!viewerOpen) return undefined;
@@ -311,7 +367,8 @@ export function VisitPhotosStep({
     kind: VisitPhotoKind,
     title: string,
     buttonLabel: string,
-    inputRef: RefObject<HTMLInputElement | null>,
+    fileInputRef: RefObject<HTMLInputElement | null>,
+    cameraInputRef: RefObject<HTMLInputElement | null>,
   ) => {
     const kindPhotos = photos.filter((photo) => photo.kind === kind);
     const upload = uploads[kind];
@@ -337,9 +394,14 @@ export function VisitPhotosStep({
           <span className="visit-photo-dropzone__icon"><Icon name="photo" /></span>
           <div><strong>Перетягніть фото сюди</strong><small>JPEG, PNG або WebP · до 10 МБ</small></div>
           <button
+            aria-expanded={photoSourceKind === kind}
+            aria-haspopup="dialog"
             className="button button--secondary"
             disabled={!editable || busy || kindPhotos.length >= 10}
-            onClick={() => { inputRef.current?.click(); }}
+            onClick={(event) => {
+              photoSourceTriggerRef.current = event.currentTarget;
+              setPhotoSourceKind(kind);
+            }}
             type="button"
           ><Icon name="plus" />{buttonLabel}</button>
           <input
@@ -352,7 +414,20 @@ export function VisitPhotosStep({
               if (file !== undefined) void uploadPhoto(kind, file);
               event.currentTarget.value = "";
             }}
-            ref={inputRef}
+            ref={fileInputRef}
+            type="file"
+          />
+          <input
+            accept={ALLOWED_PHOTO_TYPES.join(",")}
+            aria-label={`Камера для блоку «${title}»`}
+            capture="environment"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file !== undefined) void uploadPhoto(kind, file);
+              event.currentTarget.value = "";
+            }}
+            ref={cameraInputRef}
             type="file"
           />
         </div>
@@ -429,10 +504,81 @@ export function VisitPhotosStep({
     <div className="visit-photos-step">
       {deleteError ? <div className="form-message form-message--error" role="alert"><Icon name="warning" /><span>{deleteError}</span></div> : null}
       <div className="visit-photo-blocks">
-        {renderBlock("BEFORE", "До процедури", "Додати фото ДО", beforeInput)}
-        {renderBlock("AFTER", "Після процедури", "Додати фото ПІСЛЯ", afterInput)}
+        {renderBlock(
+          "BEFORE",
+          "До процедури",
+          "Додати фото ДО",
+          beforeFileInput,
+          beforeCameraInput,
+        )}
+        {renderBlock(
+          "AFTER",
+          "Після процедури",
+          "Додати фото ПІСЛЯ",
+          afterFileInput,
+          afterCameraInput,
+        )}
       </div>
       <aside className="visit-photo-privacy"><Icon name="lock" /><span><strong>Приватні медичні дані</strong><small>Фото доступні лише адміністратору та відповідальному подологу. Метадані камери й GPS видаляються перед збереженням.</small></span></aside>
+      {photoSourceKind === null ? null : (
+        <div
+          className="modal-layer visit-photo-source-layer"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) closePhotoSource();
+          }}
+          role="presentation"
+        >
+          <section
+            aria-labelledby="visit-photo-source-title"
+            aria-modal="true"
+            className="modal-card visit-photo-source-dialog"
+            ref={photoSourceDialogRef}
+            role="dialog"
+          >
+            <header className="visit-photo-source-dialog__header">
+              <span><Icon name="photo" /></span>
+              <div>
+                <p className="eyebrow">{photoSourceKind}</p>
+                <h2 id="visit-photo-source-title">Додати фото: {selectedSourceTitle.toLowerCase()}</h2>
+                <p>Оберіть, звідки додати фотографію.</p>
+              </div>
+              <button
+                aria-label="Закрити вибір фотографії"
+                className="icon-button"
+                onClick={() => { closePhotoSource(); }}
+                type="button"
+              ><Icon name="close" /></button>
+            </header>
+            <div className="visit-photo-source-actions">
+              <button
+                className="visit-photo-source-action visit-photo-source-action--camera"
+                onClick={() => { choosePhotoSource(selectedCameraInput); }}
+                ref={photoSourceFirstActionRef}
+                type="button"
+              >
+                <span><Icon name="camera" /></span>
+                <strong>Зробити фото</strong>
+                <small>Відкрити задню камеру телефона або планшета</small>
+                <Icon name="chevron" />
+              </button>
+              <button
+                className="visit-photo-source-action"
+                onClick={() => { choosePhotoSource(selectedFileInput); }}
+                type="button"
+              >
+                <span><Icon name="photo" /></span>
+                <strong>Вибрати файл</strong>
+                <small>Взяти готове фото з галереї або сховища</small>
+                <Icon name="chevron" />
+              </button>
+            </div>
+            <footer className="visit-photo-source-dialog__footer">
+              <Icon name="lock" />
+              <span>Фото буде очищене від даних камери та GPS перед збереженням.</span>
+            </footer>
+          </section>
+        </div>
+      )}
       {viewerPhoto === null ? null : (
         <div
           className="modal-layer visit-photo-lightbox"

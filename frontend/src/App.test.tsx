@@ -1726,6 +1726,54 @@ describe("TP-603 private visit photos", () => {
     });
   });
 
+  it("offers a rear-camera capture or a regular file picker for every photo block", async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      const method = input instanceof Request ? input.method : (init?.method ?? "GET");
+      if (url.includes("/api/v1/session")) return Promise.resolve(jsonResponse(adminSession));
+      if (url.includes(`/api/v1/visits/${visitFixture.id}`) && method === "GET") {
+        return Promise.resolve(jsonResponse(visitFixture));
+      }
+      if (url.includes("/api/v1/services") && method === "GET") {
+        return Promise.resolve(jsonResponse({ services: [clinicService] }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+    renderApp(`/visits/${visitFixture.id}`);
+    await openPhotoStep();
+
+    const beforeButton = screen.getByRole("button", { name: "Додати фото ДО" });
+    expect(beforeButton).toHaveAttribute("aria-haspopup", "dialog");
+    expect(beforeButton).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(beforeButton);
+
+    const dialog = screen.getByRole("dialog", { name: "Додати фото: до процедури" });
+    expect(beforeButton).toHaveAttribute("aria-expanded", "true");
+    expect(within(dialog).getByRole("button", { name: /Зробити фото/ })).toHaveFocus();
+    const cameraInput = screen.getByLabelText("Камера для блоку «До процедури»");
+    const fileInput = screen.getByLabelText("Файл для блоку «До процедури»");
+    expect(cameraInput).toHaveAttribute("capture", "environment");
+    expect(cameraInput).toHaveAttribute("accept", "image/jpeg,image/png,image/webp");
+    expect(fileInput).not.toHaveAttribute("capture");
+    expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png,image/webp");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Додати фото: до процедури" }))
+        .not.toBeInTheDocument();
+      expect(beforeButton).toHaveFocus();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати фото ПІСЛЯ" }));
+    const afterDialog = screen.getByRole("dialog", { name: "Додати фото: після процедури" });
+    const afterCameraInput = screen.getByLabelText("Камера для блоку «Після процедури»");
+    const cameraClick = vi.spyOn(afterCameraInput, "click");
+    fireEvent.click(within(afterDialog).getByRole("button", { name: /Зробити фото/ }));
+    expect(cameraClick).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog", { name: "Додати фото: після процедури" }))
+      .not.toBeInTheDocument();
+  });
+
   it("creates an intent and finalizes a canonical photo in the chosen BEFORE block", async () => {
     document.cookie = "podoria_csrftoken=test-csrf; path=/";
     const uploadedPhoto = {

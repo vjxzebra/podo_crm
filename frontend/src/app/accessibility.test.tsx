@@ -255,6 +255,27 @@ describe("application shell accessibility", () => {
     expect(results.violations).toEqual([]);
   });
 
+  it("has no detectable violations in the visit photo source dialog", async () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={[`/visits/${visitFixture.id}`]}>
+        <App />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("heading", { name: visitFixture.patient.display_name, level: 1 });
+    fireEvent.click(screen.getByRole("button", {
+      name: /3\s*Фото до \/ після\s*Доступно/,
+    }));
+    await screen.findByRole("heading", { name: "Фото до та після процедури", level: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "Додати фото ДО" }));
+    await screen.findByRole("dialog", { name: "Додати фото: до процедури" });
+
+    const results = await axe.run(container, {
+      rules: { "color-contrast": { enabled: false } },
+    });
+
+    expect(results.violations).toEqual([]);
+  });
+
   it("has no detectable violations in the recommendation editor", async () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/patients/c49d72c2-689d-4f54-91df-9a63845a02e7/recommendations"]}>
