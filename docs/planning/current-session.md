@@ -363,3 +363,26 @@ production rebuild і `/health/ready` пройшли; volumes/domain data не
 Публікація виконується штатним `main` autodeploy; authoritative результат
 фіксується GitHub Actions `Quality gate` та production health checks для
 `crm.rozhenko.km.ua` без reset або зміни domain data.
+
+## Мобільне додавання фото до та після прийому
+
+2026-07-30 розширено TP-603 без зміни приватного upload-контракту. Кнопки
+«Додати фото ДО» та «Додати фото ПІСЛЯ» відкривають CRM-styled панель із двома
+явними діями: «Зробити фото» запускає задню камеру телефона/планшета через
+`capture="environment"`, а «Вибрати файл» відкриває звичайну галерею або
+сховище без `capture`. Обидва джерела використовують наявний безпечний
+upload-intent/finalize flow, обмеження JPEG/PNG/WebP до 10 МБ, EXIF/GPS
+очищення, progress/retry та точне розділення BEFORE/AFTER.
+
+Панель має dialog semantics, focus trap, початковий фокус на камері, закриття
+через Escape/фон і повернення фокуса на кнопку. На телефоні вона стає нижньою
+панеллю з двома великими вертикальними діями, на планшеті/desktop — компактним
+двоколонковим діалогом. Desktop drag-and-drop лишився доступним.
+
+Production web image gate green: contracts, ESLint, strict typecheck,
+`233/233` frontend tests, `44/44` axe scenarios і Vite build. Authenticated
+browser QA на `390×844`, `768×1024` та default desktop підтвердив
+`capture="environment"` лише для камери, відсутність page overflow, мінімальні
+action heights `112/154 px`, body lock, focus/Escape lifecycle і чисту
+readiness-відповідь `200`. Тимчасовий synthetic visit використано лише для
+read-only UI gate і видалено після перевірки. Production deploy не виконувався.

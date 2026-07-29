@@ -28,6 +28,7 @@ export type IconName =
   | "info"
   | "flag"
   | "photo"
+  | "camera"
   | "arrow-left";
 
 const iconPaths: Record<IconName, React.ReactNode> = {
@@ -171,6 +172,12 @@ const iconPaths: Record<IconName, React.ReactNode> = {
       <rect x="3" y="5" width="18" height="15" rx="3" />
       <circle cx="9" cy="10" r="2" />
       <path d="m5 18 4.5-4.5 3 3 2-2L19 18" />
+    </>
+  ),
+  camera: (
+    <>
+      <path d="M7.5 6 9 3.5h6L16.5 6H19a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3h2.5Z" />
+      <circle cx="12" cy="13" r="4" />
     </>
   ),
   "arrow-left": <path d="m15 18-6-6 6-6" />,
