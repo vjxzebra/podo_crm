@@ -730,6 +730,116 @@ describe("TP-401 role-scoped calendar", () => {
     expect((request as Request).url).toContain("to=");
   });
 
+  it("opens the styled date picker and loads a day from another month", async () => {
+    renderApp("/calendar");
+    await screen.findByText("Марія Бондар");
+
+    const trigger = screen.getByRole("button", { name: /Обрати дату:/ });
+    fireEvent.click(trigger);
+    const picker = screen.getByRole("dialog", { name: "Вибір дати календаря" });
+    const selectedDay = picker.querySelector<HTMLButtonElement>(
+      "[data-calendar-date][aria-pressed='true']",
+    );
+    expect(selectedDay).not.toBeNull();
+    expect(selectedDay).toHaveFocus();
+    const selectedDate = selectedDay?.dataset.calendarDate;
+    expect(selectedDate).toBeDefined();
+    const [year = 0, month = 0] = (selectedDate ?? "").split("-").map(Number);
+    const targetDate = new Date(Date.UTC(year, month, 5)).toISOString().slice(0, 10);
+    const requestsBeforeSelection = vi.mocked(fetch).mock.calls.filter(([input]) =>
+      input instanceof Request && input.url.includes("/api/v1/calendar")).length;
+
+    fireEvent.click(within(picker).getByRole("button", { name: "Наступний місяць" }));
+    const targetDay = picker.querySelector<HTMLButtonElement>(
+      `[data-calendar-date="${targetDate}"]`,
+    );
+    expect(targetDay).not.toBeNull();
+    if (targetDay === null) throw new Error("Target calendar day was not rendered.");
+    fireEvent.click(targetDay);
+
+    await waitFor(() => {
+      const calendarRequests = vi.mocked(fetch).mock.calls.filter(([input]) =>
+        input instanceof Request && input.url.includes("/api/v1/calendar"));
+      expect(calendarRequests.length).toBeGreaterThan(requestsBeforeSelection);
+    });
+    const calendarRequest = vi.mocked(fetch).mock.calls
+      .map(([input]) => input)
+      .filter((input): input is Request =>
+        input instanceof Request && input.url.includes("/api/v1/calendar"))
+      .at(-1);
+    const from = new URL(calendarRequest?.url ?? "http://localhost").searchParams.get("from");
+    const kyivDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Kyiv",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    expect(kyivDate.format(new Date(from ?? ""))).toBe(targetDate);
+    expect(screen.queryByRole("dialog", { name: "Вибір дати календаря" }))
+      .not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("selects a week in the date picker and closes it with Escape", async () => {
+    renderApp("/calendar");
+    await screen.findByText("Марія Бондар");
+
+    const trigger = screen.getByRole("button", { name: /Обрати дату:/ });
+    fireEvent.click(trigger);
+    const picker = screen.getByRole("dialog", { name: "Вибір дати календаря" });
+    const selectedDay = picker.querySelector<HTMLButtonElement>(
+      "[data-calendar-date][aria-pressed='true']",
+    );
+    const selectedDate = selectedDay?.dataset.calendarDate ?? "";
+    const [year = 0, month = 0, day = 0] = selectedDate.split("-").map(Number);
+    const targetDate = new Date(Date.UTC(year, month - 1, day + 7))
+      .toISOString()
+      .slice(0, 10);
+    const targetWeekday = new Date(`${targetDate}T12:00:00Z`).getUTCDay();
+    const targetWeekStart = new Date(Date.UTC(
+      Number(targetDate.slice(0, 4)),
+      Number(targetDate.slice(5, 7)) - 1,
+      Number(targetDate.slice(8, 10)) - ((targetWeekday + 6) % 7),
+    )).toISOString().slice(0, 10);
+
+    fireEvent.click(within(picker).getByRole("button", { name: "Тиждень" }));
+    const targetDay = picker.querySelector<HTMLButtonElement>(
+      `[data-calendar-date="${targetDate}"]`,
+    );
+    expect(targetDay).not.toBeNull();
+    if (targetDay === null) throw new Error("Target calendar day was not rendered.");
+    fireEvent.click(targetDay);
+
+    const kyivDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Kyiv",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    await waitFor(() => {
+      const calendarRequest = vi.mocked(fetch).mock.calls
+        .map(([input]) => input)
+        .filter((input): input is Request =>
+          input instanceof Request && input.url.includes("/api/v1/calendar"))
+        .at(-1);
+      const from = new URL(calendarRequest?.url ?? "http://localhost")
+        .searchParams
+        .get("from");
+      expect(kyivDate.format(new Date(from ?? ""))).toBe(targetWeekStart);
+    });
+    expect(trigger).toHaveFocus();
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Вибір дати календаря" }))
+      .toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Вибір дати календаря" }))
+        .not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+  });
+
   it("locks a podologist to the server-provided own column", async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse(podologistSession))
@@ -2032,6 +2142,7 @@ describe("TP-303 internal work items", () => {
 
     expect(await screen.findByText("Лише мої справи")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Усі команди" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Telegram-сповіщення" })).toBeInTheDocument();
   });
 
   it("creates an internal work item with CSRF protection", async () => {

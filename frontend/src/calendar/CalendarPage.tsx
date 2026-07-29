@@ -13,6 +13,7 @@ import type { components } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { roleLabels, useAuth } from "../auth/AuthContext";
 import { AppointmentCreateDialog, type SlotPreset } from "./AppointmentCreateDialog";
+import { CalendarDatePicker } from "./CalendarDatePicker";
 import { AppointmentDetailDialog } from "./AppointmentDetailDialog";
 
 type CalendarResponse = components["schemas"]["CalendarResponse"];
@@ -406,6 +407,9 @@ export function CalendarPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [slotPreset, setSlotPreset] = useState<SlotPreset | null>(null);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+  const datePickerTriggerRef = useRef<HTMLButtonElement>(null);
   const appointmentTriggerRef = useRef<HTMLElement | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
   const range = useMemo(() => rangeFor(view, selectedDate), [view, selectedDate]);
@@ -429,6 +433,30 @@ export function CalendarPage() {
   useEffect(() => {
     void load();
   }, [load, requestVersion]);
+
+  useEffect(() => {
+    if (!datePickerOpen) return undefined;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node
+        && !datePickerRef.current?.contains(event.target)
+      ) {
+        setDatePickerOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setDatePickerOpen(false);
+      window.setTimeout(() => { datePickerTriggerRef.current?.focus(); }, 0);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [datePickerOpen]);
 
   if (state.status !== "authenticated") return null;
   const isPodologist = state.session.user.role === "podologist";
@@ -501,7 +529,38 @@ export function CalendarPage() {
         </div>
         <div className="calendar-date-navigation">
           <button className="icon-button" onClick={() => { move(-1); }} type="button" aria-label={view === "day" ? "Попередній день" : "Попередній тиждень"}><Icon name="arrow-left" /></button>
-          <button className="calendar-date-navigation__today" onClick={() => { setSelectedDate(dateKey(new Date())); }} type="button">{dateHeading}</button>
+          <div className="calendar-date-navigation__picker" ref={datePickerRef}>
+            <button
+              aria-expanded={datePickerOpen}
+              aria-haspopup="dialog"
+              aria-label={`Обрати дату: ${dateHeading}`}
+              className="calendar-date-navigation__today"
+              onClick={() => { setDatePickerOpen((current) => !current); }}
+              ref={datePickerTriggerRef}
+              type="button"
+            >
+              <Icon name="calendar" />
+              <span>{dateHeading}</span>
+              <Icon className="calendar-date-navigation__caret" name="chevron" />
+            </button>
+            {datePickerOpen ? (
+              <CalendarDatePicker
+                onClose={() => {
+                  setDatePickerOpen(false);
+                  window.setTimeout(() => { datePickerTriggerRef.current?.focus(); }, 0);
+                }}
+                onSelect={(date) => {
+                  setSelectedDate(date);
+                  setDatePickerOpen(false);
+                  window.setTimeout(() => { datePickerTriggerRef.current?.focus(); }, 0);
+                }}
+                onViewChange={setView}
+                selectedDate={selectedDate}
+                today={dateKey(new Date())}
+                view={view}
+              />
+            ) : null}
+          </div>
           <button className="icon-button" onClick={() => { move(1); }} type="button" aria-label={view === "day" ? "Наступний день" : "Наступний тиждень"}><Icon name="chevron" /></button>
         </div>
         {isPodologist ? (

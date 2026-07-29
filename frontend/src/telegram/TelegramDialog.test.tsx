@@ -44,6 +44,7 @@ describe("TelegramDialog", () => {
 
     renderDialog();
     expect(await screen.findByText("Не підключено")).toBeInTheDocument();
+    expect(screen.getByText(/Ваші справи та доступні вам нові заявки/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Підключити" }));
     expect(await screen.findByDisplayValue(/one-time-secret/)).toBeInTheDocument();

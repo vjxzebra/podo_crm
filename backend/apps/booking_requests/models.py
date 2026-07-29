@@ -515,3 +515,62 @@ class TelegramDelivery(models.Model):
 
     def __str__(self) -> str:
         return f"{self.booking_request.public_number} · Telegram delivery"
+
+
+class WorkItemTelegramDelivery(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    work_item = models.ForeignKey(
+        "work_items.WorkItem",
+        on_delete=models.PROTECT,
+        related_name="telegram_deliveries",
+    )
+    subscription = models.ForeignKey(
+        TelegramSubscription,
+        on_delete=models.PROTECT,
+        related_name="work_item_deliveries",
+    )
+    chat_id = models.BigIntegerField()
+    message_id = models.BigIntegerField(blank=True, null=True)
+    status = models.CharField(
+        max_length=32,
+        choices=TelegramDeliveryStatus.choices,
+        default=TelegramDeliveryStatus.PENDING,
+    )
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(blank=True, null=True)
+    error_code = models.CharField(max_length=64, blank=True)
+    error_message = models.CharField(max_length=255, blank=True)
+    last_synced_work_item_version = models.PositiveIntegerField(default=0)
+    last_synced_is_overdue = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        indexes = [
+            models.Index(
+                fields=("status", "next_attempt_at", "created_at"),
+                name="work_tg_delivery_due_idx",
+            ),
+            models.Index(
+                fields=("work_item", "status"),
+                name="work_tg_delivery_item_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("work_item", "subscription"),
+                name="work_tg_item_sub_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(attempt_count__gte=0),
+                name="work_tg_attempt_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_synced_work_item_version__gte=0),
+                name="work_tg_version_nonnegative",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.work_item_id} · Work item Telegram delivery"

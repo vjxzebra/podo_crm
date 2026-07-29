@@ -8,6 +8,7 @@ from rest_framework import status
 from apps.accounts.models import User, UserRole
 from apps.audit.registry import AuditAction
 from apps.audit.services import record_audit_event
+from apps.booking_requests.telegram_services import enqueue_work_item_telegram_delivery_on_commit
 from apps.patients.models import Patient
 from apps.patients.selectors import patients_visible_to
 from apps.work_items.models import WorkItem, WorkItemKind
@@ -107,6 +108,7 @@ def create_work_item(
         after=work_item_snapshot(item),
         description="Створено внутрішню справу.",
     )
+    enqueue_work_item_telegram_delivery_on_commit(item)
     return item
 
 
@@ -221,4 +223,5 @@ def update_work_item(
         after=work_item_snapshot(item),
         description=description,
     )
+    enqueue_work_item_telegram_delivery_on_commit(item)
     return item

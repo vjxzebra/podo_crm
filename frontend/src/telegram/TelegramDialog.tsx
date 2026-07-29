@@ -126,7 +126,7 @@ export function TelegramDialog({ onClose }: { readonly onClose: () => void }) {
           <div>
             <p className="eyebrow">Особисті сповіщення</p>
             <h2 id="telegram-dialog-title">Telegram</h2>
-            <p>Контактні дані нових заявок надходитимуть у ваш приватний чат.</p>
+            <p>Ваші справи та доступні вам нові заявки надходитимуть у приватний чат.</p>
           </div>
           <button aria-label="Закрити Telegram" className="icon-button" onClick={onClose} ref={closeRef} type="button">
             <Icon name="close" />

@@ -4,6 +4,9 @@ from apps.booking_requests.models import (
     BookingRequest,
     BookingRequestApiCredential,
     BookingRequestSubmission,
+    TelegramDelivery,
+    TelegramSubscription,
+    WorkItemTelegramDelivery,
 )
 
 
@@ -89,3 +92,57 @@ class BookingRequestSubmissionAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request: object, obj: object | None = None) -> bool:
         return False
+
+
+@admin.register(TelegramSubscription)
+class TelegramSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("user", "is_enabled", "linked_at", "last_seen_at")
+    list_filter = ("is_enabled",)
+    search_fields = ("user__email", "user__first_name", "user__last_name")
+    exclude = ("telegram_user_id", "chat_id")
+    readonly_fields = (
+        "user",
+        "username",
+        "first_name",
+        "is_enabled",
+        "linked_at",
+        "disabled_at",
+        "last_seen_at",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request: object) -> bool:
+        return False
+
+    def has_change_permission(self, request: object, obj: object | None = None) -> bool:
+        return False
+
+    def has_delete_permission(self, request: object, obj: object | None = None) -> bool:
+        return False
+
+
+class ReadOnlyTelegramDeliveryAdmin(admin.ModelAdmin):
+    list_filter = ("status",)
+    readonly_fields = ()
+
+    def has_add_permission(self, request: object) -> bool:
+        return False
+
+    def has_change_permission(self, request: object, obj: object | None = None) -> bool:
+        return False
+
+    def has_delete_permission(self, request: object, obj: object | None = None) -> bool:
+        return False
+
+
+@admin.register(TelegramDelivery)
+class TelegramDeliveryAdmin(ReadOnlyTelegramDeliveryAdmin):
+    list_display = ("booking_request", "subscription", "status", "attempt_count", "updated_at")
+    search_fields = ("booking_request__public_number", "subscription__user__email")
+
+
+@admin.register(WorkItemTelegramDelivery)
+class WorkItemTelegramDeliveryAdmin(ReadOnlyTelegramDeliveryAdmin):
+    list_display = ("work_item", "subscription", "status", "attempt_count", "updated_at")
+    search_fields = ("work_item__title", "subscription__user__email")

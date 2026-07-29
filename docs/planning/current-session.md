@@ -253,9 +253,9 @@ event, а production web image успішно зібрано ізольован�
 підтвердили відновлення без видалення volumes. Browser viewport скинуто,
 вкладки закрито, credentials лишилися тільки у Git-ignored `.env.local`.
 
-Post-MVP TP-1001—TP-1009 завершені; GAP-11 і GAP-18 мають статус `resolved`.
+Post-MVP TP-1001—TP-1012 завершені; GAP-11 і GAP-18 мають статус `resolved`.
 
-## Наступний етап — заявки та Telegram
+## Етап заявок та Telegram
 
 2026-07-28 зафіксовано
 [контракт TP-1008—TP-1011](../architecture/tp-1008-1011-booking-requests-telegram-contract.md)
@@ -283,9 +283,36 @@ Post-MVP TP-1001—TP-1009 завершені; GAP-11 і GAP-18 мають ст�
   focused `29/29` booking-request backend, canonical `444/444` backend,
   `227/227` frontend, contracts/typecheck/lint/build/runtime readiness green;
   [evidence](../evidence/tp-1011/README.md).
+- TP-1012 `done`: assignee-only durable Telegram delivery внутрішніх справ,
+  статуси open/overdue/completed/reassigned, authorized
+  `✅ Виконати справу`, exact CRM link і Telegram linking для podologist без
+  розширення booking-request fan-out; focused `16/16`, canonical `450/450`
+  backend, `227/227` frontend і `42/42` axe, migration/worker/beat/runtime
+  readiness green; [contract](../architecture/tp-1012-work-item-telegram-contract.md)
+  і [evidence](../evidence/tp-1012/README.md).
 
-Оприлюднений у запиті Telegram bot token вважається скомпрометованим і не
-перенесений у tracked files. Перед production TP-1011 його потрібно відкликати
-через BotFather, створити новий і зберегти лише у production env/file secret.
-Новий bot token не потрібен для завершених TP-1008—TP-1011 локальних gates,
-але є обов'язковим перед production rollout.
+Локальна dev migration `booking_requests.0006` застосована, оновлений web image
+і backend/worker/beat запущені; manual dispatch та наступний periodic cycle
+green, `/health/ready` і `/` повертають `200`. Локальний Telegram token не
+налаштований, active subscriptions/open work items під час gate — `0/0`,
+зовнішні повідомлення не надсилались.
+
+Production deploy TP-1012 не виконувався. Оприлюднений раніше Telegram bot
+token не переносився у tracked files; перед наступним rollout він має бути
+rotated, якщо це ще не зроблено, і зберігатися лише у production env/file
+secret.
+
+## Вибір дати в календарі
+
+2026-07-29 у календарі додано CRM-styled попап вибору дати або тижня:
+перемикання режиму, навігацію між місяцями, перехід до сьогодні, підсвічування
+поточної дати/тижня, закриття через Escape або клік поза попапом і повернення
+фокуса на кнопку дати. На мобільних попап фіксується у доступній області
+екрана, а на невисоких desktop-вікнах прокручує лише власний вміст.
+
+Canonical frontend gate green: `230/230` tests, `43/43` axe, ESLint, strict
+typecheck, production build і production web image. Browser QA на
+`1440×900`, `1280×720` та `390×844` підтвердив вибір дня/тижня, клавіатурну
+поведінку, відсутність горизонтального overflow і коректне розміщення попапа.
+Оновлений локальний web запущений; `/health/ready` і `/` повертають `200`.
+Production deploy не виконувався.

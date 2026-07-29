@@ -27,8 +27,10 @@ from apps.booking_requests.models import (
     TelegramUpdate,
     TelegramUpdateState,
     TelegramUpdateType,
+    WorkItemTelegramDelivery,
 )
 from apps.booking_requests.telegram_transport import TelegramBotClient, TelegramTransportError
+from apps.work_items.models import WorkItem
 from config.api.exceptions import ApiProblem
 
 logger = logging.getLogger("podoria")
@@ -89,7 +91,7 @@ def _subscription_snapshot(subscription: TelegramSubscription) -> dict[str, Any]
 
 
 def ensure_telegram_access(user: User) -> None:
-    if not has_scope(user, AccessScope.BOOKING_REQUESTS):
+    if not has_scope(user, AccessScope.WORK_ITEMS):
         raise ApiProblem(
             code="permission_denied",
             message="Недостатньо прав для цієї дії.",
@@ -182,6 +184,169 @@ def dispatch_telegram_delivery_on_commit(item: BookingRequest) -> None:
     transaction.on_commit(dispatch_safely)
 
 
+def _schedule_work_item_telegram_dispatch_on_commit() -> None:
+    def dispatch_safely() -> None:
+        try:
+            from apps.booking_requests.tasks import dispatch_telegram_work_item_deliveries
+
+            dispatch_telegram_work_item_deliveries.delay()
+        except Exception:
+            logger.exception("work_item_telegram_delivery_enqueue_failed")
+
+    transaction.on_commit(dispatch_safely)
+
+
+def enqueue_work_item_delivery_row(item: WorkItem) -> bool:
+    if item.is_completed:
+        return False
+    subscription = (
+        TelegramSubscription.objects.select_related("user")
+        .filter(
+            user_id=item.assignee_id,
+            is_enabled=True,
+            user__is_active=True,
+        )
+        .first()
+    )
+    if subscription is None or not has_scope(subscription.user, AccessScope.WORK_ITEMS):
+        return False
+    delivery, created = WorkItemTelegramDelivery.objects.get_or_create(
+        work_item=item,
+        subscription=subscription,
+        defaults={"chat_id": subscription.chat_id},
+    )
+    update_fields: list[str] = []
+    if delivery.chat_id != subscription.chat_id:
+        delivery.chat_id = subscription.chat_id
+        delivery.message_id = None
+        delivery.status = TelegramDeliveryStatus.PENDING
+        delivery.attempt_count = 0
+        delivery.next_attempt_at = None
+        delivery.error_code = ""
+        delivery.error_message = ""
+        update_fields.extend(
+            (
+                "chat_id",
+                "message_id",
+                "status",
+                "attempt_count",
+                "next_attempt_at",
+                "error_code",
+                "error_message",
+            )
+        )
+    elif delivery.status == TelegramDeliveryStatus.PERMANENT_FAILURE:
+        delivery.status = TelegramDeliveryStatus.PENDING
+        delivery.attempt_count = 0
+        delivery.next_attempt_at = None
+        delivery.error_code = ""
+        delivery.error_message = ""
+        update_fields.extend(
+            (
+                "status",
+                "attempt_count",
+                "next_attempt_at",
+                "error_code",
+                "error_message",
+            )
+        )
+    if update_fields:
+        delivery.save(update_fields=(*update_fields, "updated_at"))
+    return created or bool(update_fields)
+
+
+def enqueue_open_work_item_deliveries_for_subscription(
+    subscription: TelegramSubscription,
+) -> int:
+    if (
+        not subscription.is_enabled
+        or not subscription.user.is_active
+        or not has_scope(subscription.user, AccessScope.WORK_ITEMS)
+    ):
+        return 0
+    created = 0
+    work_items = WorkItem.objects.filter(
+        assignee_id=subscription.user_id,
+        is_completed=False,
+    ).order_by("due_at", "id")
+    for item in work_items.iterator():
+        created += int(enqueue_work_item_delivery_row(item))
+    return created
+
+
+def enqueue_work_item_telegram_delivery_on_commit(item: WorkItem) -> None:
+    enqueue_work_item_delivery_row(item)
+    _schedule_work_item_telegram_dispatch_on_commit()
+
+
+def _work_item_is_overdue(item: WorkItem, *, now: datetime | None = None) -> bool:
+    return not item.is_completed and item.due_at <= (now or timezone.now())
+
+
+def work_item_telegram_text(
+    item: WorkItem,
+    *,
+    recipient_user_id: int,
+    now: datetime | None = None,
+) -> str:
+    reassigned = item.assignee_id != recipient_user_id
+    if reassigned:
+        status_label = "↪️ Перепризначено"
+    elif item.is_completed:
+        status_label = "✅ Виконана"
+    elif _work_item_is_overdue(item, now=now):
+        status_label = "🔴 Прострочена"
+    else:
+        status_label = "🟡 Відкрита"
+    due_at = timezone.localtime(item.due_at).strftime("%d.%m.%Y, %H:%M")
+    patient = "Без пацієнта"
+    if item.patient is not None:
+        patient = f"{item.patient.display_name} · {item.patient.public_number}"
+    comment = item.comment or "Не вказано"
+    if len(comment) > 1200:
+        comment = f"{comment[:1197]}..."
+    lines = [
+        f"📌 Справа: {item.title}",
+        f"Статус: {status_label}",
+        f"Тип: {item.get_kind_display()}",
+        f"Термін: {due_at}",
+        f"Важлива: {'Так' if item.is_important else 'Ні'}",
+        f"Пацієнт: {patient}",
+        f"Коментар: {comment}",
+    ]
+    if item.is_completed:
+        completed_at = "Не вказано"
+        if item.completed_at is not None:
+            completed_at = timezone.localtime(item.completed_at).strftime("%d.%m.%Y, %H:%M")
+        completed_by = (
+            item.completed_by.display_name if item.completed_by is not None else "Не вказано"
+        )
+        lines.extend((f"Виконав: {completed_by}", f"Виконано: {completed_at}"))
+    elif reassigned:
+        lines.append(f"Новий відповідальний: {item.assignee.display_name}")
+    return "\n".join(lines)
+
+
+def work_item_reply_markup(
+    item: WorkItem,
+    *,
+    recipient_user_id: int,
+) -> dict[str, Any]:
+    keyboard: list[list[dict[str, str]]] = []
+    if item.assignee_id == recipient_user_id:
+        if not item.is_completed:
+            keyboard.append([{"text": "✅ Виконати справу", "callback_data": f"wi:c:{item.pk}"}])
+        keyboard.append(
+            [
+                {
+                    "text": "Відкрити в CRM",
+                    "url": f"{_crm_public_url()}/work-items?item={item.pk}",
+                }
+            ]
+        )
+    return {"inline_keyboard": keyboard}
+
+
 def booking_request_telegram_text(item: BookingRequest) -> str:
     preferred = "Не вказано"
     if item.preferred_at is not None:
@@ -245,7 +410,7 @@ def _next_attempt(error: TelegramTransportError, attempt_count: int) -> datetime
 
 
 def _mark_delivery_transport_failure(
-    delivery: TelegramDelivery,
+    delivery: TelegramDelivery | WorkItemTelegramDelivery,
     subscription: TelegramSubscription,
     error: TelegramTransportError,
 ) -> None:
@@ -376,6 +541,112 @@ def dispatch_due_telegram_deliveries(
                     "error_code",
                     "error_message",
                     "last_synced_request_version",
+                    "updated_at",
+                )
+            )
+            dispatched += 1
+    return dispatched
+
+
+def dispatch_due_work_item_telegram_deliveries(
+    *,
+    now: datetime | None = None,
+    client: TelegramSendClient | None = None,
+    limit: int = 50,
+) -> int:
+    current_time = now or timezone.now()
+    bot: TelegramSendClient = client or TelegramBotClient()
+    dispatched = 0
+    for _ in range(limit):
+        with transaction.atomic():
+            delivery = (
+                WorkItemTelegramDelivery.objects.select_related(
+                    "work_item",
+                    "work_item__assignee",
+                    "work_item__patient",
+                    "work_item__completed_by",
+                    "subscription",
+                    "subscription__user",
+                )
+                .select_for_update(of=("self",), skip_locked=True)
+                .filter(
+                    Q(status=TelegramDeliveryStatus.PENDING)
+                    | Q(status=TelegramDeliveryStatus.RETRY, next_attempt_at__lte=current_time)
+                    | Q(
+                        status=TelegramDeliveryStatus.SENT,
+                        message_id__isnull=False,
+                        last_synced_work_item_version__lt=F("work_item__version"),
+                    )
+                    | Q(
+                        status=TelegramDeliveryStatus.SENT,
+                        message_id__isnull=False,
+                        last_synced_is_overdue=False,
+                        work_item__is_completed=False,
+                        work_item__due_at__lte=current_time,
+                        work_item__assignee_id=F("subscription__user_id"),
+                    )
+                )
+                .order_by("created_at")
+                .first()
+            )
+            if delivery is None:
+                break
+            subscription = delivery.subscription
+            if (
+                not subscription.is_enabled
+                or not subscription.user.is_active
+                or not has_scope(subscription.user, AccessScope.WORK_ITEMS)
+            ):
+                delivery.status = TelegramDeliveryStatus.PERMANENT_FAILURE
+                delivery.error_code = "ineligible_subscription"
+                delivery.error_message = "Subscription is not eligible."
+                delivery.save(update_fields=("status", "error_code", "error_message", "updated_at"))
+                continue
+            item = delivery.work_item
+            text = work_item_telegram_text(
+                item,
+                recipient_user_id=subscription.user_id,
+                now=current_time,
+            )
+            reply_markup = work_item_reply_markup(
+                item,
+                recipient_user_id=subscription.user_id,
+            )
+            try:
+                if delivery.message_id is not None:
+                    bot.edit_message_text(
+                        chat_id=delivery.chat_id,
+                        message_id=delivery.message_id,
+                        text=text,
+                        reply_markup=reply_markup,
+                    )
+                else:
+                    result = bot.send_message(
+                        chat_id=delivery.chat_id,
+                        text=text,
+                        reply_markup=reply_markup,
+                    )
+                    delivery.message_id = result.message_id
+            except TelegramTransportError as exc:
+                _mark_delivery_transport_failure(delivery, subscription, exc)
+                continue
+            delivery.status = TelegramDeliveryStatus.SENT
+            delivery.attempt_count += 1
+            delivery.next_attempt_at = None
+            delivery.error_code = ""
+            delivery.error_message = ""
+            delivery.last_synced_work_item_version = item.version
+            delivery.last_synced_is_overdue = _work_item_is_overdue(item, now=current_time)
+            delivery.save(
+                update_fields=(
+                    "status",
+                    "message_id",
+                    "attempt_count",
+                    "next_attempt_at",
+                    "error_code",
+                    "error_message",
+                    "last_synced_work_item_version",
+                    "last_synced_is_overdue",
                     "updated_at",
                 )
             )
@@ -519,8 +790,32 @@ def _booking_request_id_from_callback(data: str) -> UUID | None:
         return None
 
 
-@transaction.atomic
+def _work_item_id_from_callback(data: str) -> UUID | None:
+    prefix = "wi:c:"
+    if not data.startswith(prefix):
+        return None
+    try:
+        return UUID(data.removeprefix(prefix))
+    except ValueError:
+        return None
+
+
 def _process_callback_update(
+    update: TelegramUpdate,
+    *,
+    client: TelegramSendClient | None = None,
+) -> str:
+    if update.callback_data.startswith("br:p:"):
+        return _process_booking_request_callback_update(update, client=client)
+    if update.callback_data.startswith("wi:c:"):
+        return _process_work_item_callback_update(update, client=client)
+    _answer_callback_safely(client, update.callback_query_id, "Не вдалося виконати дію.")
+    _mark_update(update, TelegramUpdateState.IGNORED, code="invalid_callback")
+    return "ignored"
+
+
+@transaction.atomic
+def _process_booking_request_callback_update(
     update: TelegramUpdate,
     *,
     client: TelegramSendClient | None = None,
@@ -587,6 +882,102 @@ def _process_callback_update(
         "Заявку вже оброблено." if was_processed else "Заявку оброблено.",
     )
     return "already_processed" if was_processed else "processed"
+
+
+@transaction.atomic
+def _process_work_item_callback_update(
+    update: TelegramUpdate,
+    *,
+    client: TelegramSendClient | None = None,
+) -> str:
+    update = TelegramUpdate.objects.select_for_update().get(update_id=update.update_id)
+    if update.state != TelegramUpdateState.RECEIVED:
+        return "skipped"
+    safe_denied = "Не вдалося виконати дію."
+    work_item_id = _work_item_id_from_callback(update.callback_data)
+    if (
+        work_item_id is None
+        or update.chat_type != "private"
+        or update.chat_id is None
+        or update.telegram_user_id is None
+    ):
+        _answer_callback_safely(client, update.callback_query_id, safe_denied)
+        _mark_update(update, TelegramUpdateState.IGNORED, code="invalid_callback")
+        return "ignored"
+    subscription = (
+        TelegramSubscription.objects.select_for_update()
+        .select_related("user")
+        .filter(
+            chat_id=update.chat_id,
+            telegram_user_id=update.telegram_user_id,
+            is_enabled=True,
+        )
+        .first()
+    )
+    if (
+        subscription is None
+        or not subscription.user.is_active
+        or not has_scope(subscription.user, AccessScope.WORK_ITEMS)
+    ):
+        _answer_callback_safely(client, update.callback_query_id, safe_denied)
+        _mark_update(update, TelegramUpdateState.IGNORED, code="unauthorized_callback")
+        return "unauthorized"
+    item = (
+        WorkItem.objects.filter(pk=work_item_id)
+        .only(
+            "id",
+            "assignee_id",
+            "is_completed",
+            "version",
+        )
+        .first()
+    )
+    if item is None:
+        _answer_callback_safely(client, update.callback_query_id, safe_denied)
+        _mark_update(update, TelegramUpdateState.IGNORED, code="unknown_callback_target")
+        return "not_found"
+    if item.assignee_id != subscription.user_id:
+        _answer_callback_safely(client, update.callback_query_id, safe_denied)
+        _mark_update(update, TelegramUpdateState.IGNORED, code="work_item_not_assigned")
+        return "unauthorized"
+    was_completed = item.is_completed
+    if not was_completed:
+        try:
+            from apps.work_items.services import update_work_item
+
+            update_work_item(
+                actor=subscription.user,
+                work_item_id=item.pk,
+                correlation_id=f"telegram-update-{update.update_id}",
+                data={"version": item.version, "is_completed": True},
+            )
+        except ApiProblem:
+            refreshed = (
+                WorkItem.objects.filter(pk=item.pk)
+                .only(
+                    "assignee_id",
+                    "is_completed",
+                )
+                .first()
+            )
+            if (
+                refreshed is None
+                or refreshed.assignee_id != subscription.user_id
+                or not refreshed.is_completed
+            ):
+                _answer_callback_safely(client, update.callback_query_id, safe_denied)
+                _mark_update(update, TelegramUpdateState.IGNORED, code="callback_complete_failed")
+                return "failed"
+            was_completed = True
+    subscription.last_seen_at = timezone.now()
+    subscription.save(update_fields=("last_seen_at", "updated_at"))
+    _mark_update(update, TelegramUpdateState.PROCESSED)
+    _answer_callback_safely(
+        client,
+        update.callback_query_id,
+        "Справу вже виконано." if was_completed else "Справу виконано.",
+    )
+    return "already_completed" if was_completed else "completed"
 
 
 @transaction.atomic
@@ -672,7 +1063,7 @@ def _process_start_update(
         update.save(update_fields=("state", "processed_at", "updated_at"))
         _send_safe_message(client, update.chat_id, TELEGRAM_SAFE_ERROR)
         return "expired"
-    if not has_scope(intent.user, AccessScope.BOOKING_REQUESTS):
+    if not has_scope(intent.user, AccessScope.WORK_ITEMS):
         update.state = TelegramUpdateState.IGNORED
         update.processed_at = now
         update.save(update_fields=("state", "processed_at", "updated_at"))
@@ -729,9 +1120,11 @@ def _process_start_update(
             after=_subscription_snapshot(subscription),
             description="Працівник підключив Telegram-сповіщення.",
         )
+    enqueue_open_work_item_deliveries_for_subscription(subscription)
+    _schedule_work_item_telegram_dispatch_on_commit()
     _send_safe_message(
         client,
         update.chat_id,
-        "Telegram підключено. Нові заявки надходитимуть у цей приватний чат.",
+        "Telegram підключено. Ваші справи та доступні нові заявки надходитимуть у цей чат.",
     )
     return "linked"

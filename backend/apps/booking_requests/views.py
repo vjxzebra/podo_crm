@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
-from apps.accounts.permissions import HasBookingRequestAccess, IsAdmin
+from apps.accounts.permissions import HasBookingRequestAccess, HasWorkItemAccess, IsAdmin
 from apps.booking_requests.authentication import (
     BookingRequestBearerAuthentication,
     BookingRequestCredentialAuth,
@@ -322,7 +322,7 @@ class ExternalBookingRequestCreateView(APIView):
 
 
 class TelegramSubscriptionView(APIView):
-    permission_classes = [HasBookingRequestAccess]
+    permission_classes = [HasWorkItemAccess]
 
     @extend_schema(
         operation_id="telegram_subscription_retrieve",
@@ -376,7 +376,7 @@ class TelegramSubscriptionView(APIView):
 
 
 class TelegramLinkIntentView(APIView):
-    permission_classes = [HasBookingRequestAccess]
+    permission_classes = [HasWorkItemAccess]
 
     @extend_schema(
         operation_id="telegram_link_intent_create",

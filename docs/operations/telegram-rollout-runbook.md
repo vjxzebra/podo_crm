@@ -1,6 +1,6 @@
 # Telegram rollout runbook
 
-Цей runbook використовується тільки після deployment TP-1011. Він не містить
+Цей runbook використовується тільки після deployment TP-1011—TP-1012. Він не містить
 реальних bot token, webhook secret, chat ID, phone або customer payload.
 
 ## Передумови
@@ -9,7 +9,7 @@
 - Новий bot token створено поза репозиторієм.
 - Окремий webhook secret згенеровано поза репозиторієм.
 - Production CRM доступна через HTTPS `CRM_PUBLIC_URL`.
-- У production вже deployed код і migrations TP-1010—TP-1011.
+- У production вже deployed код і migrations TP-1010—TP-1012.
 
 ## Secret files
 
@@ -71,6 +71,24 @@ python manage.py configure_telegram_webhook --drop-pending-updates
    контрольованих dev/staging даних; production customer data не чиститься
    ad hoc.
 
+### Smoke test призначених справ
+
+Використовуйте synthetic справу без реальних даних пацієнта.
+
+1. Підключіть Telegram для тестового assignee; окремо перевірте podologist.
+2. Створіть відкриту справу, призначену цьому користувачу.
+3. Переконайтеся, що повідомлення отримав лише assignee, status — `Відкрита`,
+   а кнопки `✅ Виконати справу` і `Відкрити в CRM` присутні.
+4. Відкрийте CRM link і перевірте exact `/work-items?item=<uuid>` projection.
+5. Натисніть completion callback: CRM має зберегти completion actor/time та
+   audit, а Telegram message — змінитися на `Виконана` без action button.
+6. Створіть другу synthetic справу й перепризначте її: стара копія має стати
+   `Перепризначено` без кнопок, новий assignee має отримати актуальну копію.
+7. Для контрольованої справи з минулим терміном запустіть due dispatcher і
+   перевірте status `Прострочена`.
+8. Видаліть synthetic data лише у dev/staging або за погодженим production
+   data-cleanup процесом.
+
 ## Evidence hygiene
 
 Evidence дозволяє:
@@ -80,6 +98,7 @@ Evidence дозволяє:
 - HTTP status codes;
 - public booking request number;
 - counts of deliveries/edits.
+- safe counts окремо для booking-request і work-item deliveries.
 
 Evidence забороняє:
 
