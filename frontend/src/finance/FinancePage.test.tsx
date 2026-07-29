@@ -42,6 +42,15 @@ function csvResponse(filename = "finance-operations-20260723-100000.csv"): Respo
   }));
 }
 
+function pdfResponse(filename = "payment-receipt-TXN-701600000000.pdf"): ResponseFactory {
+  return () => Promise.resolve(new Response("%PDF-1.7 test", {
+    headers: {
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Type": "application/pdf",
+    },
+  }));
+}
+
 function rejectedFactory(message = "offline"): ResponseFactory {
   return () => Promise.reject(new Error(message));
 }
@@ -52,6 +61,7 @@ function mockFinanceApi({
   operations,
   operationExports = [csvResponse()],
   payment = responseFactory(financePaymentResult, 201),
+  receipt = pdfResponse(),
   refund = responseFactory(financeRefundResult, 201),
   cashMovement,
   session = adminSession,
@@ -61,6 +71,7 @@ function mockFinanceApi({
   readonly operations?: ResponseFactory;
   readonly operationExports?: readonly ResponseFactory[];
   readonly payment?: ResponseFactory;
+  readonly receipt?: ResponseFactory;
   readonly refund?: ResponseFactory;
   readonly cashMovement?: ResponseFactory;
   readonly session?: typeof adminSession | typeof receptionSession;
@@ -101,6 +112,9 @@ function mockFinanceApi({
     }
     if (url.pathname === "/api/v1/payments" && request.method === "POST") {
       return payment(request);
+    }
+    if (/^\/api\/v1\/payments\/[0-9a-f-]+\/receipt$/.test(url.pathname) && request.method === "GET") {
+      return receipt(request);
     }
     if (/^\/api\/v1\/payments\/[0-9a-f-]+\/refunds$/.test(url.pathname) && request.method === "POST") {
       return refund(request);
@@ -299,6 +313,8 @@ describe("TP-702 finance operations and full payment", () => {
     let dialog = screen.getByRole("dialog", { name: financePaidOperation.payment.public_number });
     expect(within(dialog).getByText("Оплачено")).toBeInTheDocument();
     expect(within(dialog).getByText("Оплату підтверджено на терміналі.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: `Завантажити PDF квитанції ${financePaidOperation.payment.public_number}` })).toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: `Відкрити PDF для друку ${financePaidOperation.payment.public_number}` })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Оформити повне повернення" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => { expect(paidTrigger).toHaveFocus(); });
@@ -351,7 +367,50 @@ describe("TP-702 finance operations and full payment", () => {
       payment_method: "CARD",
       comment: "Повна оплата",
     });
-    expect(screen.getByRole("heading", { name: "Фінансові операції" })).toHaveFocus();
+    const receiptDialog = await screen.findByRole("dialog", { name: "Квитанція готова" });
+    expect(within(receiptDialog).getByText(/не є фіскальним чеком/i)).toBeInTheDocument();
+    expect(within(receiptDialog).getByRole("button", { name: `Завантажити PDF квитанції ${financePaymentResult.operation.payment.public_number}` })).toBeInTheDocument();
+    fireEvent.click(within(receiptDialog).getByRole("button", { name: "Готово" }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Фінансові операції" })).toHaveFocus();
+    });
+  });
+
+  it("downloads the receipt and exposes a native-browser print link", async () => {
+    const receiptRequests: Request[] = [];
+    mockFinanceApi({
+      receipt: (request) => {
+        receiptRequests.push(request);
+        return pdfResponse("receipt-custom.pdf")(request);
+      },
+    });
+    render(<FinancePage />);
+    fireEvent.click(await screen.findByRole("button", {
+      name: `Відкрити деталі ${financePaidOperation.payment.public_number} — ${financePaidOperation.patient.display_name}`,
+    }));
+    const dialog = screen.getByRole("dialog", { name: financePaidOperation.payment.public_number });
+
+    fireEvent.click(within(dialog).getByRole("button", {
+      name: `Завантажити PDF квитанції ${financePaidOperation.payment.public_number}`,
+    }));
+    await within(dialog).findByText("Завантаження PDF розпочато.");
+    expect(receiptRequests).toHaveLength(1);
+    expect(new URL(receiptRequests[0]?.url ?? "http://invalid").searchParams.get("disposition")).toBe("attachment");
+    expect(receiptRequests[0]?.headers.get("Accept")).toBe("application/pdf");
+    expect(
+      (URL.createObjectURL as unknown as { readonly mock: { readonly calls: readonly unknown[] } })
+        .mock.calls.length,
+    ).toBeGreaterThan(0);
+
+    const printLink = within(dialog).getByRole("link", {
+      name: `Відкрити PDF для друку ${financePaidOperation.payment.public_number}`,
+    });
+    const printUrl = new URL(printLink.getAttribute("href") ?? "http://invalid");
+    expect(printUrl.pathname).toBe(`/api/v1/payments/${financePaidOperation.payment.id}/receipt`);
+    expect(printUrl.searchParams.get("disposition")).toBe("inline");
+    expect(printLink).toHaveAttribute("target", "_blank");
+    expect(printLink).toHaveAttribute("rel", "noopener noreferrer");
+    expect(receiptRequests).toHaveLength(1);
   });
 
   it("preserves the form and idempotency key through a network retry", async () => {

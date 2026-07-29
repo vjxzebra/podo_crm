@@ -6,3 +6,5 @@ ruff>=0.14,<1
 mypy>=1.19,<2
 django-stubs>=5.2,<6
 djangorestframework-stubs>=3.16,<4
+pypdf>=6,<7
+types-reportlab>=4.4,<5

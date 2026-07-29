@@ -15,7 +15,8 @@ from apps.accounts.models import User
 from apps.accounts.permissions import HasCashShiftAccess, HasFinanceAccess, IsAdmin
 from apps.billing import exports as billing_exports
 from apps.billing.models import CashLedgerEntryKind
-from apps.billing.selectors import payment_receivables_visible_to
+from apps.billing.receipts import render_payment_receipt_pdf
+from apps.billing.selectors import payment_receipts_visible_to, payment_receivables_visible_to
 from apps.billing.serializers import (
     CashMovementCreateResponseSerializer,
     CashMovementCreateSerializer,
@@ -58,6 +59,7 @@ from apps.billing.services import (
 )
 from config.api.csv import SafeCsvRenderer
 from config.api.exceptions import ApiProblem
+from config.api.pdf import SafePdfRenderer
 from config.api.serializers import ErrorEnvelopeSerializer
 from config.middleware import get_request_id
 
@@ -548,6 +550,60 @@ class PaymentCreateView(APIView):
             PaymentCreateResponseSerializer(payload).data,
             status=(status.HTTP_200_OK if replayed else status.HTTP_201_CREATED),
         )
+
+
+class PaymentReceiptView(APIView):
+    permission_classes = [HasFinanceAccess]
+    renderer_classes = [JSONRenderer, SafePdfRenderer]
+
+    @extend_schema(
+        operation_id="payment_receipt_retrieve",
+        summary="Download or print an A4 payment receipt and recommendation form",
+        parameters=[
+            OpenApiParameter(
+                name="disposition",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                enum=["attachment", "inline"],
+                default="attachment",
+                description="Use inline for the browser print flow.",
+            )
+        ],
+        responses={
+            (status.HTTP_200_OK, "application/pdf"): OpenApiResponse(
+                response=OpenApiTypes.BINARY,
+                description=(
+                    "Black-and-white A4 payment receipt and podologist recommendation form."
+                ),
+            ),
+            status.HTTP_401_UNAUTHORIZED: ErrorEnvelopeSerializer,
+            status.HTTP_403_FORBIDDEN: ErrorEnvelopeSerializer,
+            status.HTTP_404_NOT_FOUND: ErrorEnvelopeSerializer,
+            status.HTTP_422_UNPROCESSABLE_ENTITY: ErrorEnvelopeSerializer,
+        },
+        tags=["finance"],
+    )
+    def get(self, request: Request, payment_id: UUID) -> HttpResponse:
+        disposition = request.query_params.get("disposition", "attachment")
+        if disposition not in {"attachment", "inline"}:
+            raise ApiProblem(
+                code="invalid_receipt_disposition",
+                message="Формат відкриття квитанції не підтримується.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                fields={"disposition": ["Доступні значення: attachment або inline."]},
+            )
+        payment = get_object_or_404(
+            payment_receipts_visible_to(_actor(request)),
+            pk=payment_id,
+        )
+        content = render_payment_receipt_pdf(payment)
+        filename = f"payment-receipt-{payment.ledger_entry.public_number}.pdf"
+        response = HttpResponse(content, content_type="application/pdf")
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
 
 
 class RefundCreateView(APIView):

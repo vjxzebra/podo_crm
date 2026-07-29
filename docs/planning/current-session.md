@@ -1,6 +1,6 @@
 # Поточний checkpoint розробки
 
-Дата: 2026-07-23
+Дата: 2026-07-30
 
 ## Зафіксований стан
 
@@ -316,3 +316,50 @@ typecheck, production build і production web image. Browser QA на
 поведінку, відсутність горизонтального overflow і коректне розміщення попапа.
 Оновлений локальний web запущений; `/health/ready` і `/` повертають `200`.
 Production deploy не виконувався.
+
+## PDF-квитанція та бланк рекомендацій
+
+2026-07-30 завершено TP-1013 за
+[контрактом](../architecture/tp-1013-payment-receipt-pdf-contract.md).
+Reception/admin після повної оплати отримує двосторінковий чорно-білий A4 PDF:
+квитанцію з immutable payment/service snapshots та окремий бланк з актуальною
+рекомендацією подолога. Clinic profile і optional logo додаються без залежності
+доступності object storage; clinical notes і фото не експортуються.
+
+`GET /api/v1/payments/{payment_id}/receipt` підтримує `attachment` для
+завантаження та `inline` для друку, застосовує finance scope і повертає
+`private, no-store`. У finance UI дії доступні одразу після успішної оплати та
+в деталях проведеної операції. Документ прямо позначений як нефіскальна
+квитанція; інтеграція РРО/ПРРО не входить у цей packet.
+
+Gate: `454/454` backend і `231/231` frontend tests, Ruff/format, mypy,
+Django checks/migrations, OpenAPI snapshot, generated client, ESLint, strict
+typecheck і production build green. Poppler render підтвердив дві A4-сторінки
+без обрізання; authenticated browser gate підтвердив download/print actions.
+In-app browser не підтримує download handle, тому PDF bytes/content/headers
+окремо підтверджені integration test і live API probe.
+
+Після UI regression report виправлено DRF content negotiation для
+`Accept: application/pdf`, який раніше повертав `406 Not Acceptable` до входу
+у receipt view. Regression tests передають той самий `Accept`, що й browser
+client; live `attachment` та `inline` probes повертають `200`, `%PDF-` і
+очікувані headers. Footer діалогу перебудовано так, щоб на широкому екрані
+текст дій не переносився; перевірено у viewport `1440×900`.
+
+Автоматичний `print()` через прихований PDF iframe замінено на пряме відкриття
+`inline` PDF у новій вкладці. Це прибирає залежність від `contentWindow` і
+дозволів embedded browser; системний друк запускається зі стандартного
+PDF-переглядача браузера.
+
+Під час першого довгого combined gate Docker Desktop не повернув exit event
+від test container. Окрема recovery-підзадача перевірила контейнер і bind
+mounts, штатно перезапустила Docker Desktop та підтвердила мінімальний bind
+і readiness. Повторні короткі backend groups, повний frontend container check,
+production rebuild і `/health/ready` пройшли; volumes/domain data не
+видалялися. Локальні credentials читалися лише з Git-ignored `.env.local`.
+
+Цей checkpoint є повним release scope TP-1013: PDF-квитанція, бланк
+рекомендацій, download/print UX, 406 regression fix і responsive footer.
+Публікація виконується штатним `main` autodeploy; authoritative результат
+фіксується GitHub Actions `Quality gate` та production health checks для
+`crm.rozhenko.km.ua` без reset або зміни domain data.

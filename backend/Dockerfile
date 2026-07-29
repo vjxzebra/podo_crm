@@ -13,7 +13,8 @@ RUN apk upgrade --no-cache \
 
 COPY requirements ./requirements
 RUN python -m pip install -r requirements/dev.txt
-RUN apk add --no-cache --virtual .python-rundeps-postgres-only \
+RUN apk add --no-cache font-dejavu \
+    && apk add --no-cache --virtual .python-rundeps-postgres-only \
       "so:libbz2.so.1" \
       musl \
       "so:libcrypto.so.3" \

@@ -83,6 +83,25 @@ def payment_receivables_visible_to(actor: User) -> QuerySet[Receivable]:
     )
 
 
+def payment_receipts_visible_to(actor: User) -> QuerySet[Payment]:
+    if not has_scope(actor, AccessScope.FINANCE):
+        return Payment.objects.none()
+    return (
+        Payment.objects.select_related(
+            "ledger_entry",
+            "receivable__visit",
+            "refund_record__ledger_entry",
+        )
+        .prefetch_related("receivable__visit__recommendations")
+        .defer(
+            "receivable__visit__complaints",
+            "receivable__visit__objective_examination",
+            "receivable__visit__detected_conditions",
+            "receivable__visit__podologist_notes",
+        )
+    )
+
+
 def payment_receivables_for_global_search(
     actor: User,
     search: str,

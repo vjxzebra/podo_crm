@@ -77,6 +77,7 @@
 | TP-1010 | `done` | One-time private Telegram linking, verified webhook, `/start`/`/stop` і durable fan-out; 440 backend/227 frontend, production web image check і desktop/mobile dialog QA green; [evidence](../evidence/tp-1010/README.md) |
 | TP-1011 | `done` | Authorized process callback, cross-chat message sync/retry, operations status command і production rollout runbook; 444 backend/227 frontend green; [evidence](../evidence/tp-1011/README.md) |
 | TP-1012 | `done` | Assignee-only Telegram delivery внутрішніх справ, open/overdue/completed/reassigned sync, authorized completion callback і podologist linking; 450 backend/227 frontend green; [evidence](../evidence/tp-1012/README.md) |
+| TP-1013 | `done` | Двосторінкова чорно-біла A4 PDF-квитанція та бланк рекомендацій після оплати; download/print у finance UI, finance-scoped API, 454 backend/231 frontend green; [contract](../architecture/tp-1013-payment-receipt-pdf-contract.md) |
 
 ## 3. Володіння модулями
 
@@ -202,6 +203,12 @@
 | TP-1011 | Inline process і синхронізація всіх Telegram copies | Authorized `br:p:<uuid>` callback викликає той самий domain service; answerCallbackQuery, stale-version delivery edit, 429/backoff/permanent-failure isolation | `✅ Оброблено` в боті; після CRM або bot action доступні messages best-effort змінюють status, прибирають action і зберігають CRM link | `done` 2026-07-28: 29 focused backend, 444 canonical backend, 227 frontend, operations command і runtime readiness green. [Evidence](../evidence/tp-1011/README.md). Production rollout вимагає rotated bot token. Не входить: гарантія edit видалених/blocked messages, client chatbot |
 | TP-1012 | Assignee-only Telegram-сповіщення внутрішніх справ; [frozen contract](../architecture/tp-1012-work-item-telegram-contract.md) | Durable work-item delivery, `wi:c:<uuid>` callback через `update_work_item`, version/overdue projection sync, reassignment isolation | Telegram доступний усім ролям із `work-items`; `✅ Виконати справу`, exact CRM link, open/overdue/completed/reassigned message states | `done` 2026-07-29: 16 focused і 450 canonical backend, 227 frontend/42 axe, migration/runtime/periodic dispatcher green. [Evidence](../evidence/tp-1012/README.md). Booking-request fan-out лишився admin/reception; production deploy не виконувався |
 
+### Етап 12 — документи оплати
+
+| ID | Вертикальний результат і джерела | API та інваріанти | UI, доступ і стани | Залежності, доказ і «не входить» |
+|---|---|---|---|---|
+| TP-1013 | PDF-квитанція та бланк рекомендацій; [frozen contract](../architecture/tp-1013-payment-receipt-pdf-contract.md) | Finance-scoped `GET /payments/{payment_id}/receipt?disposition=`; immutable Payment snapshots, current recommendations/profile, private no-store response, no ledger mutation | Reception/admin: dialog після успішної оплати та download/print у payment detail; loading/error/retry, server filename | `done` 2026-07-30: 4 focused PDF tests, 454 canonical backend, 231 frontend, Ruff/format/mypy/contracts/build green; two-page A4 render і authenticated UI gate. Не входить: РРО/ПРРО, фіскальний номер/QR, надсилання клієнту |
+
 ## 5. Покриття acceptance criteria
 
 | AC | Primary packet | Обов’язковий інтеграційний gate |
@@ -232,4 +239,4 @@
 
 ## 6. Порядок найближчого запуску
 
-ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201—TP-207, TP-301—TP-303, TP-401—TP-404, TP-501—TP-503, TP-601—TP-605, TP-701—TP-704, TP-801—TP-804, TP-901—TP-904 і post-MVP TP-1001—TP-1012 завершено. TP-904 закрив MVP із `23/23 verified`; TP-1001 закрив GAP-11 supplier directory, TP-1002—TP-1007 — safe CSV slices та GAP-18, TP-1008—TP-1011 закрили заявки, Bearer API, private Telegram authorization, inline callback і cross-chat sync, TP-1012 — assignee-only Telegram workflow внутрішніх справ. Наступна дія — окремо погоджений production deploy TP-1012 за [runbook](../operations/telegram-rollout-runbook.md); bot token має бути rotated, якщо це ще не виконано.
+ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201—TP-207, TP-301—TP-303, TP-401—TP-404, TP-501—TP-503, TP-601—TP-605, TP-701—TP-704, TP-801—TP-804, TP-901—TP-904 і post-MVP TP-1001—TP-1013 завершено. TP-904 закрив MVP із `23/23 verified`; TP-1001 закрив GAP-11 supplier directory, TP-1002—TP-1007 — safe CSV slices та GAP-18, TP-1008—TP-1011 закрили заявки, Bearer API, private Telegram authorization, inline callback і cross-chat sync, TP-1012 — assignee-only Telegram workflow внутрішніх справ, TP-1013 — двосторінковий PDF документа оплати та рекомендацій. Production deploy TP-1013 не виконувався.

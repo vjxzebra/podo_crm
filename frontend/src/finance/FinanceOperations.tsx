@@ -35,6 +35,7 @@ import {
   type OperationType,
   type PaymentMethod,
 } from "./financeTypes";
+import { PaymentReceiptActions, PaymentReceiptDialog } from "./PaymentReceipt";
 import { RefundDialog } from "./RefundDialog";
 
 type GeneratedOperationQuery = NonNullable<operations["finance_operation_list"]["parameters"]["query"]>;
@@ -277,6 +278,12 @@ function OperationDetailDialog({
           <span><Icon name="lock" />Фінансові записи не редагуються й не видаляються.</span>
           <div>
             <button className="button button--secondary" onClick={onClose} type="button">Готово</button>
+            {relatedPayment === null ? null : (
+              <PaymentReceiptActions
+                paymentId={relatedPayment.id}
+                publicNumber={relatedPayment.public_number}
+              />
+            )}
             {isPayableOperation(operation) && hasOpenShift ? <button className="button button--primary" onClick={() => { onPay(operation); }} type="button">Провести оплату</button> : null}
             {isRefundableOperation(operation) && hasOpenShift ? <button className="button button--danger" onClick={() => { onRefund(operation); }} type="button">Оформити повне повернення</button> : null}
           </div>
@@ -620,6 +627,7 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<{ readonly message: string; readonly correlationId: string } | null>(null);
   const [paymentInitial, setPaymentInitial] = useState<FinancePaymentOperation | null | undefined>(undefined);
+  const [receiptOperation, setReceiptOperation] = useState<FinancePaymentOperation | null>(null);
   const [refundInitial, setRefundInitial] = useState<FinancePaymentOperation | null | undefined>(undefined);
   const [cashMovementType, setCashMovementType] = useState<CashMovementType | null>(null);
   const [isRefreshingAfterMutation, setIsRefreshingAfterMutation] = useState(false);
@@ -809,6 +817,11 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
     window.setTimeout(() => { paymentTriggerRef.current?.focus(); }, 0);
   };
 
+  const closeReceipt = () => {
+    setReceiptOperation(null);
+    window.setTimeout(() => { headingRef.current?.focus(); }, 0);
+  };
+
   const openRefund = (operation: FinancePaymentOperation | null, trigger?: HTMLButtonElement) => {
     if (!mutationActionsAvailable) return;
     refundTriggerRef.current = trigger ?? detailTriggerRef.current;
@@ -850,7 +863,7 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
     onOperationSuccess(replayed
       ? `Оплату ${operationNumber(operation)} вже було проведено. Показуємо актуальні дані.`
       : `Оплату ${operationNumber(operation)} на ${money(operation.amount_minor)} проведено.`);
-    window.setTimeout(() => { headingRef.current?.focus(); }, 0);
+    setReceiptOperation(operation);
   };
 
   const refundSucceeded = async (operation: FinanceRefundOperation, replayed: boolean) => {
@@ -937,6 +950,7 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
       {detailError === null ? null : <div className="finance-operation-deep-link-state finance-operation-deep-link-state--error" role="alert"><Icon name="warning" /><span>{detailError.message}{detailError.correlationId === "" ? null : <small>Код запиту: {detailError.correlationId}</small>}</span>{requestedPaymentId === null ? null : <button className="button button--secondary" onClick={() => { void loadRequestedOperation(requestedPaymentId); }} type="button">Повторити</button>}<button className="button button--secondary" onClick={closeDetail} type="button">Закрити</button></div>}
       {detail === null ? null : <OperationDetailDialog hasOpenShift={mutationActionsAvailable} onClose={closeDetail} onPay={(operation) => { openPayment(operation); }} onRefund={(operation) => { openRefund(operation); }} operation={detail} />}
       {paymentInitial === undefined ? null : <PaymentDialog actionsEnabled={mutationActionsAvailable} initialOperation={paymentInitial} onClose={closePayment} onConflictRefresh={refreshAll} onSuccess={paymentSucceeded} />}
+      {receiptOperation === null ? null : <PaymentReceiptDialog onClose={closeReceipt} operation={receiptOperation} />}
       {refundInitial === undefined ? null : <RefundDialog actionsEnabled={mutationActionsAvailable} availableCashMinor={availableCashMinor} initialOperation={refundInitial} onClose={closeRefund} onConflictRefresh={refreshAll} onSuccess={refundSucceeded} />}
       {cashMovementType === null ? null : <CashMovementDialog actionsEnabled={mutationActionsAvailable} availableCashMinor={availableCashMinor} movementType={cashMovementType} onClose={closeCashMovement} onConflictRefresh={refreshAll} onSuccess={cashMovementSucceeded} />}
     </>

@@ -4828,10 +4828,34 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
 .finance-operation-link span { color: var(--color-coral-ink); font-size: 0.48rem; font-weight: 800; text-transform: uppercase; }
 .finance-operation-link strong { margin-top: 3px; font-size: 0.57rem; }
 .finance-operation-link small { margin-top: 3px; color: var(--color-muted); font-size: 0.48rem; }
-.finance-operation-detail__footer { align-items: center; justify-content: space-between; }
+.finance-operation-detail__footer { align-items: stretch; flex-direction: column; gap: 12px; }
 .finance-operation-detail__footer > span { display: inline-flex; align-items: center; gap: 6px; color: var(--color-muted); font-size: 0.49rem; }
 .finance-operation-detail__footer > span svg { width: 14px; height: 14px; }
-.finance-operation-detail__footer > div { display: flex; gap: 8px; }
+.finance-operation-detail__footer > div { display: flex; width: 100%; flex-wrap: wrap; align-items: flex-start; justify-content: flex-end; gap: 8px; }
+.finance-operation-detail__footer > div > .button,
+.finance-operation-detail__footer .finance-receipt-actions__buttons .button { flex: 0 0 auto; white-space: nowrap; }
+.finance-operation-detail__footer .finance-receipt-actions { max-width: 100%; flex: 0 0 auto; margin-top: 0; }
+.finance-operation-detail__footer .finance-receipt-actions__buttons { display: grid; grid-template-columns: repeat(2, max-content); gap: 8px; }
+.finance-operation-detail__footer .finance-receipt-actions__message { max-width: 320px; }
+.finance-receipt-layer { padding: 18px; }
+.finance-receipt-dialog { width: min(100%, 620px); }
+.finance-receipt-dialog .modal-card__header p:last-child { margin: 6px 0 0; color: var(--color-muted); font-size: 0.57rem; }
+.finance-receipt-dialog__summary { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1px solid #cfe2d9; border-radius: 14px; background: #f5faf7; }
+.finance-receipt-dialog__summary > span { display: grid; width: 46px; height: 46px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #fff; background: var(--color-sage-dark); }
+.finance-receipt-dialog__summary > span svg { width: 23px; height: 23px; }
+.finance-receipt-dialog__summary small,
+.finance-receipt-dialog__summary strong { display: block; }
+.finance-receipt-dialog__summary small { color: var(--color-muted); font-size: 0.5rem; font-weight: 800; text-transform: uppercase; }
+.finance-receipt-dialog__summary strong { margin-top: 3px; font-size: 1.3rem; }
+.finance-receipt-dialog__summary p { margin: 5px 0 0; color: var(--color-muted); font-size: 0.55rem; line-height: 1.5; }
+.finance-receipt-dialog__notice { display: flex; align-items: flex-start; gap: 9px; margin-top: 13px; padding: 11px 13px; border: 1px solid var(--color-line); border-radius: 11px; background: #fafaf9; }
+.finance-receipt-dialog__notice svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.finance-receipt-dialog__notice p { margin: 0; font-size: 0.52rem; line-height: 1.5; }
+.finance-receipt-actions { margin-top: 14px; }
+.finance-receipt-actions__buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.finance-receipt-actions__buttons .button { justify-content: center; }
+.finance-receipt-actions__message { margin: 8px 0 0; color: var(--color-sage-dark); font-size: 0.52rem; }
+.finance-receipt-actions__message--error { color: var(--color-coral-ink); }
 .finance-operation-deep-link-state { position: fixed; z-index: 96; right: 18px; bottom: 18px; display: flex; max-width: min(620px, calc(100vw - 36px)); align-items: center; gap: 9px; padding: 11px 14px; border: 1px solid var(--color-line); border-radius: 11px; background: #fff; box-shadow: var(--shadow-raised); font-size: 0.6rem; font-weight: 750; }
 .finance-operation-deep-link-state--error { border-color: #edcbc3; color: var(--color-coral-ink); }
 .finance-operation-deep-link-state > svg { width: 18px; height: 18px; flex: 0 0 auto; }
@@ -5005,14 +5029,17 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
   .finance-operation-row__action .icon-button { min-width: 44px; min-height: 44px; margin-left: auto; }
   .finance-operation-detail-layer,
   .finance-payment-layer,
+  .finance-receipt-layer,
   .finance-refund-layer,
   .finance-cash-movement-layer { align-items: stretch; padding: 0; }
   .finance-operation-detail,
   .finance-payment-dialog,
+  .finance-receipt-dialog,
   .finance-refund-dialog,
   .finance-cash-movement-dialog { width: 100%; max-height: 100dvh; min-height: 100dvh; border-radius: 0; }
   .finance-operation-detail .modal-card__header .icon-button,
   .finance-payment-dialog .modal-card__header .icon-button,
+  .finance-receipt-dialog .modal-card__header .icon-button,
   .finance-refund-dialog .modal-card__header .icon-button,
   .finance-cash-movement-dialog .modal-card__header .icon-button { min-width: 44px; min-height: 44px; }
   .finance-operation-detail__header-actions { align-items: flex-start; }
@@ -5022,6 +5049,9 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
   .finance-payment-footer { display: grid; grid-template-columns: 1fr; }
   .finance-operation-detail__footer .button,
   .finance-payment-footer .button { width: 100%; min-height: 44px; }
+  .finance-operation-detail__footer .finance-receipt-actions { width: 100%; }
+  .finance-operation-detail__footer .finance-receipt-actions__buttons,
+  .finance-receipt-actions__buttons { grid-template-columns: 1fr; }
   .finance-payment-dialog,
   .finance-refund-dialog,
   .finance-cash-movement-dialog { padding: 18px 14px calc(14px + env(safe-area-inset-bottom)); }

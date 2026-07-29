@@ -13,6 +13,7 @@ from apps.billing.views import (
     FinanceOperationExportView,
     FinanceOperationListView,
     PaymentCreateView,
+    PaymentReceiptView,
     RefundCreateView,
 )
 
@@ -64,6 +65,11 @@ urlpatterns = [
         name="finance-operation-detail",
     ),
     path("payments", PaymentCreateView.as_view(), name="payment-create"),
+    path(
+        "payments/<uuid:payment_id>/receipt",
+        PaymentReceiptView.as_view(),
+        name="payment-receipt",
+    ),
     path(
         "payments/<uuid:payment_id>/refunds",
         RefundCreateView.as_view(),
