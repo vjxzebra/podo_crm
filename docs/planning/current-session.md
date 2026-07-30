@@ -385,4 +385,15 @@ browser QA на `390×844`, `768×1024` та default desktop підтверди�
 `capture="environment"` лише для камери, відсутність page overflow, мінімальні
 action heights `112/154 px`, body lock, focus/Escape lifecycle і чисту
 readiness-відповідь `200`. Тимчасовий synthetic visit використано лише для
-read-only UI gate і видалено після перевірки. Production deploy не виконувався.
+read-only UI gate і видалено після перевірки.
+
+Production rollout завершено 2026-07-30: commit `fd97260` опубліковано через
+[PR #5](https://github.com/vjxzebra/podo_crm/pull/5), squash merge
+`fdfd01660f9010e89bf4c7ba54acd29a1232c643` потрапив у `main`, а
+[GitHub Actions run #30500645202](https://github.com/vjxzebra/podo_crm/actions/runs/30500645202)
+успішно виконав повний Docker test profile, immutable image build/package,
+upload, production deploy, Telegram webhook configuration та зовнішню
+перевірку CRM/WordPress. Незалежна фінальна перевірка повернула `200` для
+`https://crm.rozhenko.km.ua/` і `/health/ready`; backend підтвердив
+`database: ok`, `redis: ok`, `object_storage: ok`. Reset бази, видалення
+volumes або зміна domain data під час rollout не виконувалися.
