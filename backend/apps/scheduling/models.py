@@ -120,3 +120,43 @@ class Appointment(models.Model):
     @property
     def ends_at(self) -> Any:
         return self.time_range.upper
+
+
+class AppointmentServiceLine(models.Model):
+    """Ordered, immutable service snapshot selected for an appointment."""
+
+    appointment = models.ForeignKey(
+        Appointment,
+        on_delete=models.CASCADE,
+        related_name="service_lines",
+    )
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.PROTECT,
+        related_name="appointment_service_lines",
+    )
+    position = models.PositiveSmallIntegerField()
+    duration_minutes = models.PositiveSmallIntegerField()
+    service_name_snapshot = models.CharField(max_length=160)
+    service_color_snapshot = models.CharField(max_length=7)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("position", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("appointment", "service"),
+                name="scheduling_appointment_service_unique",
+            ),
+            models.UniqueConstraint(
+                fields=("appointment", "position"),
+                name="scheduling_appointment_service_position_unique",
+            ),
+            models.CheckConstraint(
+                condition=Q(duration_minutes__gt=0),
+                name="scheduling_appointment_service_duration_positive",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.appointment.public_number} · {self.service_name_snapshot}"

@@ -19,6 +19,7 @@ import { AppointmentDetailDialog } from "./AppointmentDetailDialog";
 type CalendarResponse = components["schemas"]["CalendarResponse"];
 type CalendarDay = components["schemas"]["CalendarDay"];
 type CalendarEvent = components["schemas"]["CalendarEvent"];
+type CalendarSelectedService = components["schemas"]["CalendarSelectedService"];
 type Specialist = components["schemas"]["SpecialistSummary"];
 type CalendarView = "day" | "week";
 
@@ -141,6 +142,26 @@ function eventsForDay(events: readonly CalendarEvent[], day: CalendarDay): Calen
     start,
     end,
   ));
+}
+
+function servicesForEvent(event: CalendarEvent): readonly CalendarSelectedService[] {
+  return event.services;
+}
+
+function ServiceColorRail({ event }: { readonly event: CalendarEvent }) {
+  return (
+    <span aria-hidden="true" className="calendar-event__color-rail">
+      {servicesForEvent(event).map((service) => (
+        <i
+          key={service.id}
+          style={{
+            "--service-color": service.color,
+            flexGrow: service.duration_minutes,
+          } as CSSProperties}
+        />
+      ))}
+    </span>
+  );
 }
 
 function CalendarLoading() {
@@ -313,7 +334,7 @@ function DayCalendar({
             const span = Math.max(1, Math.ceil(minutesBetween(event.starts_at, event.ends_at) / SLOT_MINUTES));
             return (
               <button
-                aria-label={`${timeLabel(event.starts_at)} ${event.patient.display_name}, ${event.status.label}`}
+                aria-label={`${timeLabel(event.starts_at)} ${event.patient.display_name}, ${event.status.label}, ${servicesForEvent(event).map((service) => service.name).join(", ")}`}
                 className={`calendar-event ${event.status.code === "CANCELED" ? "calendar-event--canceled" : ""}`}
                 data-testid="calendar-event"
                 key={event.id}
@@ -325,8 +346,10 @@ function DayCalendar({
                 } as CSSProperties}
                 type="button"
               >
+                <ServiceColorRail event={event} />
                 <span className="calendar-event__heading"><strong>{event.patient.display_name}</strong><time>{timeLabel(event.starts_at)}–{timeLabel(event.ends_at)}</time></span>
-                <p>{event.service.name} · {event.room.name}</p>
+                <span className="calendar-event__service-list">{servicesForEvent(event).map((service) => <span key={service.id} style={{ "--service-color": service.color } as CSSProperties}><i aria-hidden="true" />{service.name}</span>)}</span>
+                <p>{event.room.name} · {event.duration_minutes} хв</p>
                 <span className="calendar-event__status" style={{ "--status-color": event.status.color } as CSSProperties}>{event.status.label}</span>
               </button>
             );
@@ -374,12 +397,13 @@ function WeekCalendar({
                 </header>
                 <div className="calendar-week-day__events">
                   {dayEvents.map((event) => (
-                    <button aria-label={`${timeLabel(event.starts_at)} ${event.patient.display_name}, ${event.status.label}`} className="calendar-week-event" key={event.id} onClick={() => { onEventSelect(event.id); }} style={{ "--event-color": event.service.color } as CSSProperties} type="button">
+                    <button aria-label={`${timeLabel(event.starts_at)} ${event.patient.display_name}, ${event.status.label}, ${servicesForEvent(event).map((service) => service.name).join(", ")}`} className="calendar-week-event" key={event.id} onClick={() => { onEventSelect(event.id); }} style={{ "--event-color": event.service.color } as CSSProperties} type="button">
+                      <ServiceColorRail event={event} />
                       <time>{timeLabel(event.starts_at)}</time>
                       <strong>{event.patient.display_name}</strong>
-                      <small>{event.service.name}</small>
+                      <span className="calendar-week-event__services">{servicesForEvent(event).map((service) => <small key={service.id} style={{ "--service-color": service.color } as CSSProperties}><i aria-hidden="true" />{service.name}</small>)}</span>
                       {specialists.length > 1 ? <small>{event.specialist.display_name}</small> : null}
-                      <span>{event.status.label}</span>
+                      <span className="calendar-week-event__status">{event.status.label}</span>
                     </button>
                   ))}
                   {day.is_working && dayEvents.length === 0 ? <p className="calendar-week-empty"><Icon name="calendar" /><span>Записів немає<small>День вільний</small></span></p> : null}

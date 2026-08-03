@@ -572,6 +572,15 @@
                                         "type": "string",
                                         "format": "uuid"
                                     },
+                                    "service_ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "uuid"
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 20
+                                    },
                                     "room_id": {
                                         "type": "string",
                                         "format": "uuid"
@@ -1014,8 +1023,19 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
-                        },
-                        "required": true
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "service_ids",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "format": "uuid"
+                            },
+                            "maxItems": 20
+                        }
                     },
                     {
                         "in": "query",
@@ -10036,6 +10056,14 @@
                         "type": "string",
                         "format": "uuid"
                     },
+                    "service_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "maxItems": 20
+                    },
                     "room_id": {
                         "type": "string",
                         "format": "uuid"
@@ -10068,7 +10096,6 @@
                 "required": [
                     "patient_id",
                     "room_id",
-                    "service_id",
                     "specialist_id",
                     "starts_at"
                 ]
@@ -10107,6 +10134,12 @@
                     },
                     "service": {
                         "$ref": "#/components/schemas/AppointmentService"
+                    },
+                    "services": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AppointmentSelectedService"
+                        }
                     },
                     "specialist": {
                         "$ref": "#/components/schemas/SpecialistSummary"
@@ -10183,6 +10216,7 @@
                     "public_number",
                     "room",
                     "service",
+                    "services",
                     "specialist",
                     "starts_at",
                     "status",
@@ -10243,6 +10277,12 @@
                     "service": {
                         "$ref": "#/components/schemas/AppointmentService"
                     },
+                    "services": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AppointmentSelectedService"
+                        }
+                    },
                     "specialist": {
                         "$ref": "#/components/schemas/SpecialistSummary"
                     },
@@ -10290,11 +10330,41 @@
                     "public_number",
                     "room",
                     "service",
+                    "services",
                     "specialist",
                     "starts_at",
                     "status",
                     "updated_at",
                     "version"
+                ]
+            },
+            "AppointmentSelectedService": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "color": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "type": "string"
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "code",
+                    "color",
+                    "duration_minutes",
+                    "id",
+                    "name"
                 ]
             },
             "AppointmentService": {
@@ -10640,6 +10710,16 @@
                     "service": {
                         "$ref": "#/components/schemas/AvailabilityService"
                     },
+                    "services": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AvailabilityService"
+                        }
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
                     "requested_room": {
                         "allOf": [
                             {
@@ -10661,8 +10741,10 @@
                 },
                 "required": [
                     "date",
+                    "duration_minutes",
                     "requested_room",
                     "service",
+                    "services",
                     "slots",
                     "specialist",
                     "step_minutes",
@@ -11047,6 +11129,12 @@
                     "service": {
                         "$ref": "#/components/schemas/CalendarService"
                     },
+                    "services": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CalendarSelectedService"
+                        }
+                    },
                     "specialist": {
                         "$ref": "#/components/schemas/SpecialistSummary"
                     },
@@ -11065,6 +11153,7 @@
                     "public_number",
                     "room",
                     "service",
+                    "services",
                     "specialist",
                     "starts_at",
                     "status"
@@ -11141,6 +11230,31 @@
                     "range",
                     "specialists",
                     "timezone"
+                ]
+            },
+            "CalendarSelectedService": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "color": {
+                        "type": "string"
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "color",
+                    "duration_minutes",
+                    "id",
+                    "name"
                 ]
             },
             "CalendarService": {

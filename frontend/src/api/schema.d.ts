@@ -1644,7 +1644,8 @@ export interface components {
             /** Format: uuid */
             room_id: string;
             /** Format: uuid */
-            service_id: string;
+            service_id?: string;
+            service_ids?: string[];
             specialist_id: number;
             /** Format: date-time */
             starts_at: string;
@@ -1677,6 +1678,7 @@ export interface components {
             public_number: string;
             room: components["schemas"]["RoomSummary"];
             service: components["schemas"]["AppointmentService"];
+            services: components["schemas"]["AppointmentSelectedService"][];
             specialist: components["schemas"]["SpecialistSummary"];
             /** Format: date-time */
             starts_at: string;
@@ -1710,6 +1712,7 @@ export interface components {
             public_number: string;
             room: components["schemas"]["RoomSummary"];
             service: components["schemas"]["AppointmentService"];
+            services: components["schemas"]["AppointmentSelectedService"][];
             specialist: components["schemas"]["SpecialistSummary"];
             /** Format: date-time */
             starts_at: string;
@@ -1717,6 +1720,14 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             version: number;
+        };
+        AppointmentSelectedService: {
+            code: string;
+            color: string;
+            duration_minutes: number;
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         AppointmentService: {
             code: string;
@@ -1808,8 +1819,10 @@ export interface components {
         AvailabilityResponse: {
             /** Format: date */
             date: string;
+            duration_minutes: number;
             requested_room: components["schemas"]["RoomSummary"] | null;
             service: components["schemas"]["AvailabilityService"];
+            services: components["schemas"]["AvailabilityService"][];
             slots: components["schemas"]["AvailabilitySlot"][];
             specialist: components["schemas"]["SpecialistSummary"];
             step_minutes: number;
@@ -1926,6 +1939,7 @@ export interface components {
             public_number: string;
             room: components["schemas"]["RoomSummary"];
             service: components["schemas"]["CalendarService"];
+            services: components["schemas"]["CalendarSelectedService"][];
             specialist: components["schemas"]["SpecialistSummary"];
             /** Format: date-time */
             starts_at: string;
@@ -1949,6 +1963,13 @@ export interface components {
             range: components["schemas"]["CalendarRange"];
             specialists: components["schemas"]["SpecialistSummary"][];
             timezone: string;
+        };
+        CalendarSelectedService: {
+            color: string;
+            duration_minutes: number;
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         CalendarService: {
             color: string;
@@ -4056,6 +4077,7 @@ export interface operations {
                     room_id?: string;
                     /** Format: uuid */
                     service_id?: string;
+                    service_ids?: string[];
                     specialist_id?: number;
                     /** Format: date-time */
                     starts_at?: string;
@@ -4320,7 +4342,8 @@ export interface operations {
             query: {
                 date: string;
                 room_id?: string;
-                service_id: string;
+                service_id?: string;
+                service_ids?: string[];
                 specialist_id: number;
             };
             header?: never;

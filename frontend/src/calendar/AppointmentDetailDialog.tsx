@@ -11,6 +11,7 @@ import { apiClient } from "../api/client";
 import type { components, operations } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { csrfHeaders } from "../auth/AuthContext";
+import { ServiceMultiSelect } from "./ServiceMultiSelect";
 
 type Appointment = components["schemas"]["AppointmentDetailResponse"];
 type AppointmentUpdate = NonNullable<operations["appointment_update"]["requestBody"]>["content"]["application/json"];
@@ -89,7 +90,7 @@ export function AppointmentDetailDialog({
   const [hasNoComplaints, setHasNoComplaints] = useState(false);
   const [comment, setComment] = useState("");
   const [specialistId, setSpecialistId] = useState("");
-  const [serviceId, setServiceId] = useState("");
+  const [serviceIds, setServiceIds] = useState<readonly string[]>([]);
   const [date, setDate] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -98,7 +99,14 @@ export function AppointmentDetailDialog({
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [availabilityVersion, setAvailabilityVersion] = useState(0);
   const [cancelReason, setCancelReason] = useState("");
-  const selectedService = services.find((service) => service.id === serviceId);
+  const selectedServices = serviceIds.flatMap((id) => {
+    const service = services.find((item) => item.id === id);
+    return service === undefined ? [] : [service];
+  });
+  const totalDuration = selectedServices.reduce(
+    (total, service) => total + service.duration_minutes,
+    0,
+  );
   const selectedSlot = availability?.slots.find((slot) => slot.starts_at === startsAt);
 
   const resetForms = useCallback((value: Appointment) => {
@@ -106,7 +114,7 @@ export function AppointmentDetailDialog({
     setHasNoComplaints(value.has_no_complaints);
     setComment(value.comment);
     setSpecialistId(String(value.specialist.id));
-    setServiceId(value.service.id);
+    setServiceIds(value.services.map((service) => service.id));
     setDate(localDateKey(value.starts_at));
     setStartsAt("");
     setRoomId("");
@@ -161,7 +169,7 @@ export function AppointmentDetailDialog({
   useEffect(() => {
     if (mode !== "reschedule") return;
     const parsedSpecialistId = Number(specialistId);
-    if (!serviceId || !date || !Number.isInteger(parsedSpecialistId)) {
+    if (serviceIds.length === 0 || !date || !Number.isInteger(parsedSpecialistId)) {
       setAvailability(null);
       return;
     }
@@ -173,7 +181,7 @@ export function AppointmentDetailDialog({
         query: {
           date,
           specialist_id: parsedSpecialistId,
-          service_id: serviceId,
+          service_ids: [...serviceIds],
         },
       },
     }).then((result) => {
@@ -192,7 +200,7 @@ export function AppointmentDetailDialog({
       setAvailabilityError("Не вдалося перевірити вільні вікна.");
     });
     return () => { active = false; };
-  }, [availabilityVersion, date, mode, serviceId, specialistId]);
+  }, [availabilityVersion, date, mode, serviceIds, specialistId]);
 
   const clearMessages = () => {
     setError(null);
@@ -262,7 +270,7 @@ export function AppointmentDetailDialog({
     const parsedSpecialistId = Number(specialistId);
     const localErrors: Record<string, string[]> = {};
     if (!Number.isInteger(parsedSpecialistId)) localErrors.specialist_id = ["Оберіть спеціаліста."];
-    if (!serviceId) localErrors.service_id = ["Оберіть послугу."];
+    if (serviceIds.length === 0) localErrors.service_ids = ["Оберіть хоча б одну послугу."];
     if (!startsAt) localErrors.starts_at = ["Оберіть нове вільне вікно."];
     if (!roomId) localErrors.room_id = ["Оберіть кабінет."];
     if (Object.keys(localErrors).length > 0) {
@@ -277,7 +285,7 @@ export function AppointmentDetailDialog({
       body: {
         version: appointment.version,
         specialist_id: parsedSpecialistId,
-        service_id: serviceId,
+        service_ids: [...serviceIds],
         room_id: roomId,
         starts_at: startsAt,
       },
@@ -380,7 +388,7 @@ export function AppointmentDetailDialog({
             </div>
             <dl className="appointment-detail__facts">
               <div><dt>Дата й час</dt><dd>{dateTimeFormatter.format(new Date(appointment.starts_at))}–{timeFormatter.format(new Date(appointment.ends_at))}</dd></div>
-              <div><dt>Послуга</dt><dd>{appointment.service.name}<small>{appointment.duration_minutes} хв</small></dd></div>
+              <div className="appointment-detail__wide"><dt>Послуги</dt><dd className="appointment-detail__services">{appointment.services.map((service) => <span key={service.id} style={{ "--service-color": service.color } as CSSProperties}><i aria-hidden="true" />{service.name}<small>{service.duration_minutes} хв</small></span>)}<strong>Разом: {appointment.duration_minutes} хв</strong></dd></div>
               <div><dt>Спеціаліст</dt><dd>{appointment.specialist.display_name}</dd></div>
               <div><dt>Кабінет</dt><dd>{appointment.room.name}</dd></div>
               <div className="appointment-detail__wide"><dt>Скарги</dt><dd>{appointment.has_no_complaints ? "Скарг немає" : appointment.complaints}</dd></div>
@@ -424,9 +432,19 @@ export function AppointmentDetailDialog({
             <div className="appointment-current-slot"><Icon name="calendar" /><span><strong>Поточний час</strong><small>{dateTimeFormatter.format(new Date(appointment.starts_at))} · {appointment.room.name}</small></span></div>
             <div className="appointment-form-grid">
               <label className="form-field"><span>Спеціаліст</span><select onChange={(event) => { setSpecialistId(event.target.value); setStartsAt(""); setRoomId(""); clearMessages(); }} value={specialistId}>{specialists.map((specialist) => <option key={specialist.id} value={specialist.id}>{specialist.display_name}</option>)}</select>{fieldMessage(fieldErrors, "specialist_id") ? <small className="field-error">{fieldMessage(fieldErrors, "specialist_id")}</small> : null}</label>
-              <label className="form-field"><span>Послуга</span><select aria-label="Послуга для перенесення" onChange={(event) => { setServiceId(event.target.value); setStartsAt(""); setRoomId(""); clearMessages(); }} value={serviceId}>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select>{fieldMessage(fieldErrors, "service_id") ? <small className="field-error">{fieldMessage(fieldErrors, "service_id")}</small> : null}</label>
+              <ServiceMultiSelect
+                error={fieldMessage(fieldErrors, "service_ids") ?? fieldMessage(fieldErrors, "service_id")}
+                onChange={(nextServiceIds) => {
+                  setServiceIds(nextServiceIds);
+                  setStartsAt("");
+                  setRoomId("");
+                  clearMessages();
+                }}
+                selectedIds={serviceIds}
+                services={services}
+              />
               <label className="form-field"><span>Нова дата</span><input onChange={(event) => { setDate(event.target.value); setStartsAt(""); setRoomId(""); clearMessages(); }} required type="date" value={date} /></label>
-              <label className="form-field"><span>Тривалість</span><input readOnly value={selectedService ? `${String(selectedService.duration_minutes)} хв` : "—"} /></label>
+              <label className="form-field"><span>Тривалість</span><input readOnly value={totalDuration > 0 ? `${String(totalDuration)} хв` : "—"} /></label>
               <label className="form-field"><span>Новий час</span><select disabled={isLoadingAvailability || availability === null} onChange={(event) => { const value = event.target.value; setStartsAt(value); const slot = availability?.slots.find((item) => item.starts_at === value); setRoomId(slot?.rooms[0]?.id ?? ""); clearMessages(); }} value={startsAt}><option value="">{isLoadingAvailability ? "Перевіряємо…" : "Оберіть час"}</option>{availability?.slots.map((slot) => <option key={slot.starts_at} value={slot.starts_at}>{timeFormatter.format(new Date(slot.starts_at))}–{timeFormatter.format(new Date(slot.ends_at))}</option>)}</select>{fieldMessage(fieldErrors, "starts_at") ? <small className="field-error">{fieldMessage(fieldErrors, "starts_at")}</small> : null}</label>
               <label className="form-field"><span>Кабінет</span><select disabled={!selectedSlot} onChange={(event) => { setRoomId(event.target.value); clearMessages(); }} value={roomId}><option value="">Оберіть кабінет</option>{selectedSlot?.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>{fieldMessage(fieldErrors, "room_id") ? <small className="field-error">{fieldMessage(fieldErrors, "room_id")}</small> : null}</label>
             </div>

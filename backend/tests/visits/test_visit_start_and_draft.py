@@ -10,9 +10,9 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User, UserRole
 from apps.audit.models import AuditEvent
 from apps.audit.registry import AuditAction
-from apps.clinic.models import AppointmentStatusConfig
+from apps.clinic.models import AppointmentStatusConfig, Service
 from apps.inventory.models import InventoryOperation, StockMovement
-from apps.scheduling.models import Appointment
+from apps.scheduling.models import Appointment, AppointmentServiceLine
 from apps.visits.models import DetectedCondition, Visit, VisitStatus
 from tests.scheduling.test_create_appointment import (
     appointment_payload,
@@ -112,6 +112,37 @@ def test_assigned_podologist_starts_one_seeded_visit_idempotently() -> None:
     assert AuditEvent.objects.filter(action=AuditAction.VISIT_STARTED).count() == 1
     assert InventoryOperation.objects.count() == 0
     assert StockMovement.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_start_visit_copies_every_appointment_service_into_the_draft() -> None:
+    admin = create_user(email="admin-multi@example.test", role=UserRole.ADMIN)
+    appointment = arrived_appointment(actor=admin)
+    additional = Service.objects.create(
+        code="NAILS",
+        name="Обробка нігтів",
+        duration_minutes=30,
+        price_minor=80000,
+        color="#7C3AED",
+    )
+    AppointmentServiceLine.objects.create(
+        appointment=appointment,
+        service=additional,
+        position=1,
+        duration_minutes=additional.duration_minutes,
+        service_name_snapshot=additional.name,
+        service_color_snapshot=additional.color,
+    )
+
+    response = start(authenticated_client(admin), appointment)
+
+    assert response.status_code == 201
+    assert [line["service_id"] for line in response.json()["service_lines"]] == [
+        str(appointment.service_id),
+        str(additional.pk),
+    ]
+    assert response.json()["service_lines"][0]["is_primary"] is True
+    assert response.json()["service_lines"][1]["is_primary"] is False
 
 
 @pytest.mark.django_db

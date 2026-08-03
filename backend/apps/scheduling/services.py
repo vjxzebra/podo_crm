@@ -13,7 +13,7 @@ from apps.audit.services import record_audit_event
 from apps.clinic.models import AppointmentStatusConfig, ClinicWorkday, Room, Service
 from apps.patients.models import Patient
 from apps.patients.selectors import patients_visible_to
-from apps.scheduling.models import Appointment
+from apps.scheduling.models import Appointment, AppointmentServiceLine
 from apps.scheduling.selectors import (
     AVAILABILITY_STEP_MINUTES,
     CLINIC_TIMEZONE,
@@ -23,11 +23,13 @@ from config.api.exceptions import ApiProblem
 
 
 def appointment_snapshot(appointment: Appointment) -> dict[str, Any]:
+    selected_services = _appointment_services_read_model(appointment)
     return {
         "public_number": appointment.public_number,
         "patient_id": appointment.patient_id,
         "specialist_id": appointment.specialist_id,
         "service_id": appointment.service_id,
+        "service_ids": [item["id"] for item in selected_services],
         "room_id": appointment.room_id,
         "starts_at": appointment.starts_at,
         "ends_at": appointment.ends_at,
@@ -45,6 +47,7 @@ def appointment_snapshot(appointment: Appointment) -> dict[str, Any]:
 
 
 def appointment_read_model(appointment: Appointment) -> dict[str, Any]:
+    selected_services = _appointment_services_read_model(appointment)
     return {
         "id": appointment.pk,
         "public_number": appointment.public_number,
@@ -63,6 +66,7 @@ def appointment_read_model(appointment: Appointment) -> dict[str, Any]:
             "name": appointment.service_name_snapshot,
             "color": appointment.service_color_snapshot,
         },
+        "services": selected_services,
         "specialist": {
             "id": appointment.specialist_id,
             "display_name": appointment.specialist.display_name,
@@ -84,6 +88,35 @@ def appointment_read_model(appointment: Appointment) -> dict[str, Any]:
         "created_at": appointment.created_at,
         "updated_at": appointment.updated_at,
     }
+
+
+def _appointment_services_read_model(appointment: Appointment) -> list[dict[str, Any]]:
+    prefetched = getattr(appointment, "_prefetched_objects_cache", {}).get("service_lines")
+    lines = (
+        list(prefetched)
+        if prefetched is not None
+        else list(appointment.service_lines.select_related("service").all())
+    )
+    if not lines:
+        return [
+            {
+                "id": appointment.service_id,
+                "code": appointment.service.code,
+                "name": appointment.service_name_snapshot,
+                "color": appointment.service_color_snapshot,
+                "duration_minutes": appointment.duration_minutes,
+            }
+        ]
+    return [
+        {
+            "id": line.service_id,
+            "code": line.service.code,
+            "name": line.service_name_snapshot,
+            "color": line.service_color_snapshot,
+            "duration_minutes": line.duration_minutes,
+        }
+        for line in lines
+    ]
 
 
 STATUS_TRANSITIONS: dict[str, tuple[str, ...]] = {
@@ -229,16 +262,56 @@ def _active_specialist(*, actor: User, specialist_id: int) -> User:
     return specialist
 
 
-def _active_service(service_id: UUID) -> Service:
-    service = Service.objects.select_for_update().filter(pk=service_id, is_active=True).first()
-    if service is None:
+def _active_services(service_ids: list[UUID]) -> list[Service]:
+    services_by_id = {
+        service.pk: service
+        for service in Service.objects.select_for_update().filter(
+            pk__in=service_ids,
+            is_active=True,
+        )
+    }
+    if len(services_by_id) != len(service_ids):
         raise ApiProblem(
             code="appointment_service_unavailable",
-            message="Послуга недоступна для нового запису.",
+            message="Одна або кілька послуг недоступні для нового запису.",
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            fields={"service_id": ["Оберіть активну послугу."]},
+            fields={"service_ids": ["Оберіть лише активні послуги."]},
         )
-    return service
+    return [services_by_id[service_id] for service_id in service_ids]
+
+
+def _active_service(service_id: UUID) -> Service:
+    """Compatibility helper for single-service follow-up appointment workflows."""
+    try:
+        return _active_services([service_id])[0]
+    except ApiProblem as exc:
+        raise ApiProblem(
+            code=exc.problem_code,
+            message="Послуга недоступна для нового запису.",
+            status_code=exc.status_code,
+            fields={"service_id": ["Оберіть активну послугу."]},
+        ) from exc
+
+
+def _replace_service_lines(
+    *,
+    appointment: Appointment,
+    services: list[Service],
+) -> None:
+    appointment.service_lines.all().delete()
+    AppointmentServiceLine.objects.bulk_create(
+        [
+            AppointmentServiceLine(
+                appointment=appointment,
+                service=service,
+                position=position,
+                duration_minutes=service.duration_minutes,
+                service_name_snapshot=service.name,
+                service_color_snapshot=service.color,
+            )
+            for position, service in enumerate(services)
+        ]
+    )
 
 
 def _active_room(room_id: UUID) -> Room:
@@ -348,10 +421,12 @@ def create_appointment(
     )
     patient = _visible_patient(actor=actor, patient_id=data["patient_id"])
     specialist = _active_specialist(actor=actor, specialist_id=data["specialist_id"])
-    service = _active_service(data["service_id"])
+    services = _active_services(data["service_ids"])
+    primary_service = services[0]
     room = _active_room(data["room_id"])
     starts_at = data["starts_at"]
-    ends_at = starts_at + timedelta(minutes=service.duration_minutes)
+    duration_minutes = sum(service.duration_minutes for service in services)
+    ends_at = starts_at + timedelta(minutes=duration_minutes)
     _validate_clinic_time(starts_at=starts_at, ends_at=ends_at)
     _validate_occupancy(
         specialist=specialist,
@@ -363,18 +438,19 @@ def create_appointment(
     appointment = Appointment.objects.create(
         patient=patient,
         specialist=specialist,
-        service=service,
+        service=primary_service,
         room=room,
         time_range=(starts_at, ends_at),
-        duration_minutes=service.duration_minutes,
-        service_name_snapshot=service.name,
-        service_color_snapshot=service.color,
+        duration_minutes=duration_minutes,
+        service_name_snapshot=primary_service.name,
+        service_color_snapshot=primary_service.color,
         room_label_snapshot=room.name,
         status=status_config,
         complaints=complaints,
         has_no_complaints=has_no_complaints,
         comment=str(data.get("comment", "")).strip(),
     )
+    _replace_service_lines(appointment=appointment, services=services)
     appointment.refresh_from_db()
     record_audit_event(
         actor=actor,
@@ -448,10 +524,15 @@ def update_appointment(
     has_no_complaints = bool(data.get("has_no_complaints", appointment.has_no_complaints))
     _validate_complaints(complaints=complaints, has_no_complaints=has_no_complaints)
 
-    schedule_fields = {"specialist_id", "service_id", "room_id", "starts_at"}
+    schedule_fields = {"specialist_id", "service_ids", "room_id", "starts_at"}
     schedule_changed = bool(schedule_fields.intersection(data))
     specialist = appointment.specialist
-    service = appointment.service
+    current_lines = list(
+        appointment.service_lines.select_for_update().select_related("service").all()
+    )
+    current_services = [line.service for line in current_lines] or [appointment.service]
+    services = current_services
+    primary_service = appointment.service
     room = appointment.room
     starts_at = appointment.starts_at
     ends_at = appointment.ends_at
@@ -460,10 +541,17 @@ def update_appointment(
             actor=actor,
             specialist_id=int(data.get("specialist_id", appointment.specialist_id)),
         )
-        service = _active_service(data.get("service_id", appointment.service_id))
+        requested_service_ids = data.get(
+            "service_ids",
+            [service.pk for service in current_services],
+        )
+        services = _active_services(requested_service_ids)
+        primary_service = services[0]
         room = _active_room(data.get("room_id", appointment.room_id))
         starts_at = data.get("starts_at", appointment.starts_at)
-        ends_at = starts_at + timedelta(minutes=service.duration_minutes)
+        ends_at = starts_at + timedelta(
+            minutes=sum(service.duration_minutes for service in services)
+        )
         _validate_clinic_time(starts_at=starts_at, ends_at=ends_at)
         _validate_occupancy(
             specialist=specialist,
@@ -475,12 +563,15 @@ def update_appointment(
 
     candidate = {
         "specialist_id": specialist.pk,
-        "service_id": service.pk,
+        "service_id": primary_service.pk,
+        "service_ids": [service.pk for service in services],
         "room_id": room.pk,
         "starts_at": starts_at,
         "ends_at": ends_at,
         "duration_minutes": (
-            service.duration_minutes if schedule_changed else appointment.duration_minutes
+            sum(service.duration_minutes for service in services)
+            if schedule_changed
+            else appointment.duration_minutes
         ),
         "complaints": complaints,
         "has_no_complaints": has_no_complaints,
@@ -496,19 +587,21 @@ def update_appointment(
         )
 
     appointment.specialist = specialist
-    appointment.service = service
+    appointment.service = primary_service
     appointment.room = room
     appointment.time_range = (starts_at, ends_at)
     if schedule_changed:
-        appointment.duration_minutes = service.duration_minutes
-        appointment.service_name_snapshot = service.name
-        appointment.service_color_snapshot = service.color
+        appointment.duration_minutes = candidate["duration_minutes"]
+        appointment.service_name_snapshot = primary_service.name
+        appointment.service_color_snapshot = primary_service.color
         appointment.room_label_snapshot = room.name
     appointment.complaints = complaints
     appointment.has_no_complaints = has_no_complaints
     appointment.comment = candidate["comment"]
     appointment.version += 1
     appointment.save()
+    if schedule_changed:
+        _replace_service_lines(appointment=appointment, services=services)
     appointment.refresh_from_db()
 
     action = (
