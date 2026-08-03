@@ -2888,11 +2888,16 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
 .calendar-event { position: relative; z-index: 4; min-width: 0; margin: 2px 5px; padding: 7px 8px 6px 11px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--event-color) 42%, white); border-radius: 8px; color: var(--color-ink); background: color-mix(in srgb, var(--event-color) 10%, white); box-shadow: 0 3px 10px rgb(40 56 50 / 8%); font: inherit; text-align: left; touch-action: manipulation; cursor: pointer; }
 .calendar-event:hover { z-index: 5; box-shadow: 0 6px 16px rgb(40 56 50 / 14%); transform: translateY(-1px); }
 .calendar-event:focus-visible { z-index: 5; outline: 2px solid var(--color-sage); outline-offset: 1px; }
-.calendar-event::before { position: absolute; top: 0; bottom: 0; left: 0; width: 4px; background: var(--event-color); content: ""; }
+.calendar-event__color-rail { position: absolute; inset-block: 0; left: 0; display: flex; width: 5px; overflow: hidden; flex-direction: column; }
+.calendar-event__color-rail i { min-height: 3px; background: var(--service-color); }
 .calendar-event__heading { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 5px; }
 .calendar-event strong { overflow: hidden; font-size: 0.61rem; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-event time { flex: 0 0 auto; color: var(--color-muted); font-size: 0.48rem; font-weight: 750; }
-.calendar-event p { margin: 4px 0 5px; overflow: hidden; color: var(--color-muted); font-size: 0.5rem; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-event p { margin: 3px 0 5px; overflow: hidden; color: var(--color-muted); font-size: 0.47rem; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-event__service-list { display: flex; min-width: 0; gap: 2px 7px; margin-top: 4px; overflow: hidden; flex-wrap: wrap; }
+.calendar-event__service-list > span { display: inline-flex; min-width: 0; align-items: center; gap: 4px; overflow: hidden; font-size: 0.49rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-event__service-list i,
+.calendar-week-event__services i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--service-color); }
 .calendar-event__status { display: inline-flex; max-width: 100%; align-items: center; gap: 4px; overflow: hidden; color: var(--status-color); font-size: 0.47rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-event__status::before { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--status-color); content: ""; }
 .calendar-event--canceled { opacity: 0.62; text-decoration: line-through; }
@@ -2911,11 +2916,12 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
 .calendar-week-event { position: relative; display: grid; min-width: 0; gap: 3px; padding: 10px 9px 9px 12px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--event-color) 35%, white); border-radius: 9px; color: var(--color-ink); background: color-mix(in srgb, var(--event-color) 8%, white); font: inherit; text-align: left; cursor: pointer; }
 .calendar-week-event:hover { box-shadow: 0 5px 13px rgb(40 56 50 / 10%); }
 .calendar-week-event:focus-visible { outline: 2px solid var(--color-sage); outline-offset: 1px; }
-.calendar-week-event::before { position: absolute; inset-block: 0; left: 0; width: 3px; background: var(--event-color); content: ""; }
 .calendar-week-event time { color: var(--color-muted); font-size: 0.5rem; font-weight: 800; }
 .calendar-week-event strong { overflow: hidden; font-size: 0.59rem; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-week-event small { overflow: hidden; color: var(--color-muted); font-size: 0.5rem; text-overflow: ellipsis; white-space: nowrap; }
-.calendar-week-event > span { justify-self: start; margin-top: 3px; padding: 3px 6px; border-radius: 5px; color: var(--color-sage-dark); background: rgb(255 255 255 / 70%); font-size: 0.47rem; font-weight: 800; }
+.calendar-week-event__services { display: grid; gap: 3px; }
+.calendar-week-event__services small { display: flex; align-items: center; gap: 5px; }
+.calendar-week-event__status { justify-self: start; margin-top: 3px; padding: 3px 6px; border-radius: 5px; color: var(--color-sage-dark); background: rgb(255 255 255 / 70%); font-size: 0.47rem; font-weight: 800; }
 .calendar-week-empty { display: flex; align-items: center; justify-content: center; gap: 8px; margin: auto; color: var(--color-muted); font-size: 0.6rem; text-align: left; }
 .calendar-week-empty > svg { width: 19px; height: 19px; }
 .calendar-week-empty span,
@@ -2929,6 +2935,30 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
 .appointment-editor .modal-card__header p:last-child { margin: 6px 0 0; color: var(--color-muted); font-size: 0.63rem; line-height: 1.5; }
 .appointment-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 .appointment-form-wide { grid-column: 1 / -1; }
+.service-multiselect { min-width: 0; margin: 16px 0 1px; padding: 0; border: 0; }
+.service-multiselect legend { margin-bottom: 7px; padding: 0; font-size: 0.68rem; font-weight: 800; }
+.service-multiselect__search { display: flex; min-height: 44px; align-items: center; gap: 9px; padding: 0 12px; border: 1px solid #d8dfdc; border-radius: 11px; background: #fff; }
+.service-multiselect__search:focus-within { border-color: var(--color-sage); box-shadow: 0 0 0 3px rgb(82 121 110 / 12%); }
+.service-multiselect__search svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--color-subtle); }
+.service-multiselect__search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 0.68rem; }
+.service-multiselect__options { display: grid; max-height: 190px; gap: 4px; margin-top: 7px; padding: 5px; overflow-y: auto; border: 1px solid var(--color-line); border-radius: 11px; background: #fff; }
+.service-multiselect__option { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
+.service-multiselect__option:hover,
+.service-multiselect__option--selected { background: var(--color-sage-soft); }
+.service-multiselect__option input { width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--color-sage); }
+.service-multiselect__option > span:last-child { display: grid; min-width: 0; gap: 2px; }
+.service-multiselect__option strong { overflow: hidden; font-size: 0.62rem; text-overflow: ellipsis; white-space: nowrap; }
+.service-multiselect__option small { color: var(--color-muted); font-size: 0.52rem; }
+.service-color-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--service-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--service-color) 16%, white); }
+.service-multiselect__empty,
+.service-multiselect__hint { margin: 0; padding: 9px; color: var(--color-muted); font-size: 0.56rem; }
+.service-multiselect__hint { display: block; padding-inline: 2px; }
+.service-multiselect__selected { display: grid; gap: 6px; margin-top: 8px; }
+.service-multiselect__selected > span { color: var(--color-sage-dark); font-size: 0.58rem; font-weight: 800; }
+.service-multiselect__selected > div { display: flex; gap: 5px; flex-wrap: wrap; }
+.service-multiselect__selected button { display: inline-flex; min-height: 29px; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--service-color) 35%, white); border-radius: 999px; color: var(--color-ink); background: color-mix(in srgb, var(--service-color) 9%, white); font: inherit; font-size: 0.54rem; font-weight: 750; cursor: pointer; }
+.service-multiselect__selected button > span:first-child { width: 7px; height: 7px; border-radius: 50%; background: var(--service-color); }
+.service-multiselect__selected button b { font-size: 0.75rem; }
 .appointment-patient-field { margin: 0 0 3px; }
 .appointment-patient-field > span:first-child { display: block; margin-bottom: 7px; font-size: 0.68rem; font-weight: 800; }
 .appointment-inline-loading { padding: 13px; border: 1px solid var(--color-line); border-radius: 11px; color: var(--color-muted); background: #f8faf9; font-size: 0.61rem; }
@@ -2938,6 +2968,10 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
 .appointment-patient-empty .button { min-height: 34px; flex: 0 0 auto; padding: 0 10px; }
 .appointment-availability-state { display: flex; min-height: 42px; align-items: center; padding: 8px 11px; border: 1px solid #cfe1da; border-radius: 10px; color: var(--color-sage-dark); background: var(--color-sage-soft); font-size: 0.58rem; font-weight: 750; line-height: 1.35; }
 .appointment-availability-state--error { border-color: #e9c9c4; color: var(--color-coral-ink); background: var(--color-coral); }
+.appointment-detail__services { display: grid; gap: 7px; }
+.appointment-detail__services > span { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 7px; }
+.appointment-detail__services i { width: 9px; height: 9px; border-radius: 50%; background: var(--service-color); }
+.appointment-detail__services > strong { padding-top: 3px; border-top: 1px solid var(--color-line); color: var(--color-sage-dark); font-size: 0.6rem; }
 
 /* TP-403 appointment detail and workflow */
 .appointment-detail { width: min(100%, 720px); }

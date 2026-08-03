@@ -48,6 +48,12 @@ APPOINTMENT_UPDATE_REQUEST_SCHEMA = {
         "version": {"type": "integer", "minimum": 1},
         "specialist_id": {"type": "integer", "minimum": 1},
         "service_id": {"type": "string", "format": "uuid"},
+        "service_ids": {
+            "type": "array",
+            "items": {"type": "string", "format": "uuid"},
+            "minItems": 1,
+            "maxItems": 20,
+        },
         "room_id": {"type": "string", "format": "uuid"},
         "starts_at": {"type": "string", "format": "date-time"},
         "complaints": {"type": "string", "maxLength": 4000},
@@ -120,7 +126,17 @@ class AppointmentAvailabilityView(APIView):
             role=UserRole.PODOLOGIST,
             is_active=True,
         )
-        service = get_object_or_404(Service, pk=query["service_id"], is_active=True)
+        services_by_id = {
+            service.pk: service
+            for service in Service.objects.filter(pk__in=query["service_ids"], is_active=True)
+        }
+        if len(services_by_id) != len(query["service_ids"]):
+            raise ApiProblem(
+                code="not_found",
+                message="Ресурс не знайдено.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        services = [services_by_id[service_id] for service_id in query["service_ids"]]
         room = None
         if room_id := query.get("room_id"):
             room = get_object_or_404(Room, pk=room_id, is_active=True)
@@ -128,7 +144,7 @@ class AppointmentAvailabilityView(APIView):
             actor=_actor(request),
             local_date=query["date"],
             specialist=specialist,
-            service=service,
+            services=services,
             requested_room=room,
         )
         return Response(AvailabilityResponseSerializer(result).data)

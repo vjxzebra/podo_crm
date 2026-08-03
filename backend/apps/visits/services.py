@@ -282,16 +282,34 @@ def start_visit(
         has_no_complaints=appointment.has_no_complaints,
         started_by=actor,
     )
-    VisitServiceLine.objects.create(
-        visit=visit,
-        service=appointment.service,
-        service_code=appointment.service.code,
-        service_name=appointment.service_name_snapshot,
-        duration_minutes=appointment.duration_minutes,
-        price_minor=appointment.service.price_minor,
-        quantity=1,
-        is_primary=True,
-    )
+    appointment_service_lines = list(appointment.service_lines.select_related("service").all())
+    if appointment_service_lines:
+        VisitServiceLine.objects.bulk_create(
+            [
+                VisitServiceLine(
+                    visit=visit,
+                    service=line.service,
+                    service_code=line.service.code,
+                    service_name=line.service_name_snapshot,
+                    duration_minutes=line.duration_minutes,
+                    price_minor=line.service.price_minor,
+                    quantity=1,
+                    is_primary=line.position == 0,
+                )
+                for line in appointment_service_lines
+            ]
+        )
+    else:
+        VisitServiceLine.objects.create(
+            visit=visit,
+            service=appointment.service,
+            service_code=appointment.service.code,
+            service_name=appointment.service_name_snapshot,
+            duration_minutes=appointment.duration_minutes,
+            price_minor=appointment.service.price_minor,
+            quantity=1,
+            is_primary=True,
+        )
     record_audit_event(
         actor=actor,
         action=AuditAction.VISIT_STARTED,

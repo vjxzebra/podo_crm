@@ -238,6 +238,32 @@ def test_availability_respects_hours_breaks_duration_specialist_and_room_occupan
 
 
 @pytest.mark.django_db
+def test_availability_uses_the_sum_of_all_selected_service_durations() -> None:
+    admin = create_user(email="admin-multi@example.test", role=UserRole.ADMIN)
+    specialist = create_user(email="multi@example.test", role=UserRole.PODOLOGIST)
+    Room.objects.get_or_create(name="Кабінет 1")
+    first = create_service(code="FIRST", duration_minutes=45)
+    second = create_service(code="SECOND", duration_minutes=30)
+    second.name = "Обробка нігтів"
+    second.color = "#7C3AED"
+    second.save(update_fields=("name", "color"))
+    query = (
+        f"date=2026-07-27&specialist_id={specialist.pk}"
+        f"&service_ids={first.pk}&service_ids={second.pk}"
+    )
+
+    response = authenticated_client(admin).get(f"/api/v1/appointments/availability?{query}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["duration_minutes"] == 75
+    assert [item["id"] for item in body["services"]] == [str(first.pk), str(second.pk)]
+    assert body["slots"][0]["ends_at"] == "2026-07-27T07:15:00Z"
+    assert "2026-07-27T13:45:00Z" in {item["starts_at"] for item in body["slots"]}
+    assert "2026-07-27T14:00:00Z" not in {item["starts_at"] for item in body["slots"]}
+
+
+@pytest.mark.django_db
 def test_availability_is_closed_on_non_working_day_and_hides_foreign_podologist() -> None:
     podologist = create_user(email="owner@example.test", role=UserRole.PODOLOGIST)
     foreign = create_user(email="foreign@example.test", role=UserRole.PODOLOGIST)

@@ -24,7 +24,7 @@ def appointments_visible_to(actor: User) -> QuerySet[Appointment]:
         "room",
         "status",
         "visit",
-    )
+    ).prefetch_related("service_lines__service")
     if actor.role == UserRole.PODOLOGIST:
         return queryset.filter(specialist=actor)
     return queryset
@@ -35,7 +35,7 @@ def appointments_for_global_search(actor: User, search: str) -> QuerySet[Appoint
 
     term = search.strip()
     digits = phone_digits(term)
-    scoped_appointments = appointments_visible_to(actor).select_related(None)
+    scoped_appointments = appointments_visible_to(actor).select_related(None).prefetch_related(None)
     matching_appointment_ids = (
         scoped_appointments.filter(
             Q(public_number__icontains=term) | Q(service_name_snapshot__icontains=term)
@@ -192,6 +192,7 @@ def calendar_read_model(
             "room",
             "status",
         )
+        .prefetch_related("service_lines__service")
         .filter(
             specialist__in=specialists,
             time_range__overlap=(range_start, range_end),
@@ -237,36 +238,59 @@ def calendar_read_model(
             }
         )
 
-    events = [
-        {
-            "id": appointment.pk,
-            "public_number": appointment.public_number,
-            "starts_at": appointment.starts_at,
-            "ends_at": appointment.ends_at,
-            "duration_minutes": appointment.duration_minutes,
-            "patient": {
-                "id": appointment.patient_id,
-                "public_number": appointment.patient.public_number,
-                "display_name": appointment.patient.display_name,
-            },
-            "service": {
-                "id": appointment.service_id,
-                "name": appointment.service_name_snapshot,
-                "color": appointment.service_color_snapshot,
-            },
-            "specialist": _specialist_summary(appointment.specialist),
-            "room": {
-                "id": appointment.room_id,
-                "name": appointment.room_label_snapshot,
-            },
-            "status": {
-                "code": appointment.status_id,
-                "label": appointment.status.label,
-                "color": appointment.status.color,
-            },
-        }
-        for appointment in appointments
-    ]
+    events = []
+    for appointment in appointments:
+        service_lines = list(appointment.service_lines.all())
+        selected_services = (
+            [
+                {
+                    "id": line.service_id,
+                    "name": line.service_name_snapshot,
+                    "color": line.service_color_snapshot,
+                    "duration_minutes": line.duration_minutes,
+                }
+                for line in service_lines
+            ]
+            if service_lines
+            else [
+                {
+                    "id": appointment.service_id,
+                    "name": appointment.service_name_snapshot,
+                    "color": appointment.service_color_snapshot,
+                    "duration_minutes": appointment.duration_minutes,
+                }
+            ]
+        )
+        events.append(
+            {
+                "id": appointment.pk,
+                "public_number": appointment.public_number,
+                "starts_at": appointment.starts_at,
+                "ends_at": appointment.ends_at,
+                "duration_minutes": appointment.duration_minutes,
+                "patient": {
+                    "id": appointment.patient_id,
+                    "public_number": appointment.patient.public_number,
+                    "display_name": appointment.patient.display_name,
+                },
+                "service": {
+                    "id": appointment.service_id,
+                    "name": appointment.service_name_snapshot,
+                    "color": appointment.service_color_snapshot,
+                },
+                "services": selected_services,
+                "specialist": _specialist_summary(appointment.specialist),
+                "room": {
+                    "id": appointment.room_id,
+                    "name": appointment.room_label_snapshot,
+                },
+                "status": {
+                    "code": appointment.status_id,
+                    "label": appointment.status.label,
+                    "color": appointment.status.color,
+                },
+            }
+        )
     return {
         "timezone": CLINIC_TIMEZONE_NAME,
         "range": {
@@ -288,7 +312,7 @@ def appointment_availability(
     actor: User,
     local_date: date,
     specialist: User,
-    service: Service,
+    services: list[Service],
     requested_room: Room | None,
 ) -> dict[str, object]:
     if actor.role == UserRole.PODOLOGIST and specialist.pk != actor.pk:
@@ -347,7 +371,8 @@ def appointment_availability(
             if appointment.room_id in room_busy:
                 room_busy[appointment.room_id].append((appointment.starts_at, appointment.ends_at))
 
-        duration = timedelta(minutes=service.duration_minutes)
+        duration_minutes = sum(service.duration_minutes for service in services)
+        duration = timedelta(minutes=duration_minutes)
         step = timedelta(minutes=AVAILABILITY_STEP_MINUTES)
         candidate = day_start
         while candidate + duration <= day_end:
@@ -384,10 +409,19 @@ def appointment_availability(
         "date": local_date,
         "specialist": _specialist_summary(specialist),
         "service": {
-            "id": service.pk,
-            "name": service.name,
-            "duration_minutes": service.duration_minutes,
+            "id": services[0].pk,
+            "name": services[0].name,
+            "duration_minutes": services[0].duration_minutes,
         },
+        "services": [
+            {
+                "id": service.pk,
+                "name": service.name,
+                "duration_minutes": service.duration_minutes,
+            }
+            for service in services
+        ],
+        "duration_minutes": sum(service.duration_minutes for service in services),
         "requested_room": _room_summary(requested_room) if requested_room is not None else None,
         "step_minutes": AVAILABILITY_STEP_MINUTES,
         "slots": slots,

@@ -12,7 +12,7 @@ from apps.audit.models import AuditEvent
 from apps.audit.registry import AuditAction
 from apps.clinic.models import AppointmentStatusConfig, ClinicBreak, ClinicWorkday, Room, Service
 from apps.patients.models import Patient
-from apps.scheduling.models import Appointment
+from apps.scheduling.models import Appointment, AppointmentServiceLine
 
 PASSWORD = "test-only-password-placeholder"  # noqa: S105
 KYIV = ZoneInfo("Europe/Kyiv")
@@ -143,6 +143,67 @@ def test_admin_and_reception_create_audited_appointment_with_server_snapshots(ro
     assert event.object_id == str(appointment.pk)
     assert event.actor_id == actor.pk
     assert event.after["patient_id"] == str(patient.pk)
+
+
+@pytest.mark.django_db
+def test_create_sums_multiple_services_and_keeps_ordered_color_snapshots() -> None:
+    specialist, service, room, patient = scheduling_fixture()
+    additional = Service.objects.create(
+        code="NAILS",
+        name="Обробка нігтів",
+        duration_minutes=30,
+        price_minor=80000,
+        color="#7C3AED",
+    )
+    admin = create_user(email="admin-multi@example.test", role=UserRole.ADMIN)
+    payload = appointment_payload(
+        specialist=specialist,
+        service=service,
+        room=room,
+        patient=patient,
+    )
+    payload.pop("service_id")
+    payload["service_ids"] = [str(service.pk), str(additional.pk)]
+
+    response = authenticated_client(admin).post(
+        "/api/v1/appointments",
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["duration_minutes"] == 75
+    assert body["ends_at"] == "2026-07-27T08:15:00Z"
+    assert body["services"] == [
+        {
+            "id": str(service.pk),
+            "code": service.code,
+            "name": service.name,
+            "color": service.color,
+            "duration_minutes": 45,
+        },
+        {
+            "id": str(additional.pk),
+            "code": additional.code,
+            "name": additional.name,
+            "color": additional.color,
+            "duration_minutes": 30,
+        },
+    ]
+    appointment = Appointment.objects.get()
+    assert appointment.service_id == service.pk
+    assert appointment.duration_minutes == 75
+    assert list(
+        AppointmentServiceLine.objects.values_list(
+            "service_id", "position", "duration_minutes", "service_color_snapshot"
+        )
+    ) == [
+        (service.pk, 0, 45, "#0F766E"),
+        (additional.pk, 1, 30, "#7C3AED"),
+    ]
+    event = AuditEvent.objects.get(action=AuditAction.APPOINTMENT_CREATED)
+    assert event.after["service_ids"] == [str(service.pk), str(additional.pk)]
 
 
 @pytest.mark.django_db

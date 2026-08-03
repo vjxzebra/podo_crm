@@ -11,6 +11,7 @@ import type { components } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { csrfHeaders, useAuth } from "../auth/AuthContext";
 import { PatientCreateDialog } from "../patients/PatientsPage";
+import { ServiceMultiSelect } from "./ServiceMultiSelect";
 
 type Appointment = components["schemas"]["AppointmentResponse"];
 type AppointmentCreateRequest = components["schemas"]["AppointmentCreateRequest"];
@@ -89,7 +90,7 @@ export function AppointmentCreateDialog({
   const [specialistId, setSpecialistId] = useState(
     initialSpecialistId === undefined ? "" : String(initialSpecialistId),
   );
-  const [serviceId, setServiceId] = useState("");
+  const [serviceIds, setServiceIds] = useState<readonly string[]>([]);
   const [date, setDate] = useState(initialDate);
   const [startsAt, setStartsAt] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -105,12 +106,19 @@ export function AppointmentCreateDialog({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [confirmClose, setConfirmClose] = useState(false);
   const presetSlotPending = useRef(presetSlot !== null && presetSlot !== undefined);
-  const selectedService = services.find((service) => service.id === serviceId);
+  const selectedServices = serviceIds.flatMap((id) => {
+    const service = services.find((item) => item.id === id);
+    return service === undefined ? [] : [service];
+  });
+  const totalDuration = selectedServices.reduce(
+    (total, service) => total + service.duration_minutes,
+    0,
+  );
   const selectedSlot = availability?.slots.find((slot) => slot.starts_at === startsAt);
   const fingerprint = JSON.stringify({
     patientId: selectedPatient?.id ?? null,
     specialistId,
-    serviceId,
+    serviceIds,
     date,
     startsAt,
     roomId,
@@ -121,7 +129,7 @@ export function AppointmentCreateDialog({
   const initialFingerprint = useMemo(() => JSON.stringify({
     patientId: presetPatientId ?? null,
     specialistId: initialSpecialistId === undefined ? "" : String(initialSpecialistId),
-    serviceId: "",
+    serviceIds: [],
     date: initialDate,
     startsAt: "",
     roomId: "",
@@ -190,7 +198,7 @@ export function AppointmentCreateDialog({
 
   useEffect(() => {
     const parsedSpecialistId = Number(specialistId);
-    if (!serviceId || !Number.isInteger(parsedSpecialistId) || parsedSpecialistId < 1 || !date) {
+    if (serviceIds.length === 0 || !Number.isInteger(parsedSpecialistId) || parsedSpecialistId < 1 || !date) {
       setAvailability(null);
       setIsLoadingAvailability(false);
       return;
@@ -203,7 +211,7 @@ export function AppointmentCreateDialog({
         query: {
           date,
           specialist_id: parsedSpecialistId,
-          service_id: serviceId,
+          service_ids: [...serviceIds],
         },
       },
     }).then((result) => {
@@ -236,7 +244,7 @@ export function AppointmentCreateDialog({
       }
     });
     return () => { active = false; };
-  }, [availabilityVersion, date, presetSlot, serviceId, specialistId]);
+  }, [availabilityVersion, date, presetSlot, serviceIds, specialistId]);
 
   const requestClose = () => {
     if (fingerprint !== initialFingerprint) {
@@ -254,7 +262,7 @@ export function AppointmentCreateDialog({
     if (!Number.isInteger(parsedSpecialistId) || parsedSpecialistId < 1) {
       localErrors.specialist_id = ["Оберіть спеціаліста."];
     }
-    if (!serviceId) localErrors.service_id = ["Оберіть послугу."];
+    if (serviceIds.length === 0) localErrors.service_ids = ["Оберіть хоча б одну послугу."];
     if (!startsAt) localErrors.starts_at = ["Оберіть вільний час."];
     if (!roomId) localErrors.room_id = ["Оберіть доступний кабінет."];
     if (hasNoComplaints === Boolean(complaints.trim())) {
@@ -272,7 +280,7 @@ export function AppointmentCreateDialog({
     const body: AppointmentCreateRequest = {
       patient_id: selectedPatient?.id ?? "",
       specialist_id: parsedSpecialistId,
-      service_id: serviceId,
+      service_ids: [...serviceIds],
       room_id: roomId,
       starts_at: startsAt,
       complaints,
@@ -331,13 +339,24 @@ export function AppointmentCreateDialog({
             </div>
 
             <label className="form-field"><span>Спеціаліст</span><select aria-label="Спеціаліст" disabled={isPodologist} onChange={(event) => { presetSlotPending.current = false; setSpecialistId(event.target.value); setStartsAt(""); setRoomId(""); clearMessages(); }} value={specialistId}><option value="">Оберіть спеціаліста</option>{specialists.map((specialist) => <option key={specialist.id} value={specialist.id}>{specialist.display_name}</option>)}</select>{isPodologist ? <small>Подолог створює запис лише до себе.</small> : null}{fieldMessage(fieldErrors, "specialist_id") ? <small className="field-error">{fieldMessage(fieldErrors, "specialist_id")}</small> : null}</label>
-            <label className="form-field"><span>Послуга</span><select disabled={isLoadingServices} onChange={(event) => { setServiceId(event.target.value); setStartsAt(""); setRoomId(""); clearMessages(); }} value={serviceId}><option value="">{isLoadingServices ? "Завантажуємо…" : "Оберіть послугу"}</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select>{fieldMessage(fieldErrors, "service_id") ? <small className="field-error">{fieldMessage(fieldErrors, "service_id")}</small> : null}</label>
+            <ServiceMultiSelect
+              error={fieldMessage(fieldErrors, "service_ids") ?? fieldMessage(fieldErrors, "service_id")}
+              isLoading={isLoadingServices}
+              onChange={(nextServiceIds) => {
+                setServiceIds(nextServiceIds);
+                setStartsAt("");
+                setRoomId("");
+                clearMessages();
+              }}
+              selectedIds={serviceIds}
+              services={services}
+            />
             <label className="form-field"><span>Дата</span><input onChange={(event) => { presetSlotPending.current = false; setDate(event.target.value); setStartsAt(""); setRoomId(""); clearMessages(); }} required type="date" value={date} /></label>
-            <label className="form-field"><span>Тривалість</span><input readOnly value={selectedService ? `${String(selectedService.duration_minutes)} хв` : "Оберіть послугу"} /></label>
+            <label className="form-field"><span>Тривалість</span><input readOnly value={totalDuration > 0 ? `${String(totalDuration)} хв` : "Оберіть послуги"} /></label>
             <label className="form-field"><span>Вільний час</span><select disabled={isLoadingAvailability || availability === null} onChange={(event) => { const value = event.target.value; setStartsAt(value); const slot = availability?.slots.find((item) => item.starts_at === value); setRoomId(slot?.rooms[0]?.id ?? ""); clearMessages(); }} value={startsAt}><option value="">{isLoadingAvailability ? "Перевіряємо…" : "Оберіть час"}</option>{availability?.slots.map((slot) => <option key={slot.starts_at} value={slot.starts_at}>{dateTimeLabel(slot.starts_at)}–{dateTimeLabel(slot.ends_at)}</option>)}</select>{fieldMessage(fieldErrors, "starts_at") ? <small className="field-error">{fieldMessage(fieldErrors, "starts_at")}</small> : null}</label>
             <label className="form-field"><span>Кабінет</span><select disabled={!selectedSlot} onChange={(event) => { setRoomId(event.target.value); clearMessages(); }} value={roomId}><option value="">Оберіть кабінет</option>{selectedSlot?.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>{fieldMessage(fieldErrors, "room_id") ? <small className="field-error">{fieldMessage(fieldErrors, "room_id")}</small> : null}</label>
             <label className="form-field"><span>Статус</span><input aria-label="Статус" readOnly value="Новий" /><small>Початковий системний статус.</small></label>
-            <div className="form-field"><span>Доступність</span><div className={`appointment-availability-state ${availabilityError ? "appointment-availability-state--error" : ""}`}>{isLoadingAvailability ? "Перевіряємо графік…" : availabilityError ?? (availability ? availability.slots.length > 0 ? `Вільних вікон: ${String(availability.slots.length)}` : "Вільних вікон немає" : "Оберіть спеціаліста, послугу й дату")}</div></div>
+            <div className="form-field"><span>Доступність</span><div className={`appointment-availability-state ${availabilityError ? "appointment-availability-state--error" : ""}`}>{isLoadingAvailability ? "Перевіряємо графік…" : availabilityError ?? (availability ? availability.slots.length > 0 ? `Вільних вікон: ${String(availability.slots.length)}` : "Вільних вікон немає" : "Оберіть спеціаліста, послуги й дату")}</div></div>
 
             <label className="form-field appointment-form-wide"><span>Скарги / причина звернення</span><textarea disabled={hasNoComplaints} maxLength={4000} onChange={(event) => { setComplaints(event.target.value); clearMessages(); }} placeholder="Опишіть скарги або причину звернення" rows={3} value={complaints} />{fieldMessage(fieldErrors, "complaints") ? <small className="field-error">{fieldMessage(fieldErrors, "complaints")}</small> : null}</label>
             <label className="settings-check appointment-form-wide"><input aria-label="Скарг немає" checked={hasNoComplaints} onChange={(event) => { const checked = event.target.checked; setHasNoComplaints(checked); if (checked) setComplaints(""); clearMessages(); }} type="checkbox" /><span><strong>Скарг немає</strong><small>Явно підтвердіть відсутність скарг для профілактичної послуги.</small></span></label>

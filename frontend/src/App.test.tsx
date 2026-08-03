@@ -703,6 +703,41 @@ describe("TP-401 role-scoped calendar", () => {
     expect(screen.getAllByText("Вільно").length).toBeGreaterThan(0);
   });
 
+  it("renders every selected service as its own color segment", async () => {
+    const multiEvent = {
+      ...calendarFixture.events[0],
+      ends_at: "2026-07-21T07:45:00Z",
+      duration_minutes: 75,
+      services: [
+        calendarFixture.events[0].services[0],
+        {
+          id: "8487d46c-e741-4a09-bd3f-123c14fb4e21",
+          name: "Обробка нігтів",
+          color: "#7C3AED",
+          duration_minutes: 30,
+        },
+      ],
+    } as const;
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(adminSession))
+      .mockResolvedValueOnce(jsonResponse({
+        ...calendarFixture,
+        events: [multiEvent],
+      }));
+
+    renderApp("/calendar");
+
+    const event = await screen.findByTestId("calendar-event");
+    expect(within(event).getByText(clinicService.name)).toBeInTheDocument();
+    expect(within(event).getByText("Обробка нігтів")).toBeInTheDocument();
+    const segments = event.querySelectorAll(".calendar-event__color-rail i");
+    expect(segments).toHaveLength(2);
+    expect((segments[0] as HTMLElement).style.getPropertyValue("--service-color"))
+      .toBe(clinicService.color);
+    expect((segments[1] as HTMLElement).style.getPropertyValue("--service-color"))
+      .toBe("#7C3AED");
+  });
+
   it("switches to the seven-day overview and filters a specialist locally", async () => {
     const weekFixture = {
       ...calendarFixture,
@@ -921,10 +956,7 @@ describe("TP-402 appointment create", () => {
     fireEvent.click(screen.getByRole("button", { name: "Новий запис" }));
     const dialog = await screen.findByRole("dialog", { name: "Новий запис" });
     fireEvent.change(within(dialog).getByLabelText("Спеціаліст"), { target: { value: "4" } });
-    await within(dialog).findByRole("option", { name: clinicService.name });
-    fireEvent.change(within(dialog).getByLabelText("Послуга"), {
-      target: { value: clinicService.id },
-    });
+    fireEvent.click(await within(dialog).findByLabelText(`Обрати послугу ${clinicService.name}`));
     fireEvent.change(within(dialog).getByRole("searchbox", { name: "Знайти пацієнта для запису" }), {
       target: { value: "Марія" },
     });
@@ -952,13 +984,117 @@ describe("TP-402 appointment create", () => {
     expect(await (request as Request).clone().json()).toMatchObject({
       patient_id: patientFixture.id,
       specialist_id: 4,
-      service_id: clinicService.id,
+      service_ids: [clinicService.id],
       room_id: clinicRoom.id,
       starts_at: availabilityFixture.slots[0].starts_at,
       status_code: "NEW",
       complaints: "Біль під час ходьби",
       has_no_complaints: false,
     });
+  });
+
+  it("searches services interactively, selects several and sends their summed duration", async () => {
+    const additionalService = {
+      ...clinicService,
+      id: "8487d46c-e741-4a09-bd3f-123c14fb4e21",
+      code: "NAILS",
+      name: "Обробка нігтів",
+      duration_minutes: 30,
+      color: "#7C3AED",
+    } as const;
+    const multiAvailability = {
+      ...availabilityFixture,
+      services: [
+        availabilityFixture.service,
+        {
+          id: additionalService.id,
+          name: additionalService.name,
+          duration_minutes: additionalService.duration_minutes,
+        },
+      ],
+      duration_minutes: 75,
+      slots: availabilityFixture.slots.map((slot) => ({
+        ...slot,
+        ends_at: new Date(new Date(slot.starts_at).getTime() + 75 * 60_000).toISOString(),
+      })),
+    } as const;
+    const firstMultiSlot = multiAvailability.slots[0];
+    if (firstMultiSlot === undefined) throw new Error("Expected a multi-service slot.");
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      const method = input instanceof Request ? input.method : (init?.method ?? "GET");
+      if (url.includes("/api/v1/session")) return Promise.resolve(jsonResponse(adminSession));
+      if (url.includes("/api/v1/calendar")) return Promise.resolve(jsonResponse(calendarFixture));
+      if (url.includes("/api/v1/services")) {
+        return Promise.resolve(jsonResponse({ services: [clinicService, additionalService] }));
+      }
+      if (url.includes("/api/v1/patients")) {
+        return Promise.resolve(jsonResponse({ patients: [patientFixture], next_cursor: null }));
+      }
+      if (url.includes("/api/v1/appointments/availability")) {
+        return Promise.resolve(jsonResponse(multiAvailability));
+      }
+      if (url.endsWith("/api/v1/appointments") && method === "POST") {
+        return Promise.resolve(jsonResponse({
+          ...appointmentFixture,
+          duration_minutes: 75,
+          services: [
+            appointmentFixture.services[0],
+            {
+              id: additionalService.id,
+              code: additionalService.code,
+              name: additionalService.name,
+              color: additionalService.color,
+              duration_minutes: additionalService.duration_minutes,
+            },
+          ],
+        }, 201));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+    renderApp("/calendar?compose=appointment");
+    const dialog = await screen.findByRole("dialog", { name: "Новий запис" });
+    fireEvent.change(within(dialog).getByLabelText("Спеціаліст"), { target: { value: "4" } });
+    fireEvent.click(await within(dialog).findByLabelText(`Обрати послугу ${clinicService.name}`));
+    fireEvent.change(within(dialog).getByLabelText("Пошук послуги"), {
+      target: { value: "нігтів" },
+    });
+    expect(within(dialog).queryByLabelText(`Обрати послугу ${clinicService.name}`)).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByLabelText(`Обрати послугу ${additionalService.name}`));
+    expect(within(dialog).getByLabelText("Тривалість")).toHaveValue("75 хв");
+    expect(within(dialog).getByText("Обрано: 2 · разом 75 хв")).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Знайти пацієнта для запису" }), {
+      target: { value: "Марія" },
+    });
+    fireEvent.click(await within(dialog).findByRole("button", { name: /Марія Бондар/ }));
+    await within(dialog).findByRole("option", { name: "11:00–12:15" });
+    fireEvent.change(within(dialog).getByLabelText("Вільний час"), {
+      target: { value: firstMultiSlot.starts_at },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Скарги / причина звернення"), {
+      target: { value: "Комплексна процедура" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Створити запис" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Новий запис" })).not.toBeInTheDocument();
+    });
+    const request = fetchMock.mock.calls.find(([input]) =>
+      input instanceof Request
+      && input.method === "POST"
+      && input.url.endsWith("/api/v1/appointments"))?.[0];
+    expect(request).toBeInstanceOf(Request);
+    expect(await (request as Request).clone().json()).toMatchObject({
+      service_ids: [clinicService.id, additionalService.id],
+    });
+    const availabilityRequests = fetchMock.mock.calls.filter(([input]) =>
+      input instanceof Request && input.url.includes("/api/v1/appointments/availability"));
+    expect(availabilityRequests.some(([input]) => {
+      const values = new URL((input as Request).url).searchParams.getAll("service_ids");
+      return values.join(",") === `${clinicService.id},${additionalService.id}`;
+    })).toBe(true);
   });
 
   it("prefills a free calendar cell and keeps the patient locked from a patient card", async () => {
@@ -977,10 +1113,7 @@ describe("TP-402 appointment create", () => {
     fireEvent.click(screen.getByRole("button", { name: "Створити запис на 11:00, Олена Подолог" }));
     const slotDialog = await screen.findByRole("dialog", { name: "Новий запис" });
     expect(within(slotDialog).getByLabelText("Спеціаліст")).toHaveValue("4");
-    await within(slotDialog).findByRole("option", { name: clinicService.name });
-    fireEvent.change(within(slotDialog).getByLabelText("Послуга"), {
-      target: { value: clinicService.id },
-    });
+    fireEvent.click(await within(slotDialog).findByLabelText(`Обрати послугу ${clinicService.name}`));
     await waitFor(() => {
       expect(within(slotDialog).getByLabelText("Вільний час")).toHaveValue(
         availabilityFixture.slots[0].starts_at,
@@ -1085,8 +1218,7 @@ describe("TP-402 appointment create", () => {
     renderApp("/calendar?compose=appointment");
     const dialog = await screen.findByRole("dialog", { name: "Новий запис" });
     fireEvent.change(within(dialog).getByLabelText("Спеціаліст"), { target: { value: "4" } });
-    await within(dialog).findByRole("option", { name: clinicService.name });
-    fireEvent.change(within(dialog).getByLabelText("Послуга"), { target: { value: clinicService.id } });
+    fireEvent.click(await within(dialog).findByLabelText(`Обрати послугу ${clinicService.name}`));
     fireEvent.change(within(dialog).getByRole("searchbox", { name: "Знайти пацієнта для запису" }), { target: { value: "Марія" } });
     fireEvent.click(await within(dialog).findByRole("button", { name: /Марія Бондар/ }));
     await within(dialog).findByRole("option", { name: "11:00–11:45" });
@@ -1097,7 +1229,7 @@ describe("TP-402 appointment create", () => {
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Кабінет уже зайнятий");
     expect(within(dialog).getByText(new RegExp(patientFixture.public_number))).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("Послуга")).toHaveValue(clinicService.id);
+    expect(within(dialog).getByLabelText(`Обрати послугу ${clinicService.name}`)).toBeChecked();
     expect(within(dialog).getByLabelText("Скарг немає")).toBeChecked();
     expect(within(dialog).getByLabelText("Коментар · необов’язково")).toHaveValue("Зберегти цей коментар");
     expect(within(dialog).getByLabelText("Вільний час")).toHaveValue("");
@@ -1248,7 +1380,7 @@ describe("TP-403 appointment detail and workflow", () => {
     const dialog = await screen.findByRole("dialog", { name: "Деталі запису" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Перенести" }));
 
-    await within(dialog).findByRole("option", { name: clinicService.name });
+    await within(dialog).findByLabelText(`Обрати послугу ${clinicService.name}`);
     await within(dialog).findByRole("option", { name: "11:00–11:45" });
     fireEvent.change(within(dialog).getByLabelText("Новий час"), {
       target: { value: availabilityFixture.slots[0].starts_at },
@@ -1256,7 +1388,7 @@ describe("TP-403 appointment detail and workflow", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Підтвердити перенесення" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Кабінет уже зайнятий");
-    expect(within(dialog).getByLabelText("Послуга для перенесення")).toHaveValue(clinicService.id);
+    expect(within(dialog).getByLabelText(`Обрати послугу ${clinicService.name}`)).toBeChecked();
     expect(within(dialog).getByLabelText("Новий час")).toHaveValue("");
     await waitFor(() => {
       const availabilityCalls = fetchMock.mock.calls.filter(([input]) =>

@@ -52,6 +52,10 @@ class CalendarServiceSerializer(serializers.Serializer[Any]):
     color = serializers.CharField()
 
 
+class CalendarSelectedServiceSerializer(CalendarServiceSerializer):
+    duration_minutes = serializers.IntegerField(min_value=1)
+
+
 class CalendarStatusSerializer(serializers.Serializer[Any]):
     code = serializers.CharField()
     color = serializers.CharField()
@@ -69,6 +73,7 @@ class CalendarEventSerializer(serializers.Serializer[Any]):
     duration_minutes = serializers.IntegerField(min_value=1)
     patient = CalendarPatientSerializer()
     service = CalendarServiceSerializer()
+    services = CalendarSelectedServiceSerializer(many=True)
     specialist = SpecialistSummarySerializer()
     room = RoomSummarySerializer()
     status = CalendarStatusSerializer()
@@ -105,8 +110,17 @@ class CalendarResponseSerializer(serializers.Serializer[Any]):
 class AvailabilityFilterSerializer(serializers.Serializer[Any]):
     date = serializers.DateField()
     specialist_id = serializers.IntegerField(min_value=1)
-    service_id = serializers.UUIDField()
+    service_id = serializers.UUIDField(required=False)
+    service_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=False,
+        max_length=20,
+    )
     room_id = serializers.UUIDField(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        return _normalize_service_selection(attrs, required=True)
 
 
 class AvailabilityServiceSerializer(serializers.Serializer[Any]):
@@ -126,6 +140,8 @@ class AvailabilityResponseSerializer(serializers.Serializer[Any]):
     date = serializers.DateField()
     specialist = SpecialistSummarySerializer()
     service = AvailabilityServiceSerializer()
+    services = AvailabilityServiceSerializer(many=True)
+    duration_minutes = serializers.IntegerField(min_value=1)
     requested_room = RoomSummarySerializer(allow_null=True)
     step_minutes = serializers.IntegerField(min_value=1)
     slots = AvailabilitySlotSerializer(many=True)
@@ -134,7 +150,13 @@ class AvailabilityResponseSerializer(serializers.Serializer[Any]):
 class AppointmentCreateSerializer(serializers.Serializer[Any]):
     patient_id = serializers.UUIDField()
     specialist_id = serializers.IntegerField(min_value=1)
-    service_id = serializers.UUIDField()
+    service_id = serializers.UUIDField(required=False)
+    service_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=False,
+        max_length=20,
+    )
     room_id = serializers.UUIDField()
     starts_at = serializers.DateTimeField()
     complaints = serializers.CharField(required=False, allow_blank=True, max_length=4000)
@@ -148,6 +170,9 @@ class AppointmentCreateSerializer(serializers.Serializer[Any]):
     def validate_comment(self, value: str) -> str:
         return value.strip()
 
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        return _normalize_service_selection(attrs, required=True)
+
 
 class AppointmentPatientSerializer(CalendarPatientSerializer):
     phone = serializers.CharField()
@@ -155,6 +180,10 @@ class AppointmentPatientSerializer(CalendarPatientSerializer):
 
 class AppointmentServiceSerializer(CalendarServiceSerializer):
     code = serializers.CharField()
+
+
+class AppointmentSelectedServiceSerializer(AppointmentServiceSerializer):
+    duration_minutes = serializers.IntegerField(min_value=1)
 
 
 class AppointmentResponseSerializer(serializers.Serializer[Any]):
@@ -165,6 +194,7 @@ class AppointmentResponseSerializer(serializers.Serializer[Any]):
     duration_minutes = serializers.IntegerField(min_value=1)
     patient = AppointmentPatientSerializer()
     service = AppointmentServiceSerializer()
+    services = AppointmentSelectedServiceSerializer(many=True)
     specialist = SpecialistSummarySerializer()
     room = RoomSummarySerializer()
     status = CalendarStatusSerializer()
@@ -190,6 +220,12 @@ class AppointmentUpdateSerializer(serializers.Serializer[Any]):
     version = serializers.IntegerField(min_value=1)
     specialist_id = serializers.IntegerField(min_value=1, required=False)
     service_id = serializers.UUIDField(required=False)
+    service_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=False,
+        max_length=20,
+    )
     room_id = serializers.UUIDField(required=False)
     starts_at = serializers.DateTimeField(required=False)
     complaints = serializers.CharField(required=False, allow_blank=True, max_length=4000)
@@ -205,7 +241,29 @@ class AppointmentUpdateSerializer(serializers.Serializer[Any]):
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         if len(attrs) == 1:
             raise serializers.ValidationError({"non_field_errors": ["Укажіть хоча б одну зміну."]})
-        return attrs
+        return _normalize_service_selection(attrs, required=False)
+
+
+def _normalize_service_selection(
+    attrs: dict[str, Any],
+    *,
+    required: bool,
+) -> dict[str, Any]:
+    legacy_service_id = attrs.pop("service_id", None)
+    service_ids = list(attrs.get("service_ids", []))
+    if legacy_service_id is not None and service_ids:
+        raise serializers.ValidationError(
+            {"service_ids": ["Передайте послуги лише в одному форматі."]}
+        )
+    if not service_ids and legacy_service_id is not None:
+        service_ids = [legacy_service_id]
+    if required and not service_ids:
+        raise serializers.ValidationError({"service_ids": ["Оберіть хоча б одну послугу."]})
+    if len(service_ids) != len(set(service_ids)):
+        raise serializers.ValidationError({"service_ids": ["Кожну послугу можна обрати лише раз."]})
+    if service_ids:
+        attrs["service_ids"] = service_ids
+    return attrs
 
 
 class AppointmentStatusTransitionSerializer(serializers.Serializer[Any]):
