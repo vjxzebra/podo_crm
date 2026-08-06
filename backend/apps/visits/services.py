@@ -12,6 +12,7 @@ from apps.accounts.models import User, UserRole
 from apps.audit.registry import AuditAction
 from apps.audit.services import record_audit_event
 from apps.clinic.models import AppointmentStatusConfig, Service
+from apps.discounts.services import visit_loyalty_preview
 from apps.inventory.models import Material, MaterialLot
 from apps.scheduling.models import Appointment
 from apps.visits.models import (
@@ -154,6 +155,7 @@ def visit_read_model(visit: Visit) -> dict[str, Any]:
             for recommendation in visit.recommendations.all()
         ],
         "editable": visit.status == VisitStatus.DRAFT,
+        "loyalty": visit_loyalty_preview(visit_id=visit.pk, patient_id=visit.patient_id),
         "started_at": visit.started_at,
         "updated_at": visit.updated_at,
         "completed_at": visit.completed_at,

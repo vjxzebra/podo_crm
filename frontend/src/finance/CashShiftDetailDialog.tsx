@@ -35,6 +35,9 @@ export function CashShiftDetailDialog({ shift, onClose, onRequestClose }: CashSh
   useFinanceDialogLifecycle({ dialogRef, initialFocusRef: closeRef, onEscape: onClose });
   const totals = shift.totals;
   const reconciliation = shift.reconciliation;
+  const openingSource = shift.opening_source_shift === null
+    ? shift.opening_basis === "LEGACY" ? "Історична зміна" : "Перша зміна каси"
+    : shift.opening_source_shift.public_number;
   const exportShift = async () => {
     setIsExporting(true);
     setExportError(null);
@@ -82,6 +85,8 @@ export function CashShiftDetailDialog({ shift, onClose, onRequestClose }: CashSh
             <dl>
               <div><dt>Відкрито</dt><dd>{dateTimeFormatter.format(new Date(shift.opened_at))}</dd></div>
               <div><dt>Закрито</dt><dd>{shift.closed_at === null ? "—" : dateTimeFormatter.format(new Date(shift.closed_at))}</dd></div>
+              <div><dt>Початковий залишок</dt><dd>{money(shift.opening_cash_minor)}</dd></div>
+              <div><dt>Джерело залишку</dt><dd>{openingSource}</dd></div>
             </dl>
           </section>
 
@@ -147,7 +152,7 @@ export function CashShiftDetailDialog({ shift, onClose, onRequestClose }: CashSh
           <div>
             <button className="button button--secondary" disabled={isExporting} onClick={() => { void exportShift(); }} type="button">{isExporting ? "Готуємо CSV…" : "Експортувати CSV"}</button>
             <button className="button button--secondary" onClick={onClose} type="button">Готово</button>
-            {shift.status === "OPEN" && onRequestClose !== undefined ? <button className="button button--danger" onClick={onRequestClose} type="button">Закрити зміну</button> : null}
+            {shift.status === "OPEN" && shift.permissions.can_close && onRequestClose !== undefined ? <button className="button button--danger" onClick={onRequestClose} type="button">Закрити зміну</button> : null}
           </div>
         </footer>
       </section>

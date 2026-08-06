@@ -33,17 +33,30 @@ from apps.audit.registry import AuditAction
 from apps.audit.services import record_audit_event
 from apps.billing.models import (
     CashAdjustment,
+    CashDrawer,
     CashLedgerEntry,
     CashLedgerEntryKind,
     CashShift,
+    CashShiftOpeningBasis,
     CashShiftStatus,
+    DiscountSource,
     Payment,
     PaymentMethod,
+    PricingState,
     Receivable,
     ReceivableStatus,
     Refund,
+    VisitPricing,
 )
-from apps.visits.models import VisitStatus
+from apps.discounts.models import (
+    Discount,
+    LoyaltyPolicy,
+    PatientLoyaltyState,
+    VisitLoyaltyEvent,
+)
+from apps.discounts.services import get_active_discount_for_update
+from apps.patients.models import Patient
+from apps.visits.models import Visit, VisitStatus
 from config.api.exceptions import ApiProblem
 
 
@@ -58,7 +71,7 @@ def _cash_shift_access_required() -> ApiProblem:
 def _cash_shift_already_open() -> ApiProblem:
     return ApiProblem(
         code="cash_shift_already_open",
-        message="У вас уже є відкрита касова зміна.",
+        message="Спільна касова зміна вже відкрита іншим або поточним працівником.",
         status_code=status.HTTP_409_CONFLICT,
     )
 
@@ -66,7 +79,7 @@ def _cash_shift_already_open() -> ApiProblem:
 def _cash_shift_required() -> ApiProblem:
     return ApiProblem(
         code="cash_shift_required",
-        message="Перед проведенням фінансової операції відкрийте власну касову зміну.",
+        message="Фінансові операції може проводити лише власник поточної касової зміни.",
         status_code=status.HTTP_409_CONFLICT,
     )
 
@@ -177,7 +190,9 @@ def _validate_finance_actor(actor: User) -> None:
 
 
 def _cash_shift_queryset() -> QuerySet[CashShift]:
-    return CashShift.objects.select_related("employee", "closed_by").prefetch_related(
+    return CashShift.objects.select_related(
+        "employee", "closed_by", "drawer", "opening_source_shift"
+    ).prefetch_related(
         Prefetch(
             "entries",
             queryset=CashLedgerEntry.objects.select_related("created_by").order_by(
@@ -190,6 +205,201 @@ def _cash_shift_queryset() -> QuerySet[CashShift]:
 def _constraint_name(exc: IntegrityError) -> str:
     cause = getattr(exc, "__cause__", None)
     return str(getattr(getattr(cause, "diag", None), "constraint_name", ""))
+
+
+def pricing_snapshot(pricing: VisitPricing) -> dict[str, Any]:
+    return {
+        "id": pricing.pk,
+        "visit_id": pricing.visit_id,
+        "gross_minor": pricing.gross_minor,
+        "discount_id": pricing.discount_id,
+        "discount_name": pricing.discount_name_snapshot,
+        "discount_percent": pricing.discount_percent_snapshot,
+        "discount_source": pricing.discount_source,
+        "discount_amount_minor": pricing.discount_amount_minor,
+        "net_minor": pricing.net_minor,
+        "version": pricing.version,
+        "state": pricing.state,
+        "settled_at": pricing.settled_at,
+    }
+
+
+def pricing_read_model(pricing: VisitPricing) -> dict[str, Any]:
+    return {
+        "gross_minor": pricing.gross_minor,
+        "discount_id": pricing.discount_id,
+        "discount_name": pricing.discount_name_snapshot,
+        "discount_percent": pricing.discount_percent_snapshot,
+        "discount_source": pricing.discount_source,
+        "discount_amount_minor": pricing.discount_amount_minor,
+        "net_minor": pricing.net_minor,
+        "version": pricing.version,
+        "state": pricing.state,
+    }
+
+
+def calculate_discount_minor(*, gross_minor: int, percent: int) -> int:
+    if gross_minor <= 0:
+        return 0
+    return (gross_minor * percent) // 100
+
+
+def _pricing_values(
+    *,
+    gross_minor: int,
+    discount: Discount | None,
+    source: str,
+    applied_by: User | None,
+) -> dict[str, Any]:
+    if gross_minor == 0 or discount is None:
+        return {
+            "discount": None,
+            "discount_name_snapshot": "",
+            "discount_percent_snapshot": None,
+            "discount_source": "",
+            "applied_by": None,
+            "discount_amount_minor": 0,
+            "net_minor": gross_minor,
+        }
+    discount_minor = calculate_discount_minor(
+        gross_minor=gross_minor,
+        percent=discount.percent,
+    )
+    return {
+        "discount": discount,
+        "discount_name_snapshot": discount.name,
+        "discount_percent_snapshot": discount.percent,
+        "discount_source": source,
+        "applied_by": applied_by,
+        "discount_amount_minor": discount_minor,
+        "net_minor": gross_minor - discount_minor,
+    }
+
+
+def create_visit_pricing(
+    *,
+    actor: User,
+    visit: Visit,
+    gross_minor: int,
+    manual_discount_id: UUID | None,
+) -> VisitPricing:
+    if not transaction.get_connection().in_atomic_block:
+        raise RuntimeError("Visit pricing must be created inside the finish transaction.")
+
+    Patient.objects.select_for_update(no_key=True).get(pk=visit.patient_id)
+    policy, _ = LoyaltyPolicy.objects.select_for_update(of=("self",)).get_or_create(
+        key="default",
+        defaults={"every_n": 5},
+    )
+    automatic_discount: Discount | None = None
+    if policy.is_active:
+        if policy.discount_id is None or policy.started_at is None:
+            raise ApiProblem(
+                code="loyalty_policy_invalid",
+                message="Активна програма лояльності налаштована некоректно.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        policy_discount = get_active_discount_for_update(policy.discount_id)
+        loyalty_state = (
+            PatientLoyaltyState.objects.select_for_update()
+            .filter(patient_id=visit.patient_id)
+            .first()
+        )
+        if loyalty_state is None:
+            loyalty_state = PatientLoyaltyState.objects.create(patient_id=visit.patient_id)
+        loyalty_state.completed_count += 1
+        loyalty_state.version += 1
+        loyalty_state.save(update_fields=("completed_count", "version", "updated_at"))
+        eligible = loyalty_state.completed_count % policy.every_n == 0
+        VisitLoyaltyEvent.objects.create(
+            visit=visit,
+            patient_id=visit.patient_id,
+            sequence_number=loyalty_state.completed_count,
+            eligible=eligible,
+            every_n_snapshot=policy.every_n,
+            discount=policy_discount,
+            discount_name_snapshot=policy_discount.name,
+            discount_percent_snapshot=policy_discount.percent,
+            policy_started_at_snapshot=policy.started_at,
+        )
+        if eligible:
+            automatic_discount = policy_discount
+
+    manual_discount = (
+        get_active_discount_for_update(manual_discount_id)
+        if manual_discount_id is not None
+        else None
+    )
+    selected_discount = manual_discount or automatic_discount
+    source = (
+        DiscountSource.PODOLOGIST
+        if manual_discount is not None
+        else DiscountSource.LOYALTY
+        if automatic_discount is not None
+        else ""
+    )
+    values = _pricing_values(
+        gross_minor=gross_minor,
+        discount=selected_discount,
+        source=source,
+        applied_by=actor if manual_discount is not None else None,
+    )
+    state = PricingState.SETTLED if values["net_minor"] == 0 else PricingState.OPEN
+    return VisitPricing.objects.create(
+        visit=visit,
+        gross_minor=gross_minor,
+        state=state,
+        settled_at=timezone.now() if state == PricingState.SETTLED else None,
+        **values,
+    )
+
+
+def replace_open_pricing_discount(
+    *,
+    pricing: VisitPricing,
+    actor: User,
+    discount_id: UUID,
+    expected_version: int,
+) -> VisitPricing:
+    if pricing.state != PricingState.OPEN:
+        raise ApiProblem(
+            code="pricing_settled",
+            message="Розрахунок уже зафіксовано та не може бути змінений.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if pricing.version != expected_version:
+        raise ApiProblem(
+            code="pricing_version_conflict",
+            message="Розрахунок уже змінився. Оновіть дані та повторіть оплату.",
+            status_code=status.HTTP_409_CONFLICT,
+            fields={"pricing_version": ["Версія розрахунку застаріла."]},
+        )
+    discount = get_active_discount_for_update(discount_id)
+    values = _pricing_values(
+        gross_minor=pricing.gross_minor,
+        discount=discount,
+        source=DiscountSource.RECEPTION,
+        applied_by=actor,
+    )
+    for field, value in values.items():
+        setattr(pricing, field, value)
+    pricing.version += 1
+    pricing.save()
+    return pricing
+
+
+def settle_pricing(pricing: VisitPricing) -> VisitPricing:
+    if pricing.state != PricingState.OPEN:
+        raise ApiProblem(
+            code="pricing_settled",
+            message="Розрахунок уже зафіксовано.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    pricing.state = PricingState.SETTLED
+    pricing.settled_at = timezone.now()
+    pricing.version += 1
+    pricing.save(update_fields=("state", "settled_at", "version", "updated_at"))
+    return pricing
 
 
 def _payload_hash(data: dict[str, Any]) -> str:
@@ -344,6 +554,10 @@ def cash_shift_audit_snapshot(shift: CashShift) -> dict[str, Any]:
         "employee_name": shift.employee_name_snapshot,
         "employee_email": shift.employee_email_snapshot,
         "employee_role": shift.employee_role_snapshot,
+        "drawer_key": shift.drawer_id,
+        "opening_cash_minor": shift.opening_cash_minor,
+        "opening_basis": shift.opening_basis,
+        "opening_source_shift_id": shift.opening_source_shift_id,
         "status": shift.status,
         "opened_at": shift.opened_at,
     }
@@ -378,7 +592,11 @@ def cash_ledger_entry_read_model(entry: CashLedgerEntry) -> dict[str, Any]:
     }
 
 
-def _cash_shift_totals(entries: list[CashLedgerEntry]) -> dict[str, int]:
+def _cash_shift_totals(
+    entries: list[CashLedgerEntry],
+    *,
+    opening_cash_minor: int = 0,
+) -> dict[str, int]:
     totals = {
         "operations_count": len(entries),
         "payment_count": 0,
@@ -394,7 +612,7 @@ def _cash_shift_totals(entries: list[CashLedgerEntry]) -> dict[str, int]:
         "deposits_minor": 0,
         "withdrawals_minor": 0,
         "revenue_minor": 0,
-        "expected_cash_minor": 0,
+        "expected_cash_minor": opening_cash_minor,
     }
     for entry in entries:
         if entry.kind == CashLedgerEntryKind.PAYMENT:
@@ -422,7 +640,8 @@ def _cash_shift_totals(entries: list[CashLedgerEntry]) -> dict[str, int]:
 
     totals["revenue_minor"] = totals["payments_total_minor"] - totals["refunds_total_minor"]
     totals["expected_cash_minor"] = (
-        totals["cash_payments_minor"]
+        opening_cash_minor
+        + totals["cash_payments_minor"]
         - totals["cash_refunds_minor"]
         + totals["deposits_minor"]
         - totals["withdrawals_minor"]
@@ -451,8 +670,10 @@ def cash_shift_summary(
     shift: CashShift,
     *,
     entries: list[CashLedgerEntry] | None = None,
+    actor: User | None = None,
 ) -> dict[str, Any]:
     resolved_entries = list(shift.entries.all()) if entries is None else entries
+    source = shift.opening_source_shift
     return {
         "id": shift.pk,
         "public_number": shift.public_number,
@@ -463,17 +684,35 @@ def cash_shift_summary(
             "email": shift.employee_email_snapshot,
             "role": shift.employee_role_snapshot,
         },
+        "drawer_key": shift.drawer_id,
+        "opening_cash_minor": shift.opening_cash_minor,
+        "opening_basis": shift.opening_basis,
+        "opening_source_shift": (
+            None if source is None else {"id": source.pk, "public_number": source.public_number}
+        ),
+        "permissions": {
+            "can_mutate": actor is not None and shift.employee_id == actor.pk,
+            "can_close": actor is not None
+            and (shift.employee_id == actor.pk or actor.role == UserRole.ADMIN),
+        },
         "opened_at": shift.opened_at,
         "closed_at": shift.closed_at,
-        "totals": _cash_shift_totals(resolved_entries),
+        "totals": _cash_shift_totals(
+            resolved_entries,
+            opening_cash_minor=shift.opening_cash_minor,
+        ),
         "reconciliation": _cash_shift_reconciliation(shift),
     }
 
 
-def cash_shift_projection(shift: CashShift) -> dict[str, Any]:
+def cash_shift_projection(
+    shift: CashShift,
+    *,
+    actor: User | None = None,
+) -> dict[str, Any]:
     entries = list(shift.entries.all())
     return {
-        **cash_shift_summary(shift, entries=entries),
+        **cash_shift_summary(shift, entries=entries, actor=actor),
         "entries": [cash_ledger_entry_read_model(entry) for entry in entries],
     }
 
@@ -503,7 +742,7 @@ def available_cash_minor(shift: CashShift) -> int:
             default=0,
         )
     )
-    return int(aggregate["value"] or 0)
+    return shift.opening_cash_minor + int(aggregate["value"] or 0)
 
 
 def current_cash_shift(*, actor: User) -> CashShift | None:
@@ -511,7 +750,7 @@ def current_cash_shift(*, actor: User) -> CashShift | None:
     return (
         _cash_shift_queryset()
         .filter(
-            employee=actor,
+            drawer_id=CashDrawer.MAIN_KEY,
             status=CashShiftStatus.OPEN,
         )
         .first()
@@ -521,19 +760,45 @@ def current_cash_shift(*, actor: User) -> CashShift | None:
 @transaction.atomic
 def open_cash_shift(*, actor: User, correlation_id: str) -> CashShift:
     _validate_actor(actor)
-    locked_actor = User.objects.select_for_update().get(pk=actor.pk)
+    locked_actor = User.objects.get(pk=actor.pk)
     _validate_actor(locked_actor)
+    CashDrawer.objects.get_or_create(key=CashDrawer.MAIN_KEY)
+    drawer = CashDrawer.objects.select_for_update().get(pk=CashDrawer.MAIN_KEY)
     if CashShift.objects.filter(
-        employee=locked_actor,
+        drawer=drawer,
         status=CashShiftStatus.OPEN,
     ).exists():
         raise _cash_shift_already_open()
 
+    source = (
+        CashShift.objects.select_for_update(of=("self",))
+        .filter(drawer=drawer, status=CashShiftStatus.CLOSED)
+        .order_by("-closed_at", "-id")
+        .first()
+    )
+    if source is None:
+        opening_basis = CashShiftOpeningBasis.INITIAL
+        opening_cash_minor = 0
+    else:
+        if source.actual_cash_at_close_minor is None:
+            raise RuntimeError("The latest closed cash shift has no actual cash snapshot.")
+        opening_basis = CashShiftOpeningBasis.CARRY_FORWARD
+        opening_cash_minor = source.actual_cash_at_close_minor
+
     try:
         with transaction.atomic():
-            shift = CashShift.objects.create(employee=locked_actor)
+            shift = CashShift.objects.create(
+                employee=locked_actor,
+                drawer=drawer,
+                opening_cash_minor=opening_cash_minor,
+                opening_source_shift=source,
+                opening_basis=opening_basis,
+            )
     except IntegrityError as exc:
-        if _constraint_name(exc) == "billing_one_open_cash_shift_per_employee":
+        if _constraint_name(exc) in {
+            "billing_one_open_cash_shift_per_drawer",
+            "billing_cash_shift_source_used_once",
+        }:
             raise _cash_shift_already_open() from exc
         raise
 
@@ -547,7 +812,7 @@ def open_cash_shift(*, actor: User, correlation_id: str) -> CashShift:
         correlation_id=correlation_id,
         before={},
         after=cash_shift_audit_snapshot(shift),
-        description="Відкрито особисту касову зміну працівника.",
+        description="Відкрито спільну касову зміну клініки.",
     )
     return shift
 
@@ -606,7 +871,7 @@ def cash_shift_close_preview(*, actor: User, shift_id: UUID) -> dict[str, Any]:
         total_minor=Coalesce(Sum("amount_minor"), 0),
     )
     return {
-        "shift": cash_shift_projection(shift),
+        "shift": cash_shift_projection(shift, actor=actor),
         "unpaid": {
             "count": int(unpaid["count"] or 0),
             "total_minor": int(unpaid["total_minor"] or 0),
@@ -713,7 +978,7 @@ def cash_shift_history_page(
     has_more = len(page) > CASH_SHIFT_PAGE_SIZE
     visible_page = page[:CASH_SHIFT_PAGE_SIZE]
     next_cursor = _encode_cash_shift_cursor(visible_page[-1]) if has_more else None
-    return [cash_shift_summary(shift) for shift in visible_page], next_cursor
+    return [cash_shift_summary(shift, actor=actor) for shift in visible_page], next_cursor
 
 
 def _cash_entry_sum(condition: Q) -> Any:
@@ -814,7 +1079,13 @@ def cash_shift_history_export_rows(
                     "transfer_net_minor": transfer_payments - transfer_refunds,
                     "deposits_minor": deposits,
                     "withdrawals_minor": withdrawals,
-                    "expected_cash_minor": (cash_payments - cash_refunds + deposits - withdrawals),
+                    "expected_cash_minor": (
+                        shift.opening_cash_minor
+                        + cash_payments
+                        - cash_refunds
+                        + deposits
+                        - withdrawals
+                    ),
                 },
             }
         )
@@ -880,8 +1151,9 @@ def close_cash_shift(
     if existing is not None:
         return existing, True
 
+    CashDrawer.objects.select_for_update().get(pk=CashDrawer.MAIN_KEY)
     locked_queryset = CashShift.objects.select_for_update(of=("self",)).select_related(
-        "employee", "closed_by"
+        "employee", "closed_by", "opening_source_shift"
     )
     if actor.role != UserRole.ADMIN:
         locked_queryset = locked_queryset.filter(employee=actor)
@@ -901,7 +1173,7 @@ def close_cash_shift(
         .select_related("created_by")
         .order_by("-posted_at", "-id")
     )
-    totals = _cash_shift_totals(entries)
+    totals = _cash_shift_totals(entries, opening_cash_minor=shift.opening_cash_minor)
     if totals["operations_count"] != normalized["expected_operations_count"]:
         raise _cash_shift_changed()
 
@@ -917,7 +1189,7 @@ def close_cash_shift(
             fields={"comment": ["Поясніть нестачу або надлишок готівки."]},
         )
 
-    before = cash_shift_summary(shift, entries=entries)
+    before = cash_shift_summary(shift, entries=entries, actor=actor)
     shift.status = CashShiftStatus.CLOSED
     shift.closed_at = timezone.now()
     shift.expected_cash_at_close_minor = expected_cash_minor
@@ -960,7 +1232,7 @@ def close_cash_shift(
                 return replay, True
         raise
 
-    after = cash_shift_summary(shift, entries=entries)
+    after = cash_shift_summary(shift, entries=entries, actor=actor)
     record_audit_event(
         actor=actor,
         action=AuditAction.CASH_SHIFT_CLOSED,
@@ -1014,6 +1286,7 @@ def _payment_operations_queryset(filters: dict[str, Any]) -> QuerySet[Receivable
         Receivable.objects.select_related(
             "visit__patient",
             "visit__specialist",
+            "visit__pricing",
         )
         .prefetch_related(
             "visit__service_lines",
@@ -1302,6 +1575,7 @@ def finance_payment_operation_read_model(receivable: Receivable) -> dict[str, An
             },
             "services": services,
         },
+        "pricing": pricing_read_model(visit.pricing),
         "payment": payment_payload,
         "refund": refund_payload,
     }
@@ -1560,6 +1834,13 @@ def payment_audit_snapshot(payment: Payment) -> dict[str, Any]:
         "patient_id": payment.patient_id_snapshot,
         "cash_shift_id": ledger.cash_shift_id,
         "amount_minor": ledger.amount_minor,
+        "gross_minor": payment.gross_total_minor_snapshot,
+        "discount_id": payment.discount_id_snapshot,
+        "discount_name": payment.discount_name_snapshot,
+        "discount_percent": payment.discount_percent_snapshot,
+        "discount_source": payment.discount_source_snapshot,
+        "discount_amount_minor": payment.discount_amount_minor_snapshot,
+        "net_minor": payment.net_total_minor_snapshot,
         "payment_method": ledger.payment_method,
         "comment": payment.comment,
         "receivable_status": payment.receivable.status,
@@ -1579,6 +1860,9 @@ def post_payment(
     normalized = {
         "visit_id": str(data["visit_id"]),
         "payment_method": str(data["payment_method"]),
+        "pricing_version": int(data["pricing_version"]),
+        "discount_action": str(data["discount_action"]),
+        "discount_id": (str(data["discount_id"]) if data.get("discount_id") is not None else None),
         "comment": str(data.get("comment", "")).strip(),
     }
     request_hash = _payload_hash(normalized)
@@ -1590,8 +1874,24 @@ def post_payment(
     if existing is not None:
         return existing, True
 
+    shift = (
+        CashShift.objects.select_for_update(of=("self",))
+        .filter(status=CashShiftStatus.OPEN)
+        .first()
+    )
+    if shift is None or shift.employee_id != actor.pk:
+        raise _cash_shift_required()
+
+    existing = _existing_payment(
+        actor=actor,
+        idempotency_key=idempotency_key,
+        payload_hash=request_hash,
+    )
+    if existing is not None:
+        return existing, True
+
     receivable = (
-        Receivable.objects.select_for_update(of=("self",))
+        Receivable.objects.select_for_update(of=("self", "visit"))
         .select_related("visit__patient", "visit__specialist")
         .prefetch_related("visit__service_lines")
         .filter(visit_id=data["visit_id"])
@@ -1615,39 +1915,66 @@ def post_payment(
         raise _receivable_already_paid()
     if receivable.status == ReceivableStatus.REFUNDED:
         raise _receivable_already_refunded()
+
+    pricing = (
+        VisitPricing.objects.select_for_update(of=("self",))
+        .filter(visit_id=receivable.visit_id)
+        .first()
+    )
+    if pricing is None:
+        raise ApiProblem(
+            code="pricing_missing",
+            message=(
+                "Розрахунок прийому не знайдено. Оновіть дані або зверніться до адміністратора."
+            ),
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if pricing.state != PricingState.OPEN:
+        raise ApiProblem(
+            code="pricing_settled",
+            message="Розрахунок уже зафіксовано.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if pricing.version != data["pricing_version"]:
+        raise ApiProblem(
+            code="pricing_version_conflict",
+            message="Розрахунок уже змінився. Оновіть дані та повторіть оплату.",
+            status_code=status.HTTP_409_CONFLICT,
+            fields={"pricing_version": ["Версія розрахунку застаріла."]},
+        )
     if (
         receivable.status != ReceivableStatus.OPEN
         or receivable.amount_minor <= 0
         or receivable.visit.status != VisitStatus.COMPLETED
         or receivable.visit.completed_at is None
         or receivable.visit.total_minor != receivable.amount_minor
+        or pricing.net_minor != receivable.amount_minor
     ):
         raise _visit_not_payable()
 
-    shift = (
-        CashShift.objects.select_for_update(of=("self",))
-        .filter(employee=actor, status=CashShiftStatus.OPEN)
-        .first()
-    )
-    if shift is None:
-        raise _cash_shift_required()
-
-    existing = _existing_payment(
-        actor=actor,
-        idempotency_key=idempotency_key,
-        payload_hash=request_hash,
-    )
-    if existing is not None:
-        return existing, True
-
-    patient = receivable.visit.patient
-    specialist = receivable.visit.specialist
     before = {
         "receivable_id": receivable.pk,
         "visit_id": receivable.visit_id,
         "amount_minor": receivable.amount_minor,
         "receivable_status": receivable.status,
+        "pricing": pricing_snapshot(pricing),
     }
+    if data["discount_action"] == "SET":
+        pricing = replace_open_pricing_discount(
+            pricing=pricing,
+            actor=actor,
+            discount_id=data["discount_id"],
+            expected_version=data["pricing_version"],
+        )
+        if receivable.visit.total_minor != pricing.net_minor:
+            receivable.visit.total_minor = pricing.net_minor
+            receivable.visit.save(update_fields=("total_minor", "updated_at"))
+        if receivable.amount_minor != pricing.net_minor:
+            receivable.amount_minor = pricing.net_minor
+            receivable.save(update_fields=("amount_minor", "updated_at"))
+
+    patient = receivable.visit.patient
+    specialist = receivable.visit.specialist
     try:
         with transaction.atomic():
             ledger = CashLedgerEntry.objects.create(
@@ -1662,7 +1989,7 @@ def post_payment(
             payment = Payment.objects.create(
                 ledger_entry=ledger,
                 receivable=receivable,
-                comment=normalized["comment"],
+                comment=str(normalized["comment"]),
                 patient_id_snapshot=patient.pk,
                 patient_public_number_snapshot=patient.public_number,
                 patient_name_snapshot=patient.display_name,
@@ -1673,6 +2000,14 @@ def post_payment(
                     receivable.visit.payment_handoff_requested
                 ),
                 visit_total_minor_snapshot=receivable.visit.total_minor,
+                gross_total_minor_snapshot=pricing.gross_minor,
+                discount_id_snapshot=pricing.discount_id,
+                discount_name_snapshot=pricing.discount_name_snapshot,
+                discount_percent_snapshot=pricing.discount_percent_snapshot,
+                discount_source_snapshot=pricing.discount_source,
+                discount_amount_minor_snapshot=pricing.discount_amount_minor,
+                net_total_minor_snapshot=pricing.net_minor,
+                pricing_snapshot_is_legacy=False,
                 specialist_id_snapshot=specialist.pk,
                 specialist_name_snapshot=specialist.display_name,
                 employee_name_snapshot=actor.display_name,
@@ -1696,6 +2031,7 @@ def post_payment(
 
     receivable.status = ReceivableStatus.PAID
     receivable.save(update_fields=("status", "updated_at"))
+    settle_pricing(pricing)
     payment = _payment_with_context().get(pk=payment.pk)
     record_audit_event(
         actor=actor,
@@ -1762,6 +2098,18 @@ def post_refund(
             message="Оплату для повернення не знайдено.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+    # All cash mutations lock the singleton shift before their business rows.
+    # Keeping that order here prevents payment/refund/close races from forming
+    # a shift -> receivable / receivable -> shift deadlock cycle.
+    shift = (
+        CashShift.objects.select_for_update(of=("self",))
+        .filter(status=CashShiftStatus.OPEN)
+        .first()
+    )
+    if shift is None or shift.employee_id != actor.pk:
+        raise _cash_shift_required()
+
     receivable = (
         Receivable.objects.select_for_update(of=("self",))
         .select_related("visit")
@@ -1798,14 +2146,6 @@ def post_refund(
         or payment.ledger_entry.amount_minor != receivable.amount_minor
     ):
         raise _payment_not_refundable()
-
-    shift = (
-        CashShift.objects.select_for_update(of=("self",))
-        .filter(employee=actor, status=CashShiftStatus.OPEN)
-        .first()
-    )
-    if shift is None:
-        raise _cash_shift_required()
 
     existing = _existing_refund(
         actor=actor,

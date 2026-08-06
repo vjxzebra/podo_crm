@@ -427,8 +427,10 @@ export function VisitPage() {
             <div>
               <p className="eyebrow">Прийом завершено</p>
               <h2>{visit.payment_handoff_requested ? "Передано ресепшну на оплату" : "Збережено як завершений"}</h2>
-              <p>Сума до оплати: <strong>{moneyFormatter.format((visit.total_minor ?? visit.services_total_minor) / 100)}</strong>. Складські рухи, рекомендації та історія прийому зафіксовані атомарно.</p>
+              <p>Сума до оплати: <strong>{moneyFormatter.format((finishResult?.pricing?.net_minor ?? visit.total_minor ?? visit.services_total_minor) / 100)}</strong>. Складські рухи, рекомендації та історія прийому зафіксовані атомарно.</p>
               <dl>
+                <div><dt>Вартість послуг</dt><dd>{moneyFormatter.format((finishResult?.pricing?.gross_minor ?? visit.services_total_minor) / 100)}</dd></div>
+                <div><dt>Знижка</dt><dd>{finishResult?.pricing?.discount_percent === null || finishResult?.pricing?.discount_percent === undefined ? "Не застосовано" : `${finishResult.pricing.discount_name} · ${String(finishResult.pricing.discount_percent)}% (− ${moneyFormatter.format(finishResult.pricing.discount_amount_minor / 100)})`}</dd></div>
                 <div><dt>Фінансове зобов’язання</dt><dd>{finishResult?.receivable.status === "OPEN" || finishResult === null ? "Очікує повної оплати" : finishResult.receivable.status}</dd></div>
                 <div><dt>Списано партій</dt><dd>{finishResult?.movement_ids.length ?? visit.material_lines.length}</dd></div>
                 <div><dt>Наступний запис</dt><dd>{finishResult?.follow_up_appointment_id ? "Створено" : "Не створювався або дані вже оновлено"}</dd></div>

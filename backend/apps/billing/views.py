@@ -141,12 +141,13 @@ class CashShiftOpenView(APIView):
         tags=["cash"],
     )
     def post(self, request: Request) -> Response:
+        actor = _actor(request)
         shift = open_cash_shift(
-            actor=_actor(request),
+            actor=actor,
             correlation_id=get_request_id(request),
         )
         return Response(
-            CashShiftProjectionSerializer(cash_shift_projection(shift)).data,
+            CashShiftProjectionSerializer(cash_shift_projection(shift, actor=actor)).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -165,8 +166,9 @@ class CurrentCashShiftView(APIView):
         tags=["cash"],
     )
     def get(self, request: Request) -> Response:
-        shift = current_cash_shift(actor=_actor(request))
-        payload = {"shift": None if shift is None else cash_shift_projection(shift)}
+        actor = _actor(request)
+        shift = current_cash_shift(actor=actor)
+        payload = {"shift": None if shift is None else cash_shift_projection(shift, actor=actor)}
         return Response(CashShiftCurrentResponseSerializer(payload).data)
 
 
@@ -185,8 +187,11 @@ class CashShiftDetailView(APIView):
         tags=["cash"],
     )
     def get(self, request: Request, shift_id: UUID) -> Response:
-        shift = cash_shift_detail(actor=_actor(request), shift_id=shift_id)
-        return Response(CashShiftProjectionSerializer(cash_shift_projection(shift)).data)
+        actor = _actor(request)
+        shift = cash_shift_detail(actor=actor, shift_id=shift_id)
+        return Response(
+            CashShiftProjectionSerializer(cash_shift_projection(shift, actor=actor)).data
+        )
 
 
 class CashShiftHistoryExportView(APIView):
@@ -352,15 +357,16 @@ class CashShiftCloseView(APIView):
     def post(self, request: Request, shift_id: UUID) -> Response:
         serializer = CashShiftCloseSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        actor = _actor(request)
         shift, replayed = close_cash_shift(
-            actor=_actor(request),
+            actor=actor,
             shift_id=shift_id,
             correlation_id=get_request_id(request),
             idempotency_key=_idempotency_key(request),
             data=dict(serializer.validated_data),
         )
         payload = {
-            "shift": cash_shift_projection(shift),
+            "shift": cash_shift_projection(shift, actor=actor),
             "replayed": replayed,
         }
         return Response(

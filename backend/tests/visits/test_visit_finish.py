@@ -13,13 +13,14 @@ from apps.accounts.models import User, UserRole
 from apps.audit.models import AuditEvent
 from apps.audit.registry import AuditAction
 from apps.billing.models import CashLedgerEntry, Payment, Receivable, ReceivableStatus
+from apps.clinic.models import Service
 from apps.inventory.models import (
     InventoryOperation,
     InventoryOperationKind,
     MaterialLot,
     StockMovement,
 )
-from apps.scheduling.models import Appointment
+from apps.scheduling.models import Appointment, AppointmentServiceLine
 from apps.visits.models import (
     Visit,
     VisitFinishResult,
@@ -50,13 +51,22 @@ def _finish_payload(
     }
 
 
-def _follow_up_payload(appointment: Appointment) -> dict[str, object]:
-    return {
-        "starts_at": datetime(2026, 8, 3, 11, 0, tzinfo=KYIV).isoformat(),
-        "service_id": str(appointment.service_id),
+def _follow_up_payload(
+    appointment: Appointment,
+    *,
+    service_ids: list[str] | None = None,
+    starts_at: datetime | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "starts_at": (starts_at or datetime(2026, 8, 3, 11, 0, tzinfo=KYIV)).isoformat(),
         "specialist_id": appointment.specialist_id,
         "room_id": str(appointment.room_id),
     }
+    if service_ids is None:
+        payload["service_id"] = str(appointment.service_id)
+    else:
+        payload["service_ids"] = service_ids
+    return payload
 
 
 def _finish(
@@ -104,14 +114,26 @@ def _visit_with_materials(
 def test_finish_posts_stock_receivable_recommendation_follow_up_and_audit_atomically() -> None:
     admin = create_user(email="admin@example.test", role=UserRole.ADMIN)
     appointment, visit, lots = _visit_with_materials(admin=admin)
+    additional = Service.objects.create(
+        code="NAILS",
+        name="Обробка нігтів",
+        duration_minutes=30,
+        price_minor=80000,
+        color="#7C3AED",
+    )
+    selected_service_ids = [str(additional.pk), str(appointment.service_id)]
     payload = _finish_payload(
         version=visit.version,
-        follow_up=_follow_up_payload(appointment),
+        follow_up=_follow_up_payload(appointment, service_ids=selected_service_ids),
     )
 
     response = _finish(authenticated_client(admin), str(visit.pk), payload)
+    replay = _finish(authenticated_client(admin), str(visit.pk), payload)
 
     assert response.status_code == 201, response.json()
+    assert replay.status_code == 200, replay.json()
+    assert replay.json()["replayed"] is True
+    assert replay.json()["follow_up_appointment_id"] == response.json()["follow_up_appointment_id"]
     body = response.json()
     assert body["replayed"] is False
     assert body["visit"]["status"] == VisitStatus.COMPLETED
@@ -142,9 +164,72 @@ def test_finish_posts_stock_receivable_recommendation_follow_up_and_audit_atomic
     assert follow_up.patient_id == visit.patient_id
     assert follow_up.status_id == "NEW"
     assert follow_up.has_no_complaints is True
+    assert follow_up.service_id == additional.pk
+    assert follow_up.duration_minutes == 75
+    assert list(
+        follow_up.service_lines.values_list(
+            "service_id", "position", "duration_minutes", "service_name_snapshot"
+        )
+    ) == [
+        (additional.pk, 0, 30, additional.name),
+        (appointment.service_id, 1, 45, appointment.service.name),
+    ]
+    assert Appointment.objects.count() == 2
+    assert AppointmentServiceLine.objects.filter(appointment=follow_up).count() == 2
     assert AuditEvent.objects.filter(action=AuditAction.VISIT_COMPLETED).count() == 1
     assert AuditEvent.objects.filter(action=AuditAction.STOCK_MOVEMENT_POSTED).count() == 1
     assert VisitFinishResult.objects.filter(visit=visit).count() == 1
+
+
+@pytest.mark.django_db
+def test_finish_rejects_empty_duplicate_mixed_and_inactive_follow_up_services() -> None:
+    admin = create_user(email="invalid-follow-up-admin@example.test", role=UserRole.ADMIN)
+    appointment = arrived_appointment(actor=admin)
+    visit_id = start(authenticated_client(admin), appointment).json()["id"]
+    inactive = Service.objects.create(
+        code="INACTIVE",
+        name="Неактивна послуга",
+        duration_minutes=30,
+        price_minor=80000,
+        color="#7C3AED",
+        is_active=False,
+    )
+    common = {
+        "starts_at": datetime(2026, 8, 3, 11, 0, tzinfo=KYIV).isoformat(),
+        "specialist_id": appointment.specialist_id,
+        "room_id": str(appointment.room_id),
+    }
+    service_id = str(appointment.service_id)
+    selections = (
+        ("empty", {"service_ids": []}, "follow_up.service_ids"),
+        ("duplicate", {"service_ids": [service_id, service_id]}, "follow_up.service_ids"),
+        (
+            "mixed",
+            {"service_id": service_id, "service_ids": [service_id]},
+            "follow_up.service_ids",
+        ),
+        ("missing", {}, "follow_up.service_ids"),
+        ("inactive", {"service_ids": [str(inactive.pk)]}, "service_ids"),
+    )
+
+    for key, selection, error_field in selections:
+        response = _finish(
+            authenticated_client(admin),
+            visit_id,
+            _finish_payload(
+                version=1,
+                follow_up={**common, **selection},
+            ),
+            key=f"invalid-follow-up-{key}",
+        )
+
+        assert response.status_code == 422, response.json()
+        assert error_field in response.json()["fields"]
+
+    assert Visit.objects.get(pk=visit_id).status == VisitStatus.DRAFT
+    assert Appointment.objects.count() == 1
+    assert not Receivable.objects.exists()
+    assert not VisitFinishResult.objects.exists()
 
 
 @pytest.mark.django_db
@@ -286,6 +371,13 @@ def test_finish_fault_after_first_lot_update_leaves_no_partial_rows_or_balances(
 def test_follow_up_slot_conflict_rolls_back_stock_receivable_and_completion() -> None:
     admin = create_user(email="admin@example.test", role=UserRole.ADMIN)
     appointment, visit, lots = _visit_with_materials(admin=admin, quantities=("1.000",))
+    additional = Service.objects.create(
+        code="CONFLICT-TAIL",
+        name="Додаткова обробка",
+        duration_minutes=30,
+        price_minor=80000,
+        color="#7C3AED",
+    )
     blocking = authenticated_client(admin).post(
         "/api/v1/appointments",
         appointment_payload(
@@ -293,7 +385,7 @@ def test_follow_up_slot_conflict_rolls_back_stock_receivable_and_completion() ->
             service=appointment.service,
             room=appointment.room,
             patient=appointment.patient,
-            starts_at=datetime(2026, 8, 3, 11, 0, tzinfo=KYIV),
+            starts_at=datetime(2026, 8, 3, 12, 0, tzinfo=KYIV),
         ),
         format="json",
     )
@@ -304,7 +396,10 @@ def test_follow_up_slot_conflict_rolls_back_stock_receivable_and_completion() ->
         str(visit.pk),
         _finish_payload(
             version=visit.version,
-            follow_up=_follow_up_payload(appointment),
+            follow_up=_follow_up_payload(
+                appointment,
+                service_ids=[str(appointment.service_id), str(additional.pk)],
+            ),
         ),
     )
 
@@ -317,6 +412,56 @@ def test_follow_up_slot_conflict_rolls_back_stock_receivable_and_completion() ->
     assert not Receivable.objects.exists()
     assert not InventoryOperation.objects.exists()
     assert not VisitFinishResult.objects.exists()
+
+
+@pytest.mark.django_db
+def test_multi_service_follow_up_copies_ordered_services_when_its_visit_starts() -> None:
+    admin = create_user(email="follow-up-start-admin@example.test", role=UserRole.ADMIN)
+    appointment = arrived_appointment(actor=admin)
+    visit_id = start(authenticated_client(admin), appointment).json()["id"]
+    additional = Service.objects.create(
+        code="FOLLOW-UP-CARE",
+        name="Повторна обробка",
+        duration_minutes=30,
+        price_minor=80000,
+        color="#7C3AED",
+    )
+    selected_service_ids = [str(additional.pk), str(appointment.service_id)]
+    client = authenticated_client(admin)
+
+    finished = _finish(
+        client,
+        visit_id,
+        _finish_payload(
+            version=1,
+            follow_up=_follow_up_payload(appointment, service_ids=selected_service_ids),
+        ),
+        key="multi-follow-up-start",
+    )
+    assert finished.status_code == 201, finished.json()
+    follow_up = Appointment.objects.get(pk=finished.json()["follow_up_appointment_id"])
+    status_url = f"/api/v1/appointments/{follow_up.pk}/status"
+    confirmed = client.post(
+        status_url,
+        {"version": follow_up.version, "status_code": "CONFIRMED"},
+        format="json",
+    )
+    assert confirmed.status_code == 200, confirmed.json()
+    arrived = client.post(
+        status_url,
+        {"version": confirmed.json()["version"], "status_code": "ARRIVED"},
+        format="json",
+    )
+    assert arrived.status_code == 200, arrived.json()
+    follow_up.refresh_from_db()
+
+    started = start(client, follow_up)
+
+    assert started.status_code == 201, started.json()
+    assert [line["service_id"] for line in started.json()["service_lines"]] == (
+        selected_service_ids
+    )
+    assert [line["is_primary"] for line in started.json()["service_lines"]] == [True, False]
 
 
 @pytest.mark.django_db(transaction=True)
@@ -456,12 +601,21 @@ def test_openapi_exposes_atomic_finish_contract_and_idempotency_header() -> None
     schema = SchemaGenerator().get_schema(request=None, public=True)
     operation = schema["paths"]["/api/v1/visits/{visit_id}/finish"]["post"]
     request_schema = schema["components"]["schemas"]["VisitFinishRequest"]
+    follow_up_schema = schema["components"]["schemas"]["VisitFollowUpInputRequest"]
     response_schema = schema["components"]["schemas"]["VisitFinishResponse"]
 
     header = next(item for item in operation["parameters"] if item["name"] == "Idempotency-Key")
     assert header["required"] is True
     assert set(request_schema["required"]) == {"payment_handoff_requested", "version"}
     assert request_schema["properties"]["follow_up"]["nullable"] is True
+    assert set(follow_up_schema["required"]) == {"room_id", "specialist_id", "starts_at"}
+    assert follow_up_schema["properties"]["service_id"]["format"] == "uuid"
+    assert follow_up_schema["properties"]["service_ids"] == {
+        "type": "array",
+        "items": {"type": "string", "format": "uuid"},
+        "maxItems": 20,
+        "minItems": 1,
+    }
     assert response_schema["properties"]["receivable"] == {
         "$ref": "#/components/schemas/VisitReceivable"
     }

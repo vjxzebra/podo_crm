@@ -11,7 +11,7 @@ from drf_spectacular.generators import SchemaGenerator
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
-from apps.billing.models import Payment, PaymentMethod, Receivable, ReceivableStatus
+from apps.billing.models import Payment, PaymentMethod, Receivable, VisitPricing
 from apps.billing.selectors import payment_receivables_for_global_search
 from apps.billing.services import open_cash_shift, post_payment
 from apps.clinic.models import AppointmentStatusConfig, Room, Service
@@ -23,6 +23,7 @@ from apps.patients.selectors import patients_for_global_search
 from apps.scheduling.models import Appointment
 from apps.scheduling.selectors import appointments_for_global_search
 from apps.visits.models import Visit, VisitServiceLine, VisitStatus
+from tests.financial_fixtures import complete_visit_with_neutral_pricing
 
 PASSWORD = "test-only-password-placeholder"  # noqa: S105
 
@@ -41,6 +42,28 @@ def authenticated_client(user: User) -> APIClient:
     client = APIClient()
     client.force_authenticate(user)
     return client
+
+
+def post_fixture_payment(
+    *,
+    actor: User,
+    receivable: Receivable,
+    correlation_id: str,
+    idempotency_key: str,
+) -> None:
+    pricing = VisitPricing.objects.get(visit_id=receivable.visit_id)
+    post_payment(
+        actor=actor,
+        correlation_id=correlation_id,
+        idempotency_key=idempotency_key,
+        data={
+            "visit_id": receivable.visit_id,
+            "payment_method": PaymentMethod.CARD,
+            "comment": "",
+            "pricing_version": pricing.version,
+            "discount_action": "KEEP",
+        },
+    )
 
 
 def domain_fixture() -> dict[str, object]:
@@ -94,14 +117,14 @@ def domain_fixture() -> dict[str, object]:
         appointment=appointment,
         patient=patient,
         specialist=owner,
-        status=VisitStatus.COMPLETED,
+        status=VisitStatus.DRAFT,
         complaints="",
         has_no_complaints=True,
-        total_minor=service.price_minor,
-        payment_handoff_requested=True,
+        total_minor=None,
+        payment_handoff_requested=False,
         version=2,
         started_by=owner,
-        completed_at=starts_at + timedelta(minutes=45),
+        completed_at=None,
     )
     VisitServiceLine.objects.create(
         visit=visit,
@@ -113,10 +136,10 @@ def domain_fixture() -> dict[str, object]:
         quantity=1,
         is_primary=True,
     )
-    receivable = Receivable.objects.create(
-        visit=visit,
-        amount_minor=service.price_minor,
-        status=ReceivableStatus.OPEN,
+    _, receivable = complete_visit_with_neutral_pricing(
+        visit,
+        completed_at=starts_at + timedelta(minutes=45),
+        payment_handoff_requested=True,
     )
     material = Material.objects.create(
         sku="ORBIT-001",
@@ -351,19 +374,29 @@ def test_search_ranking_uses_frozen_identifier_name_substring_tiers() -> None:
             appointment=appointment,
             patient=patient,
             specialist=specialist,
-            status=VisitStatus.COMPLETED,
+            status=VisitStatus.DRAFT,
             complaints="",
             has_no_complaints=True,
-            total_minor=service.price_minor,
-            payment_handoff_requested=True,
+            total_minor=None,
+            payment_handoff_requested=False,
             version=2,
             started_by=specialist,
-            completed_at=appointment_start + timedelta(minutes=30),
+            completed_at=None,
         )
-        receivable = Receivable.objects.create(
+        VisitServiceLine.objects.create(
             visit=visit,
-            amount_minor=service.price_minor,
-            status=ReceivableStatus.OPEN,
+            service=service,
+            service_code=service.code,
+            service_name=service.name,
+            duration_minutes=service.duration_minutes,
+            price_minor=service.price_minor,
+            quantity=1,
+            is_primary=True,
+        )
+        _, receivable = complete_visit_with_neutral_pricing(
+            visit,
+            completed_at=appointment_start + timedelta(minutes=30),
+            payment_handoff_requested=True,
         )
         patients[tier] = patient
         appointments[tier] = appointment
@@ -613,15 +646,11 @@ def test_paid_formatted_phone_is_searchable_by_digits_only() -> None:
     reception = fixture["reception"]
     receivable = fixture["receivable"]
     open_cash_shift(actor=reception, correlation_id="search-phone-shift")  # type: ignore[arg-type]
-    post_payment(
+    post_fixture_payment(
         actor=reception,  # type: ignore[arg-type]
+        receivable=receivable,  # type: ignore[arg-type]
         correlation_id="search-phone-payment",
         idempotency_key="search-phone-payment-key",
-        data={
-            "visit_id": receivable.visit_id,  # type: ignore[union-attr]
-            "payment_method": PaymentMethod.CARD,
-            "comment": "",
-        },
     )
 
     response = authenticated_client(reception).get(  # type: ignore[arg-type]
@@ -637,15 +666,11 @@ def test_payment_search_prefetches_only_safe_item_context() -> None:
     fixture = domain_fixture()
     reception = fixture["reception"]
     open_cash_shift(actor=reception, correlation_id="search-hydration-shift")  # type: ignore[arg-type]
-    post_payment(
+    post_fixture_payment(
         actor=reception,  # type: ignore[arg-type]
+        receivable=fixture["receivable"],  # type: ignore[arg-type]
         correlation_id="search-hydration-payment",
         idempotency_key="search-hydration-payment-key",
-        data={
-            "visit_id": fixture["receivable"].visit_id,  # type: ignore[union-attr]
-            "payment_method": PaymentMethod.CARD,
-            "comment": "",
-        },
     )
 
     with CaptureQueriesContext(connection) as captured:
@@ -713,15 +738,11 @@ def test_paid_payment_ranking_covers_snapshot_ledger_and_phone_tiers() -> None:
     reception = fixture["reception"]
     receivable = fixture["receivable"]
     open_cash_shift(actor=reception, correlation_id="search-paid-rank-shift")  # type: ignore[arg-type]
-    post_payment(
+    post_fixture_payment(
         actor=reception,  # type: ignore[arg-type]
+        receivable=receivable,  # type: ignore[arg-type]
         correlation_id="search-paid-rank-payment",
         idempotency_key="search-paid-rank-payment-key",
-        data={
-            "visit_id": receivable.visit_id,  # type: ignore[union-attr]
-            "payment_method": PaymentMethod.CARD,
-            "comment": "",
-        },
     )
     payment = Payment.objects.select_related("ledger_entry").get(receivable=receivable)
 

@@ -196,10 +196,13 @@ def test_refund_can_reverse_historical_other_actor_payment_into_own_shift() -> N
     original_shift.close_payload_hash = "a" * 64
     original_shift.save()
     refund_actor = create_user(email="refund-actor@example.test", role=UserRole.ADMIN)
-    refund_shift = CashShift.objects.create(employee=refund_actor)
+    refund_client = authenticated_client(refund_actor)
+    opened = refund_client.post("/api/v1/cash-shifts", format="json")
+    assert opened.status_code == 201, opened.json()
+    refund_shift = CashShift.objects.get(pk=opened.json()["id"])
 
     response = post_refund(
-        authenticated_client(refund_actor),
+        refund_client,
         payment["id"],
         key="historical-refund",
     )
@@ -222,12 +225,27 @@ def test_cash_refund_requires_current_shift_cash_and_rolls_back_cleanly() -> Non
         key="cash-original-payment",
         payment_method=PaymentMethod.CASH,
     )
+    original_shift = CashShift.objects.get(employee=original_actor)
+    closed = authenticated_client(original_actor).post(
+        f"/api/v1/cash-shifts/{original_shift.pk}/close",
+        {
+            "actual_cash_minor": 0,
+            "expected_operations_count": 1,
+            "cash_count_confirmed": True,
+            "comment": "Готівку вилучено перед передачею каси",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="cash-original-close",
+    )
+    assert closed.status_code == 201, closed.json()
     refund_actor = create_user(email="cash-refund@example.test")
-    CashShift.objects.create(employee=refund_actor)
+    refund_client = authenticated_client(refund_actor)
+    opened = refund_client.post("/api/v1/cash-shifts", format="json")
+    assert opened.status_code == 201, opened.json()
     ledger_before = CashLedgerEntry.objects.count()
 
     response = post_refund(
-        authenticated_client(refund_actor),
+        refund_client,
         paid.json()["operation"]["payment"]["id"],
         key="insufficient-cash-refund",
     )
@@ -530,9 +548,24 @@ def test_concurrent_refunds_and_outgoing_cash_allow_only_one_safe_result() -> No
     assert {value for _, value in refund_results} == {"ok", "payment_already_refunded"}
     assert Refund.objects.count() == 1
 
+    actor_shift = CashShift.objects.get(employee=actor)
+    closed = authenticated_client(actor).post(
+        f"/api/v1/cash-shifts/{actor_shift.pk}/close",
+        {
+            "actual_cash_minor": 0,
+            "expected_operations_count": 2,
+            "cash_count_confirmed": True,
+            "comment": "",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="concurrent-refund-close",
+    )
+    assert closed.status_code == 201, closed.json()
+
     cash_actor = create_user(email="concurrent-cash@example.test")
-    CashShift.objects.create(employee=cash_actor)
     cash_client = authenticated_client(cash_actor)
+    opened = cash_client.post("/api/v1/cash-shifts", format="json")
+    assert opened.status_code == 201, opened.json()
     deposit = post_movement(
         cash_client,
         movement_type=CashLedgerEntryKind.DEPOSIT,
@@ -668,12 +701,10 @@ def test_raw_tp703_guards_reject_orphan_refund_wrong_snapshot_and_negative_cash(
         )
     assert not CashLedgerEntry.objects.filter(idempotency_key="wrong-refund-snapshot").exists()
 
-    empty_actor = create_user(email="raw-negative@example.test")
-    empty_shift = CashShift.objects.create(employee=empty_actor)
     with pytest.raises(DatabaseError), transaction.atomic():
         CashLedgerEntry.objects.create(
-            cash_shift=empty_shift,
-            created_by=empty_actor,
+            cash_shift=shift,
+            created_by=actor,
             kind=CashLedgerEntryKind.WITHDRAWAL,
             amount_minor=1,
             payment_method="",
@@ -729,8 +760,10 @@ def test_exact_replay_survives_closed_shift_and_corrupt_untyped_key_is_conflict(
     assert replay.json()["operation"] == movement.json()["operation"]
 
     other = create_user(email="corrupt-key@example.test")
-    other_shift = CashShift.objects.create(employee=other)
     other_client = authenticated_client(other)
+    opened = other_client.post("/api/v1/cash-shifts", format="json")
+    assert opened.status_code == 201, opened.json()
+    other_shift = CashShift.objects.get(pk=opened.json()["id"])
     with transaction.atomic():
         CashLedgerEntry.objects.create(
             cash_shift=other_shift,

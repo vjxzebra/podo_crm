@@ -4,6 +4,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.billing.models import ReceivableStatus
+from apps.billing.serializers import VisitPricingSerializer
 from apps.visits.models import (
     DetectedCondition,
     VisitPhotoKind,
@@ -154,6 +155,20 @@ class VisitRecommendationUpdateSerializer(VisitRecommendationCreateSerializer):
     version = serializers.IntegerField(min_value=1)
 
 
+class VisitLoyaltyDiscountSerializer(serializers.Serializer[Any]):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    percent = serializers.IntegerField()
+
+
+class VisitLoyaltySerializer(serializers.Serializer[Any]):
+    is_active = serializers.BooleanField()
+    every_n = serializers.IntegerField(allow_null=True)
+    visit_number = serializers.IntegerField(allow_null=True)
+    eligible = serializers.BooleanField()
+    discount = VisitLoyaltyDiscountSerializer(allow_null=True)
+
+
 class VisitResponseSerializer(serializers.Serializer[Any]):
     id = serializers.UUIDField()
     public_number = serializers.CharField()
@@ -177,6 +192,7 @@ class VisitResponseSerializer(serializers.Serializer[Any]):
     photos = VisitPhotoSerializer(many=True)
     recommendations = VisitRecommendationSerializer(many=True)
     editable = serializers.BooleanField()
+    loyalty = VisitLoyaltySerializer()
     started_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
     completed_at = serializers.DateTimeField(allow_null=True)
@@ -232,9 +248,31 @@ class VisitPhotoContentQuerySerializer(serializers.Serializer[Any]):
 
 class VisitFollowUpInputSerializer(serializers.Serializer[Any]):
     starts_at = serializers.DateTimeField()
-    service_id = serializers.UUIDField()
+    service_id = serializers.UUIDField(required=False)
+    service_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=False,
+        min_length=1,
+        max_length=20,
+    )
     specialist_id = serializers.IntegerField(min_value=1)
     room_id = serializers.UUIDField()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        legacy_service_id = attrs.get("service_id")
+        service_ids = list(attrs.get("service_ids", []))
+        if legacy_service_id is not None and service_ids:
+            raise serializers.ValidationError(
+                {"service_ids": ["Передайте послуги лише в одному форматі."]}
+            )
+        if legacy_service_id is None and not service_ids:
+            raise serializers.ValidationError({"service_ids": ["Оберіть хоча б одну послугу."]})
+        if len(service_ids) != len(set(service_ids)):
+            raise serializers.ValidationError(
+                {"service_ids": ["Кожну послугу можна обрати лише раз."]}
+            )
+        return attrs
 
 
 class VisitFinishSerializer(serializers.Serializer[Any]):
@@ -247,6 +285,7 @@ class VisitFinishSerializer(serializers.Serializer[Any]):
         trim_whitespace=True,
     )
     payment_handoff_requested = serializers.BooleanField()
+    discount_id = serializers.UUIDField(required=False, allow_null=False)
     follow_up = VisitFollowUpInputSerializer(required=False, allow_null=True, default=None)
 
 
@@ -261,6 +300,7 @@ class VisitFinishResponseSerializer(serializers.Serializer[Any]):
     replayed = serializers.BooleanField()
     visit = VisitResponseSerializer()
     receivable = VisitReceivableSerializer()
+    pricing = VisitPricingSerializer()
     inventory_operation_id = serializers.UUIDField(allow_null=True)
     movement_ids = serializers.ListField(child=serializers.UUIDField())
     follow_up_appointment_id = serializers.UUIDField(allow_null=True)

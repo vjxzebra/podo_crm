@@ -383,6 +383,33 @@ def render_payment_receipt_pdf(payment: Payment) -> bytes:
         ledger.payment_method,
         ledger.payment_method,
     )
+    pricing_rows: list[list[Flowable | str]] = [
+        [
+            _p(f"Спосіб оплати: {payment_method_label}", styles["value"]),
+            _p(
+                f"Вартість послуг: {_money(payment.gross_total_minor_snapshot)}",
+                styles["value"],
+            ),
+        ]
+    ]
+    if payment.discount_percent_snapshot is not None:
+        pricing_rows.append(
+            [
+                "",
+                _p(
+                    f"Знижка {payment.discount_name_snapshot} "
+                    f"({payment.discount_percent_snapshot}%): "
+                    f"−{_money(payment.discount_amount_minor_snapshot)}",
+                    styles["value"],
+                ),
+            ]
+        )
+    pricing_rows.append(
+        [
+            "",
+            _p(f"ДО СПЛАТИ: {_money(payment.net_total_minor_snapshot)}", styles["total"]),
+        ]
+    )
     story: list[Flowable] = [
         _clinic_header(clinic, styles),
         HRFlowable(width="100%", thickness=0.8, color=colors.black, spaceAfter=5 * mm),
@@ -408,16 +435,8 @@ def render_payment_receipt_pdf(payment: Payment) -> bytes:
         _services_table(payment, styles),
         Spacer(1, 4 * mm),
         Table(
-            [
-                [
-                    _p(
-                        f"Спосіб оплати: {payment_method_label}",
-                        styles["value"],
-                    ),
-                    _p(f"РАЗОМ: {_money(ledger.amount_minor)}", styles["total"]),
-                ]
-            ],
-            colWidths=[86 * mm, 86 * mm],
+            pricing_rows,
+            colWidths=[62 * mm, 110 * mm],
             style=[
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("BOX", (0, 0), (-1, -1), 1, colors.black),
@@ -484,6 +503,20 @@ def render_payment_receipt_pdf(payment: Payment) -> bytes:
         story.append(_p("Рекомендації не внесені.", styles["recommendation"]))
     story.extend(
         [
+            _p("Рекомендована дата наступного візиту", styles["section"]),
+            Table(
+                [["____ / ____ / ______"]],
+                colWidths=[86 * mm],
+                hAlign="LEFT",
+                style=[
+                    ("FONTNAME", (0, 0), (-1, -1), _FONT_REGULAR),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2 * mm),
+                ],
+            ),
             Spacer(1, 12 * mm),
             Table(
                 [

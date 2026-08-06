@@ -1641,6 +1641,34 @@ describe("TP-602 visit service and material draft", () => {
 });
 
 describe("TP-604 atomic visit finish", () => {
+  const followUpAdditionalService = {
+    ...clinicService,
+    id: "fa751ae3-dd57-49a6-b81a-bd762a090dc0",
+    code: "NAILS",
+    name: "Обробка нігтів",
+    duration_minutes: 30,
+    price_minor: 80000,
+    color: "#7C3AED",
+  } as const;
+  const multiServiceAvailability = {
+    ...availabilityFixture,
+    service: availabilityFixture.service,
+    services: [
+      availabilityFixture.service,
+      {
+        id: followUpAdditionalService.id,
+        name: followUpAdditionalService.name,
+        duration_minutes: followUpAdditionalService.duration_minutes,
+      },
+    ],
+    duration_minutes: 75,
+    slots: availabilityFixture.slots.map((slot) => ({
+      ...slot,
+      ends_at: "2026-07-21T09:15:00Z",
+    })),
+  } as const;
+  const multiServiceStartsAt = "2026-07-21T08:00:00Z";
+
   const openFinishStep = async () => {
     await screen.findByRole("heading", { name: visitFixture.patient.display_name, level: 1 });
     fireEvent.click(screen.getByRole("button", { name: "Далі: послуги й матеріали" }));
@@ -1649,7 +1677,7 @@ describe("TP-604 atomic visit finish", () => {
     await screen.findByRole("heading", { name: "Перевірка та завершення", level: 2 });
   };
 
-  it("submits recommendations, handoff and one free follow-up slot with a stable key", async () => {
+  it("submits an ordered multi-service follow-up with aggregate availability", async () => {
     document.cookie = "podoria_csrftoken=test-csrf; path=/";
     const completedVisit = {
       ...visitFixture,
@@ -1699,13 +1727,15 @@ describe("TP-604 atomic visit finish", () => {
         return Promise.resolve(jsonResponse(calendarFixture));
       }
       if (url.includes("/api/v1/appointments/availability") && method === "GET") {
-        return Promise.resolve(jsonResponse(availabilityFixture));
+        return Promise.resolve(jsonResponse(multiServiceAvailability));
       }
       if (url.endsWith("/finish") && method === "POST") {
         return Promise.resolve(jsonResponse(finishResponse, 201));
       }
       if (url.includes("/api/v1/services") && method === "GET") {
-        return Promise.resolve(jsonResponse({ services: [clinicService] }));
+        return Promise.resolve(jsonResponse({
+          services: [clinicService, followUpAdditionalService],
+        }));
       }
       return Promise.resolve(jsonResponse({}));
     });
@@ -1718,10 +1748,15 @@ describe("TP-604 atomic visit finish", () => {
       target: { value: "Щоденний домашній догляд" },
     });
     fireEvent.click(screen.getByLabelText(/Записати на наступний прийом/));
+    expect(await screen.findByLabelText(`Обрати послугу ${clinicService.name}`))
+      .toBeChecked();
+    fireEvent.click(screen.getByLabelText(
+      `Обрати послугу ${followUpAdditionalService.name}`,
+    ));
     fireEvent.change(screen.getByLabelText("Дата"), { target: { value: "2026-07-27" } });
-    await screen.findByRole("option", { name: "11:00–11:45" });
+    await screen.findByRole("option", { name: "11:00–12:15" });
     fireEvent.change(screen.getByLabelText("Вільний час"), {
-      target: { value: availabilityFixture.slots[0].starts_at },
+      target: { value: multiServiceStartsAt },
     });
     fireEvent.click(screen.getByLabelText(/Підтверджую підсумок прийому/));
     fireEvent.click(screen.getByRole("button", { name: "Завершити й передати на оплату" }));
@@ -1742,12 +1777,24 @@ describe("TP-604 atomic visit finish", () => {
       recommendations: "Щоденний домашній догляд",
       payment_handoff_requested: true,
       follow_up: {
-        starts_at: availabilityFixture.slots[0].starts_at,
-        service_id: clinicService.id,
+        starts_at: multiServiceStartsAt,
+        service_ids: [clinicService.id, followUpAdditionalService.id],
         specialist_id: visitFixture.specialist.id,
         room_id: clinicRoom.id,
       },
     });
+    const availabilityRequest = fetchMock.mock.calls
+      .map(([input]) => input)
+      .find((input): input is Request => (
+        input instanceof Request && input.url.includes("/appointments/availability")
+      ));
+    if (availabilityRequest === undefined) throw new Error("Expected availability request.");
+    const availabilityUrl = new URL(availabilityRequest.url);
+    expect(availabilityUrl.searchParams.getAll("service_ids")).toEqual([
+      clinicService.id,
+      followUpAdditionalService.id,
+    ]);
+    expect(availabilityUrl.searchParams.has("service_id")).toBe(false);
   });
 
   it("refreshes availability and requires confirmation again after a slot conflict", async () => {
@@ -1762,7 +1809,7 @@ describe("TP-604 atomic visit finish", () => {
       }
       if (url.includes("/api/v1/calendar")) return Promise.resolve(jsonResponse(calendarFixture));
       if (url.includes("/api/v1/appointments/availability")) {
-        return Promise.resolve(jsonResponse(availabilityFixture));
+        return Promise.resolve(jsonResponse(multiServiceAvailability));
       }
       if (url.endsWith("/finish") && method === "POST") {
         finishAttempts += 1;
@@ -1773,15 +1820,26 @@ describe("TP-604 atomic visit finish", () => {
           fields: { "follow_up.starts_at": ["Час спеціаліста вже зайнятий."] },
         }, 409));
       }
-      return Promise.resolve(jsonResponse({ services: [clinicService] }));
+      return Promise.resolve(jsonResponse({
+        services: [clinicService, followUpAdditionalService],
+      }));
     });
     renderApp(`/visits/${visitFixture.id}`);
     await openFinishStep();
     fireEvent.click(screen.getByLabelText(/Записати на наступний прийом/));
     fireEvent.change(screen.getByLabelText("Дата"), { target: { value: "2026-07-27" } });
-    await screen.findByRole("option", { name: "11:00–11:45" });
+    await screen.findByRole("option", { name: "11:00–12:15" });
     fireEvent.change(screen.getByLabelText("Вільний час"), {
-      target: { value: availabilityFixture.slots[0].starts_at },
+      target: { value: multiServiceStartsAt },
+    });
+    fireEvent.click(screen.getByLabelText(
+      `Обрати послугу ${followUpAdditionalService.name}`,
+    ));
+    expect(screen.getByLabelText("Вільний час")).toHaveValue("");
+    expect(screen.getByLabelText(/Підтверджую підсумок прийому/)).toBeDisabled();
+    await screen.findByRole("option", { name: "11:00–12:15" });
+    fireEvent.change(screen.getByLabelText("Вільний час"), {
+      target: { value: multiServiceStartsAt },
     });
     fireEvent.click(screen.getByLabelText(/Підтверджую підсумок прийому/));
     fireEvent.click(screen.getByRole("button", { name: "Завершити й передати на оплату" }));

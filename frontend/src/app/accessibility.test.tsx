@@ -10,6 +10,7 @@ import {
   clinicService,
   financeOperationsFixture,
   financePaidOperation,
+  financeReceptionDiscount,
   jsonResponse,
   visitFixture,
   visitPhotoAfterFixture,
@@ -191,7 +192,11 @@ describe("application shell accessibility", () => {
       </MemoryRouter>,
     );
     fireEvent.click(await screen.findByRole("button", { name: /^Оплатити / }));
-    await screen.findByRole("dialog", { name: "Провести оплату прийому" });
+    const dialog = await screen.findByRole("dialog", { name: "Провести оплату прийому" });
+    fireEvent.click(await within(dialog).findByRole("radio", { name: /Замінити знижку/ }));
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Активна знижка" }), {
+      target: { value: financeReceptionDiscount.id },
+    });
 
     const results = await axe.run(container, {
       rules: { "color-contrast": { enabled: false } },
@@ -465,6 +470,8 @@ describe("application shell accessibility", () => {
     fireEvent.click(screen.getByRole("button", { name: "Далі: фото" }));
     fireEvent.click(screen.getByRole("button", { name: "Далі: завершення" }));
     await screen.findByRole("heading", { name: "Перевірка та завершення", level: 2 });
+    fireEvent.click(screen.getByLabelText(/Записати на наступний прийом/));
+    await screen.findByRole("group", { name: "Доступні послуги" });
 
     const results = await axe.run(container, {
       rules: { "color-contrast": { enabled: false } },

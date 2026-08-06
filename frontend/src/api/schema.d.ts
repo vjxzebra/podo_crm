@@ -600,6 +600,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["discount_list"];
+        put?: never;
+        post: operations["discount_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discounts/{discount_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["discount_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["discount_update"];
+        trace?: never;
+    };
     "/api/v1/finance/operations": {
         parameters: {
             query?: never;
@@ -925,6 +957,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loyalty-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["loyalty_policy_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["loyalty_policy_update"];
         trace?: never;
     };
     "/api/v1/notifications": {
@@ -2054,15 +2102,29 @@ export interface components {
             next_cursor: string | null;
             shifts: components["schemas"]["CashShiftSummary"][];
         };
+        CashShiftOpeningSource: {
+            /** Format: uuid */
+            id: string;
+            public_number: string;
+        };
+        CashShiftPermissions: {
+            can_close: boolean;
+            can_mutate: boolean;
+        };
         CashShiftProjection: {
             /** Format: date-time */
             closed_at: string | null;
+            drawer_key: components["schemas"]["DrawerKeyEnum"];
             employee: components["schemas"]["CashShiftEmployee"];
             entries: components["schemas"]["CashLedgerEntry"][];
             /** Format: uuid */
             id: string;
             /** Format: date-time */
             opened_at: string;
+            opening_basis: components["schemas"]["OpeningBasisEnum"];
+            opening_cash_minor: number;
+            opening_source_shift: components["schemas"]["CashShiftOpeningSource"] | null;
+            permissions: components["schemas"]["CashShiftPermissions"];
             public_number: string;
             reconciliation: components["schemas"]["CashShiftReconciliation"] | null;
             status: components["schemas"]["CashShiftStatusEnum"];
@@ -2084,11 +2146,16 @@ export interface components {
         CashShiftSummary: {
             /** Format: date-time */
             closed_at: string | null;
+            drawer_key: components["schemas"]["DrawerKeyEnum"];
             employee: components["schemas"]["CashShiftEmployee"];
             /** Format: uuid */
             id: string;
             /** Format: date-time */
             opened_at: string;
+            opening_basis: components["schemas"]["OpeningBasisEnum"];
+            opening_cash_minor: number;
+            opening_source_shift: components["schemas"]["CashShiftOpeningSource"] | null;
+            permissions: components["schemas"]["CashShiftPermissions"];
             public_number: string;
             reconciliation: components["schemas"]["CashShiftReconciliation"] | null;
             status: components["schemas"]["CashShiftStatusEnum"];
@@ -2210,6 +2277,38 @@ export interface components {
          * @enum {string}
          */
         DifferenceKindEnum: "MATCH" | "SURPLUS" | "SHORTAGE";
+        Discount: {
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: uuid */
+            readonly id: string;
+            is_active?: boolean;
+            name: string;
+            percent: number;
+            /** Format: date-time */
+            readonly updated_at: string;
+            version?: number;
+        };
+        /**
+         * @description * `KEEP` - KEEP
+         *     * `SET` - SET
+         * @enum {string}
+         */
+        DiscountActionEnum: "KEEP" | "SET";
+        DiscountCreateRequest: {
+            /** @default true */
+            is_active: boolean;
+            name: string;
+            percent: number;
+        };
+        DiscountList: {
+            discounts: components["schemas"]["Discount"][];
+        };
+        /**
+         * @description * `main` - main
+         * @enum {string}
+         */
+        DrawerKeyEnum: "main";
         /**
          * @description * `own` - own
          *     * `all` - all
@@ -2313,6 +2412,7 @@ export interface components {
             occurred_at: string;
             patient: components["schemas"]["FinancePatient"];
             payment: components["schemas"]["FinancePayment"] | null;
+            pricing: components["schemas"]["VisitPricing"];
             refund: components["schemas"]["FinanceRefund"] | null;
             status: components["schemas"]["ReceivableStatusEnum"];
             /**
@@ -2461,6 +2561,17 @@ export interface components {
         LoginRequestRequest: {
             email: string;
             password: string;
+        };
+        LoyaltyPolicy: {
+            discount: components["schemas"]["Discount"] | null;
+            every_n?: number;
+            is_active?: boolean;
+            readonly key: string;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly updated_at: string;
+            version?: number;
         };
         ManualWriteoffCreateRequest: {
             /** @default  */
@@ -2648,6 +2759,13 @@ export interface components {
         NotificationToneEnum: "sage" | "sand" | "blue" | "lilac" | "coral";
         /** @enum {unknown} */
         NullEnum: null;
+        /**
+         * @description * `LEGACY` - Історична
+         *     * `INITIAL` - Перша зміна
+         *     * `CARRY_FORWARD` - Перенесення залишку
+         * @enum {string}
+         */
+        OpeningBasisEnum: "LEGACY" | "INITIAL" | "CARRY_FORWARD";
         OverviewAppointment: {
             duration_minutes: number;
             /** Format: date-time */
@@ -2774,6 +2892,19 @@ export interface components {
             email?: string;
             name?: string;
             phone?: string;
+            version?: number;
+        };
+        PatchedDiscountUpdateRequest: {
+            is_active?: boolean;
+            name?: string;
+            percent?: number;
+            version?: number;
+        };
+        PatchedLoyaltyPolicyUpdateRequest: {
+            /** Format: uuid */
+            discount_id?: string | null;
+            every_n?: number;
+            is_active?: boolean;
             version?: number;
         };
         PatchedMaterialUpdateRequest: {
@@ -3036,7 +3167,11 @@ export interface components {
         PaymentCreateRequest: {
             /** @default  */
             comment: string;
+            discount_action: components["schemas"]["DiscountActionEnum"];
+            /** Format: uuid */
+            discount_id?: string | null;
             payment_method: components["schemas"]["PaymentMethodEnum"];
+            pricing_version: number;
             /** Format: uuid */
             visit_id: string;
         };
@@ -3455,6 +3590,8 @@ export interface components {
             version: number;
         };
         VisitFinishRequest: {
+            /** Format: uuid */
+            discount_id?: string;
             follow_up?: components["schemas"]["VisitFollowUpInputRequest"] | null;
             payment_handoff_requested: boolean;
             /** @default  */
@@ -3467,6 +3604,7 @@ export interface components {
             /** Format: uuid */
             inventory_operation_id: string | null;
             movement_ids: string[];
+            pricing: components["schemas"]["VisitPricing"];
             receivable: components["schemas"]["VisitReceivable"];
             replayed: boolean;
             visit: components["schemas"]["VisitResponse"];
@@ -3475,10 +3613,24 @@ export interface components {
             /** Format: uuid */
             room_id: string;
             /** Format: uuid */
-            service_id: string;
+            service_id?: string;
+            service_ids?: string[];
             specialist_id: number;
             /** Format: date-time */
             starts_at: string;
+        };
+        VisitLoyalty: {
+            discount: components["schemas"]["VisitLoyaltyDiscount"] | null;
+            eligible: boolean;
+            every_n: number | null;
+            is_active: boolean;
+            visit_number: number | null;
+        };
+        VisitLoyaltyDiscount: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            percent: number;
         };
         VisitMaterialLine: {
             /** Format: decimal */
@@ -3587,6 +3739,18 @@ export interface components {
             /** Format: uuid */
             visit_id: string;
         };
+        VisitPricing: {
+            discount_amount_minor: number;
+            /** Format: uuid */
+            discount_id: string | null;
+            discount_name: string;
+            discount_percent: number | null;
+            discount_source: string;
+            gross_minor: number;
+            net_minor: number;
+            state: string;
+            version: number;
+        };
         VisitReceivable: {
             amount_minor: number;
             /** Format: date-time */
@@ -3620,6 +3784,7 @@ export interface components {
             has_no_complaints: boolean;
             /** Format: uuid */
             id: string;
+            loyalty: components["schemas"]["VisitLoyalty"];
             material_lines: components["schemas"]["VisitMaterialLine"][];
             objective_examination: string;
             patient: components["schemas"]["VisitPatient"];
@@ -5883,6 +6048,197 @@ export interface operations {
             };
         };
     };
+    discount_list: {
+        parameters: {
+            query?: {
+                /** @description Admins may filter the catalog; other roles always receive active discounts. */
+                status?: "active" | "all" | "inactive";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscountList"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    discount_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscountCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DiscountCreateRequest"];
+                "multipart/form-data": components["schemas"]["DiscountCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Discount"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    discount_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discount_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Discount"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    discount_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discount_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedDiscountUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedDiscountUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedDiscountUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Discount"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     finance_operation_list: {
         parameters: {
             query?: {
@@ -7183,6 +7539,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InventoryOperation"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    loyalty_policy_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoyaltyPolicy"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    loyalty_policy_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedLoyaltyPolicyUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedLoyaltyPolicyUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedLoyaltyPolicyUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoyaltyPolicy"];
                 };
             };
             401: {

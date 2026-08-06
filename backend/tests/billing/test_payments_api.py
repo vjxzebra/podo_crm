@@ -17,14 +17,18 @@ from apps.billing.models import (
     CashLedgerEntry,
     CashLedgerEntryKind,
     CashShift,
+    DiscountSource,
     ImmutablePaymentError,
     ImmutableReceivableError,
     Payment,
     PaymentMethod,
+    PricingState,
     Receivable,
     ReceivableStatus,
+    VisitPricing,
 )
 from apps.clinic.models import AppointmentStatusConfig, Room, Service
+from apps.discounts.models import Discount
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
 from apps.visits.models import Visit, VisitServiceLine, VisitStatus
@@ -46,6 +50,7 @@ def authenticated_client(user: User) -> APIClient:
     return client
 
 
+@transaction.atomic
 def completed_receivable(
     *,
     amount_minor: int = 145_000,
@@ -103,14 +108,14 @@ def completed_receivable(
         appointment=appointment,
         patient=patient,
         specialist=specialist,
-        status=VisitStatus.COMPLETED,
+        status=VisitStatus.DRAFT,
         complaints="",
         has_no_complaints=True,
         total_minor=amount_minor,
         payment_handoff_requested=True,
         version=2,
         started_by=specialist,
-        completed_at=starts_at + timedelta(minutes=45),
+        completed_at=None,
     )
     VisitServiceLine.objects.create(
         visit=visit,
@@ -122,11 +127,23 @@ def completed_receivable(
         quantity=1,
         is_primary=True,
     )
-    return Receivable.objects.create(
+    VisitPricing.objects.create(
+        visit=visit,
+        gross_minor=amount_minor,
+        discount_amount_minor=0,
+        net_minor=amount_minor,
+        state=(PricingState.SETTLED if amount_minor == 0 else PricingState.OPEN),
+        settled_at=(timezone.now() if amount_minor == 0 else None),
+    )
+    receivable = Receivable.objects.create(
         visit=visit,
         amount_minor=amount_minor,
         status=(ReceivableStatus.PAID if amount_minor == 0 else ReceivableStatus.OPEN),
     )
+    visit.status = VisitStatus.COMPLETED
+    visit.completed_at = starts_at + timedelta(minutes=45)
+    visit.save(update_fields=("status", "completed_at", "updated_at"))
+    return receivable
 
 
 def post_payment(
@@ -136,14 +153,29 @@ def post_payment(
     key: str = "payment-key-1",
     payment_method: str = PaymentMethod.CASH,
     comment: str = "Оплачено повністю",
+    pricing_version: int | None = None,
+    discount_action: str = "KEEP",
+    discount_id: str | None = None,
 ):
+    pricing = VisitPricing.objects.get(visit_id=receivable.visit_id)
+    default_pricing_version = getattr(receivable, "_payment_pricing_version", None)
+    if default_pricing_version is None:
+        default_pricing_version = pricing.version
+        receivable._payment_pricing_version = default_pricing_version
+    payload = {
+        "visit_id": str(receivable.visit_id),
+        "payment_method": payment_method,
+        "pricing_version": (
+            default_pricing_version if pricing_version is None else pricing_version
+        ),
+        "discount_action": discount_action,
+        "comment": comment,
+    }
+    if discount_id is not None:
+        payload["discount_id"] = discount_id
     return client.post(
         "/api/v1/payments",
-        {
-            "visit_id": str(receivable.visit_id),
-            "payment_method": payment_method,
-            "comment": comment,
-        },
+        payload,
         format="json",
         HTTP_IDEMPOTENCY_KEY=key,
         HTTP_X_REQUEST_ID="tp702-payment",
@@ -160,6 +192,7 @@ def raw_payment(
     visit = receivable.visit
     patient = visit.patient
     specialist = visit.specialist
+    pricing = visit.pricing
     lines = list(visit.service_lines.all())
     return Payment(
         ledger_entry=ledger,
@@ -174,6 +207,14 @@ def raw_payment(
         visit_completed_at_snapshot=visit.completed_at,
         visit_payment_handoff_requested_snapshot=visit.payment_handoff_requested,
         visit_total_minor_snapshot=visit.total_minor,
+        gross_total_minor_snapshot=pricing.gross_minor,
+        discount_id_snapshot=pricing.discount_id,
+        discount_name_snapshot=pricing.discount_name_snapshot,
+        discount_percent_snapshot=pricing.discount_percent_snapshot,
+        discount_source_snapshot=pricing.discount_source,
+        discount_amount_minor_snapshot=pricing.discount_amount_minor,
+        net_total_minor_snapshot=pricing.net_minor,
+        pricing_snapshot_is_legacy=False,
         specialist_id_snapshot=specialist.pk,
         specialist_name_snapshot=specialist.display_name,
         employee_name_snapshot=actor.display_name,
@@ -235,6 +276,7 @@ def test_full_payment_is_server_derived_snapshotted_audited_and_in_own_shift(
         "amount_minor",
         "patient",
         "visit",
+        "pricing",
         "payment",
         "refund",
     }
@@ -268,6 +310,10 @@ def test_full_payment_is_server_derived_snapshotted_audited_and_in_own_shift(
     assert payment.ledger_entry.payment_method == payment_method
     assert payment.patient_id_snapshot == receivable.visit.patient_id
     assert payment.visit_total_minor_snapshot == 145_000
+    assert payment.gross_total_minor_snapshot == 145_000
+    assert payment.discount_id_snapshot is None
+    assert payment.discount_amount_minor_snapshot == 0
+    assert payment.net_total_minor_snapshot == 145_000
     assert payment.services_snapshot == operation["visit"]["services"]
 
     event = AuditEvent.objects.get(action=AuditAction.PAYMENT_POSTED)
@@ -311,6 +357,131 @@ def test_payment_replays_same_key_and_rejects_mismatch_or_new_key_after_settleme
 
 
 @pytest.mark.django_db
+def test_reception_sets_discount_without_stacking_and_settles_immutable_snapshots() -> None:
+    actor = create_user(email="reception-discount@example.test", role=UserRole.RECEPTION)
+    CashShift.objects.create(employee=actor)
+    receivable = completed_receivable(amount_minor=145_000)
+    discount = Discount.objects.create(name="Рецепція 10", percent=10)
+
+    response = post_payment(
+        authenticated_client(actor),
+        receivable,
+        key="payment-with-discount",
+        payment_method=PaymentMethod.CARD,
+        discount_action="SET",
+        discount_id=str(discount.pk),
+    )
+
+    assert response.status_code == 201, response.json()
+    operation = response.json()["operation"]
+    assert operation["amount_minor"] == 130_500
+    assert operation["pricing"] == {
+        "gross_minor": 145_000,
+        "discount_id": str(discount.pk),
+        "discount_name": "Рецепція 10",
+        "discount_percent": 10,
+        "discount_source": DiscountSource.RECEPTION,
+        "discount_amount_minor": 14_500,
+        "net_minor": 130_500,
+        "version": 3,
+        "state": PricingState.SETTLED,
+    }
+
+    receivable.refresh_from_db()
+    receivable.visit.refresh_from_db()
+    pricing = VisitPricing.objects.get(visit_id=receivable.visit_id)
+    payment = Payment.objects.select_related("ledger_entry").get(receivable=receivable)
+    assert receivable.amount_minor == 130_500
+    assert receivable.visit.total_minor == 130_500
+    assert payment.ledger_entry.amount_minor == 130_500
+    assert pricing.state == PricingState.SETTLED
+    assert payment.gross_total_minor_snapshot == 145_000
+    assert payment.discount_id_snapshot == discount.pk
+    assert payment.discount_name_snapshot == "Рецепція 10"
+    assert payment.discount_percent_snapshot == 10
+    assert payment.discount_source_snapshot == DiscountSource.RECEPTION
+    assert payment.discount_amount_minor_snapshot == 14_500
+    assert payment.net_total_minor_snapshot == 130_500
+    assert payment.pricing_snapshot_is_legacy is False
+
+    discount.name = "Перейменована"
+    discount.is_active = False
+    discount.version += 1
+    discount.save()
+    payment.refresh_from_db()
+    pricing.refresh_from_db()
+    assert payment.discount_name_snapshot == "Рецепція 10"
+    assert pricing.discount_name_snapshot == "Рецепція 10"
+
+
+@pytest.mark.django_db
+def test_payment_discount_contract_rejects_stale_inactive_and_invalid_actions() -> None:
+    actor = create_user(email="reception-contract@example.test", role=UserRole.RECEPTION)
+    CashShift.objects.create(employee=actor)
+    receivable = completed_receivable()
+    active = Discount.objects.create(name="Активна", percent=15)
+    inactive = Discount.objects.create(name="Неактивна", percent=20, is_active=False)
+    client = authenticated_client(actor)
+
+    stale = post_payment(
+        client,
+        receivable,
+        key="stale-pricing",
+        pricing_version=99,
+    )
+    unavailable = post_payment(
+        client,
+        receivable,
+        key="inactive-discount",
+        discount_action="SET",
+        discount_id=str(inactive.pk),
+    )
+    keep_with_id = client.post(
+        "/api/v1/payments",
+        {
+            "visit_id": str(receivable.visit_id),
+            "payment_method": "CARD",
+            "pricing_version": 1,
+            "discount_action": "KEEP",
+            "discount_id": str(active.pk),
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="keep-with-id",
+    )
+    set_without_id = client.post(
+        "/api/v1/payments",
+        {
+            "visit_id": str(receivable.visit_id),
+            "payment_method": "CARD",
+            "pricing_version": 1,
+            "discount_action": "SET",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="set-without-id",
+    )
+    clear = client.post(
+        "/api/v1/payments",
+        {
+            "visit_id": str(receivable.visit_id),
+            "payment_method": "CARD",
+            "pricing_version": 1,
+            "discount_action": "CLEAR",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="clear-action",
+    )
+
+    assert stale.status_code == 409
+    assert stale.json()["code"] == "pricing_version_conflict"
+    assert unavailable.status_code == 409
+    assert unavailable.json()["code"] == "discount_unavailable"
+    assert keep_with_id.status_code == 422
+    assert set_without_id.status_code == 422
+    assert clear.status_code == 422
+    assert not Payment.objects.exists()
+
+
+@pytest.mark.django_db
 def test_payment_requires_own_open_shift_and_never_uses_another_employee_shift() -> None:
     actor = create_user(email="reception@example.test", role=UserRole.RECEPTION)
     other = create_user(email="other@example.test", role=UserRole.RECEPTION)
@@ -335,6 +506,8 @@ def test_payment_contract_rejects_unknown_amount_and_requires_valid_idempotency_
     payload = {
         "visit_id": str(receivable.visit_id),
         "payment_method": "CASH",
+        "pricing_version": receivable.visit.pricing.version,
+        "discount_action": "KEEP",
         "comment": "",
     }
 
@@ -377,6 +550,7 @@ def test_payment_endpoints_enforce_finance_role_and_authentication() -> None:
 @pytest.mark.django_db
 def test_zero_total_receivable_is_paid_without_payment_or_ledger_and_is_listed() -> None:
     actor = create_user(email="reception@example.test", role=UserRole.RECEPTION)
+    CashShift.objects.create(employee=actor)
     zero = completed_receivable(amount_minor=0)
 
     listing = authenticated_client(actor).get("/api/v1/finance/operations")
@@ -536,7 +710,13 @@ def test_paid_operation_keeps_immutable_patient_staff_visit_and_service_snapshot
     actor.save()
     line.service_name = "Перейменована послуга"
     line.price_minor = 1
-    line.save()
+    with pytest.raises(DatabaseError), transaction.atomic():
+        line.save()
+    line.refresh_from_db()
+    service = line.service
+    service.name = "Перейменована послуга"
+    service.price_minor = 1
+    service.save()
     replacement = Patient.objects.create(
         first_name="Нова",
         last_name="Пацієнтка",
@@ -688,6 +868,75 @@ def test_concurrent_different_keys_allow_only_one_payment_per_receivable() -> No
 
 
 @pytest.mark.django_db(transaction=True)
+def test_concurrent_discount_overrides_commit_one_payment_and_one_final_pricing() -> None:
+    actor = create_user(email="override-race@example.test", role=UserRole.RECEPTION)
+    CashShift.objects.create(employee=actor)
+    receivable = completed_receivable()
+    discounts = [
+        Discount.objects.create(name="Race 10", percent=10),
+        Discount.objects.create(name="Race 20", percent=20),
+    ]
+    initial_version = VisitPricing.objects.get(visit_id=receivable.visit_id).version
+    barrier = Barrier(2)
+
+    def submit(index: int) -> tuple[int, str, str | None]:
+        close_old_connections()
+        request_actor = User.objects.get(pk=actor.pk)
+        request_receivable = Receivable.objects.get(pk=receivable.pk)
+        barrier.wait(timeout=5)
+        try:
+            response = post_payment(
+                authenticated_client(request_actor),
+                request_receivable,
+                key=f"override-race-{index}",
+                payment_method=PaymentMethod.CARD,
+                pricing_version=initial_version,
+                discount_action="SET",
+                discount_id=str(discounts[index].pk),
+            )
+            body = response.json()
+            return (
+                response.status_code,
+                body.get("code", "ok"),
+                body.get("operation", {}).get("pricing", {}).get("discount_id"),
+            )
+        finally:
+            connections["default"].close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(submit, range(2)))
+
+    assert sorted(status_code for status_code, _, _ in results) == [201, 409]
+    assert {code for _, code, _ in results} == {"ok", "receivable_already_paid"}
+    winning_discount_id = next(
+        discount_id for status_code, _, discount_id in results if status_code == 201
+    )
+    winning_discount = Discount.objects.get(pk=winning_discount_id)
+    pricing = VisitPricing.objects.get(visit_id=receivable.visit_id)
+    payment = Payment.objects.select_related("ledger_entry").get(receivable=receivable)
+    receivable.refresh_from_db()
+    receivable.visit.refresh_from_db()
+    expected_discount_minor = pricing.gross_minor * winning_discount.percent // 100
+    expected_net_minor = pricing.gross_minor - expected_discount_minor
+
+    assert pricing.discount_id == winning_discount.pk
+    assert pricing.discount_source == DiscountSource.RECEPTION
+    assert pricing.discount_amount_minor == expected_discount_minor
+    assert pricing.net_minor == expected_net_minor
+    assert pricing.state == PricingState.SETTLED
+    assert receivable.status == ReceivableStatus.PAID
+    assert receivable.amount_minor == expected_net_minor
+    assert receivable.visit.total_minor == expected_net_minor
+    assert payment.discount_id_snapshot == winning_discount.pk
+    assert payment.discount_amount_minor_snapshot == expected_discount_minor
+    assert payment.net_total_minor_snapshot == expected_net_minor
+    assert payment.ledger_entry.amount_minor == expected_net_minor
+    assert Payment.objects.count() == 1
+    assert CashLedgerEntry.objects.filter(kind=CashLedgerEntryKind.PAYMENT).count() == 1
+    assert AuditEvent.objects.filter(action=AuditAction.PAYMENT_POSTED).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
 def test_payment_receivable_and_ledger_raw_guards_are_enforced() -> None:
     actor = create_user(email="reception@example.test", role=UserRole.RECEPTION)
     other = create_user(email="other@example.test", role=UserRole.RECEPTION)
@@ -723,11 +972,10 @@ def test_payment_receivable_and_ledger_raw_guards_are_enforced() -> None:
     with pytest.raises(DatabaseError), transaction.atomic(), connection.cursor() as cursor:
         cursor.execute("DELETE FROM billing_receivable WHERE id = %s", [receivable.pk])
 
-    other_shift = CashShift.objects.create(employee=other)
     with pytest.raises(DatabaseError), transaction.atomic():
         CashLedgerEntry.objects.create(
-            cash_shift=other_shift,
-            created_by=actor,
+            cash_shift=shift,
+            created_by=other,
             kind=CashLedgerEntryKind.PAYMENT,
             amount_minor=100,
             payment_method=PaymentMethod.CASH,
@@ -794,24 +1042,23 @@ def test_payment_receivable_and_ledger_raw_guards_are_enforced() -> None:
     assert not CashLedgerEntry.objects.filter(idempotency_key="unsettled-typed-payment").exists()
     assert not Payment.objects.filter(receivable=unsettled_receivable).exists()
 
-    closed_actor = create_user(email="closed@example.test", role=UserRole.RECEPTION)
-    closed_shift = CashShift.objects.create(employee=closed_actor)
-    closed_shift.status = "CLOSED"
-    closed_shift.closed_at = timezone.now()
-    closed_shift.expected_cash_at_close_minor = 0
-    closed_shift.actual_cash_at_close_minor = 0
-    closed_shift.discrepancy_minor = 0
-    closed_shift.closed_by = closed_actor
-    closed_shift.closed_by_name_snapshot = closed_actor.display_name
-    closed_shift.closed_by_email_snapshot = closed_actor.email
-    closed_shift.closed_by_role_snapshot = closed_actor.role
-    closed_shift.close_idempotency_key = "raw-guard-close"
-    closed_shift.close_payload_hash = "f" * 64
-    closed_shift.save()
+    closed = authenticated_client(actor).post(
+        f"/api/v1/cash-shifts/{shift.pk}/close",
+        {
+            "actual_cash_minor": receivable.amount_minor,
+            "expected_operations_count": 1,
+            "cash_count_confirmed": True,
+            "comment": "",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="raw-guard-close",
+    )
+    assert closed.status_code == 201, closed.json()
+    shift.refresh_from_db()
     with pytest.raises(DatabaseError), transaction.atomic():
         CashLedgerEntry.objects.create(
-            cash_shift=closed_shift,
-            created_by=closed_actor,
+            cash_shift=shift,
+            created_by=actor,
             kind=CashLedgerEntryKind.PAYMENT,
             amount_minor=100,
             payment_method=PaymentMethod.CASH,
@@ -878,11 +1125,16 @@ def test_payment_openapi_freezes_union_and_full_payment_contract() -> None:
     assert set(components["PaymentCreateRequest"]["properties"]) == {
         "visit_id",
         "payment_method",
+        "pricing_version",
+        "discount_action",
+        "discount_id",
         "comment",
     }
     assert set(components["PaymentCreateRequest"]["required"]) == {
         "visit_id",
         "payment_method",
+        "pricing_version",
+        "discount_action",
     }
     assert components["PaymentCreateRequest"]["additionalProperties"] is False
     assert "amount_minor" not in components["PaymentCreateRequest"]["properties"]
@@ -894,6 +1146,7 @@ def test_payment_openapi_freezes_union_and_full_payment_contract() -> None:
         "amount_minor",
         "patient",
         "visit",
+        "pricing",
         "payment",
         "refund",
     }

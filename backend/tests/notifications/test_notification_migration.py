@@ -8,7 +8,7 @@ from apps.accounts.models import User, UserRole
 from apps.notifications.models import Notification, NotificationKind
 
 MIGRATION_ZERO = [("notifications", None)]
-MIGRATION_CURRENT = [("notifications", "0001_initial")]
+MIGRATION_CURRENT = [("notifications", "0002_notificationtelegramdelivery")]
 
 
 def create_user(email: str) -> User:

@@ -43,6 +43,11 @@ class AuditAction(StrEnum):
     APPOINTMENT_STATUS_CONFIG_UPDATED = "settings.appointment_status_config_updated"
     CLINIC_SCHEDULE_UPDATED = "settings.clinic_schedule_updated"
     BOOKING_REQUEST_API_TOKEN_ROTATED = "settings.booking_request_api_token_rotated"  # noqa: S105
+    DISCOUNT_CREATED = "settings.discount_created"
+    DISCOUNT_UPDATED = "settings.discount_updated"
+    DISCOUNT_DEACTIVATED = "settings.discount_deactivated"
+    DISCOUNT_REACTIVATED = "settings.discount_reactivated"
+    LOYALTY_POLICY_UPDATED = "settings.loyalty_policy_updated"
 
     PATIENT_CREATED = "patients.patient_created"
     PATIENT_UPDATED = "patients.patient_updated"
@@ -120,6 +125,11 @@ EVENT_SECTIONS: dict[str, AuditSection] = {
     AuditAction.APPOINTMENT_STATUS_CONFIG_UPDATED: AuditSection.SETTINGS,
     AuditAction.CLINIC_SCHEDULE_UPDATED: AuditSection.SETTINGS,
     AuditAction.BOOKING_REQUEST_API_TOKEN_ROTATED: AuditSection.SETTINGS,
+    AuditAction.DISCOUNT_CREATED: AuditSection.SETTINGS,
+    AuditAction.DISCOUNT_UPDATED: AuditSection.SETTINGS,
+    AuditAction.DISCOUNT_DEACTIVATED: AuditSection.SETTINGS,
+    AuditAction.DISCOUNT_REACTIVATED: AuditSection.SETTINGS,
+    AuditAction.LOYALTY_POLICY_UPDATED: AuditSection.SETTINGS,
     AuditAction.PATIENT_CREATED: AuditSection.PATIENTS,
     AuditAction.PATIENT_UPDATED: AuditSection.PATIENTS,
     AuditAction.MEDICAL_RECORD_UPDATED: AuditSection.MEDICAL,

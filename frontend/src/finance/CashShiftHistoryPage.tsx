@@ -100,7 +100,7 @@ function HistoryRows({ isMobile, onOpen, shifts }: HistoryRowsProps) {
           <li className="finance-history-card" key={shift.id}>
             <header><div><strong>{shift.public_number}</strong><time dateTime={shift.opened_at}>{dateTimeFormatter.format(new Date(shift.opened_at))}</time></div><span className={`finance-history-status finance-history-status--${shift.status.toLocaleLowerCase()}`}>{shift.status === "CLOSED" ? "Закрита" : "Відкрита"}</span></header>
             <p><span className="avatar" aria-hidden="true">{shift.employee.name.slice(0, 1).toLocaleUpperCase("uk")}</span><span><strong>{shift.employee.name}</strong><small>{shift.employee.email}</small></span></p>
-            <dl><div><dt>Відкрито / закрито</dt><dd>{new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(shift.opened_at))} / {shift.closed_at === null ? "—" : new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(shift.closed_at))}</dd></div><div><dt>Виторг</dt><dd>{money(shift.totals.revenue_minor)}</dd></div><div><dt>Готівка / картка</dt><dd>{money(shift.totals.cash_payments_minor - shift.totals.cash_refunds_minor)} / {money(shift.totals.card_payments_minor - shift.totals.card_refunds_minor)}</dd></div><div><dt>Очік. / факт.</dt><dd>{money(shift.totals.expected_cash_minor)} / {shift.reconciliation === null ? "—" : money(shift.reconciliation.actual_cash_minor)}</dd></div><div><dt>Розбіжність</dt><dd>{discrepancy(shift)}</dd></div></dl>
+            <dl><div><dt>Відкрито / закрито</dt><dd>{new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(shift.opened_at))} / {shift.closed_at === null ? "—" : new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(shift.closed_at))}</dd></div><div><dt>Початковий залишок</dt><dd>{money(shift.opening_cash_minor)}</dd></div><div><dt>Виторг</dt><dd>{money(shift.totals.revenue_minor)}</dd></div><div><dt>Готівка / картка</dt><dd>{money(shift.totals.cash_payments_minor - shift.totals.cash_refunds_minor)} / {money(shift.totals.card_payments_minor - shift.totals.card_refunds_minor)}</dd></div><div><dt>Очік. / факт.</dt><dd>{money(shift.totals.expected_cash_minor)} / {shift.reconciliation === null ? "—" : money(shift.reconciliation.actual_cash_minor)}</dd></div><div><dt>Розбіжність</dt><dd>{discrepancy(shift)}</dd></div></dl>
             <button className="button button--secondary button--full" onClick={(event) => { onOpen(shift, event.currentTarget); }} type="button">Деталі зміни</button>
           </li>
         ))}
@@ -112,12 +112,13 @@ function HistoryRows({ isMobile, onOpen, shifts }: HistoryRowsProps) {
     <>
     <p className="finance-history-table__scroll-hint" id="finance-history-scroll-hint"><Icon name="chevron" />Прокрутіть таблицю горизонтально, щоб переглянути всі стовпці.</p>
     <div aria-describedby="finance-history-scroll-hint" aria-label="Історія касових змін" className="finance-history-table" role="table" tabIndex={0}>
-      <div className="finance-history-table__head" role="row"><span role="columnheader">Дата / зміна</span><span role="columnheader">Працівник</span><span role="columnheader">Час роботи</span><span role="columnheader">Виторг</span><span role="columnheader">Готівка</span><span role="columnheader">Картка</span><span role="columnheader">Очік. / факт.</span><span role="columnheader">Розбіжність</span><span role="columnheader">Статус</span><span role="columnheader">Дії</span></div>
+      <div className="finance-history-table__head" role="row"><span role="columnheader">Дата / зміна</span><span role="columnheader">Працівник</span><span role="columnheader">Час роботи</span><span role="columnheader">Початок</span><span role="columnheader">Виторг</span><span role="columnheader">Готівка</span><span role="columnheader">Картка</span><span role="columnheader">Очік. / факт.</span><span role="columnheader">Розбіжність</span><span role="columnheader">Статус</span><span role="columnheader">Дії</span></div>
       {shifts.map((shift) => (
         <div className="finance-history-table__row" key={shift.id} role="row">
           <span role="cell"><strong>{dateTimeFormatter.format(new Date(shift.opened_at))}</strong><small>{shift.public_number}</small></span>
           <span role="cell"><strong>{shift.employee.name}</strong><small>{shift.employee.email}</small></span>
           <span role="cell"><strong>{new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(shift.opened_at))}</strong><small>{shift.closed_at === null ? "Ще відкрита" : `до ${new Intl.DateTimeFormat("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }).format(new Date(shift.closed_at))}`}</small></span>
+          <span className="finance-history-money" role="cell">{money(shift.opening_cash_minor)}</span>
           <span className="finance-history-money" role="cell">{money(shift.totals.revenue_minor)}</span>
           <span className="finance-history-money" role="cell">{money(shift.totals.cash_payments_minor - shift.totals.cash_refunds_minor)}</span>
           <span className="finance-history-money" role="cell">{money(shift.totals.card_payments_minor - shift.totals.card_refunds_minor)}</span>
@@ -351,7 +352,7 @@ export function CashShiftHistoryPage() {
         {nextCursor === null ? null : <footer className="finance-history-load-more"><button className="button button--secondary" disabled={isLoading} onClick={() => { void load({ ...query, cursor: nextCursor }, true); }} type="button">{isLoading ? "Завантажуємо…" : "Показати ще"}</button></footer>}
       </section>
 
-      {detail === null ? null : <CashShiftDetailDialog onClose={closeDetail} {...(detail.status === "OPEN" ? { onRequestClose: () => { setClosingShift(detail); setDetail(null); } } : {})} shift={detail} />}
+      {detail === null ? null : <CashShiftDetailDialog onClose={closeDetail} {...(detail.status === "OPEN" && detail.permissions.can_close ? { onRequestClose: () => { setClosingShift(detail); setDetail(null); } } : {})} shift={detail} />}
       {closingShift === null ? null : <CloseCashShiftDialog onClose={() => { setDetail(closingShift); setClosingShift(null); }} onSuccess={closeSucceeded} shiftId={closingShift.id} shiftNumber={closingShift.public_number} />}
     </>
   );

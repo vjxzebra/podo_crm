@@ -20,6 +20,9 @@ CASH_SHIFT_EXPORT_COLUMNS = (
     "shift_employee_name",
     "shift_employee_email",
     "currency",
+    "opening_basis",
+    "opening_cash_minor",
+    "opening_source_shift_number",
     "operations_count",
     "revenue_minor",
     "expected_cash_minor",
@@ -47,6 +50,9 @@ CASH_SHIFT_HISTORY_EXPORT_COLUMNS = (
     "employee_name",
     "employee_email",
     "currency",
+    "opening_basis",
+    "opening_cash_minor",
+    "opening_source_shift_number",
     "shift_count",
     "open_shift_count",
     "closed_shift_count",
@@ -144,6 +150,11 @@ def render_cash_shift_csv(
         spreadsheet_safe_text(employee["name"]),
         spreadsheet_safe_text(employee["email"]),
         "UAH",
+        spreadsheet_safe_text(summary["opening_basis"]),
+        summary["opening_cash_minor"],
+        ""
+        if summary["opening_source_shift"] is None
+        else spreadsheet_safe_text(summary["opening_source_shift"]["public_number"]),
     )
 
     output = StringIO(newline="")
@@ -212,7 +223,6 @@ def _history_totals(totals: Mapping[str, int]) -> tuple[int, ...]:
         totals["transfer_net_minor"],
         totals["deposits_minor"],
         totals["withdrawals_minor"],
-        totals["expected_cash_minor"],
     )
 
 
@@ -229,7 +239,6 @@ def render_cash_shift_history_csv(rows: Sequence[Mapping[str, Any]]) -> bytes:
         "transfer_net_minor": 0,
         "deposits_minor": 0,
         "withdrawals_minor": 0,
-        "expected_cash_minor": 0,
     }
     open_count = 0
     closed_count = 0
@@ -260,12 +269,16 @@ def render_cash_shift_history_csv(rows: Sequence[Mapping[str, Any]]) -> bytes:
             "",
             "",
             "UAH",
+            "",
+            "",
+            "",
             len(rows),
             open_count,
             closed_count,
             *_history_totals(report_totals),
-            actual_cash_minor,
-            discrepancy_minor,
+            "",
+            "",
+            "",
             "",
             "",
             "",
@@ -285,10 +298,16 @@ def render_cash_shift_history_csv(rows: Sequence[Mapping[str, Any]]) -> bytes:
                 spreadsheet_safe_text(shift.employee_name_snapshot),
                 spreadsheet_safe_text(shift.employee_email_snapshot),
                 "UAH",
+                spreadsheet_safe_text(shift.opening_basis),
+                shift.opening_cash_minor,
+                ""
+                if shift.opening_source_shift is None
+                else spreadsheet_safe_text(shift.opening_source_shift.public_number),
                 "",
                 "",
                 "",
                 *_history_totals(totals),
+                totals["expected_cash_minor"],
                 "" if not is_closed else shift.actual_cash_at_close_minor,
                 "" if not is_closed else shift.discrepancy_minor,
                 "" if not is_closed else spreadsheet_safe_text(shift.close_comment),

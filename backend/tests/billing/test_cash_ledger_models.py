@@ -12,6 +12,7 @@ from apps.billing.models import (
     ImmutableCashShiftError,
     PaymentMethod,
 )
+from apps.billing.services import close_cash_shift, open_cash_shift
 
 
 def create_user(email: str) -> User:
@@ -52,16 +53,15 @@ def create_entry(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_partial_unique_allows_one_open_shift_per_employee_but_not_globally() -> None:
+def test_partial_unique_allows_only_one_global_open_shift() -> None:
     first_actor = create_user("first@example.test")
     second_actor = create_user("second@example.test")
     first = CashShift.objects.create(employee=first_actor)
-    second = CashShift.objects.create(employee=second_actor)
 
     assert first.public_number.startswith("CSH-")
-    assert second.public_number.startswith("CSH-")
     with pytest.raises(IntegrityError), transaction.atomic():
-        CashShift.objects.create(employee=first_actor)
+        CashShift.objects.create(employee=second_actor)
+    assert CashShift.objects.count() == 1
 
 
 @pytest.mark.django_db(transaction=True)
@@ -100,7 +100,6 @@ def test_cash_movement_idempotency_key_is_unique_per_actor_endpoint_family() -> 
     actor = create_user("actor@example.test")
     other = create_user("other@example.test")
     shift = CashShift.objects.create(employee=actor)
-    other_shift = CashShift.objects.create(employee=other)
     create_entry(shift=shift, actor=actor, key="same-key")
 
     with pytest.raises(IntegrityError), transaction.atomic():
@@ -113,6 +112,19 @@ def test_cash_movement_idempotency_key_is_unique_per_actor_endpoint_family() -> 
             kind=CashLedgerEntryKind.WITHDRAWAL,
             key="same-key",
         )
+    close_cash_shift(
+        actor=actor,
+        shift_id=shift.pk,
+        correlation_id="same-key-close",
+        idempotency_key="same-key-close",
+        data={
+            "actual_cash_minor": 1_000,
+            "expected_operations_count": 1,
+            "cash_count_confirmed": True,
+            "comment": "",
+        },
+    )
+    other_shift = open_cash_shift(actor=other, correlation_id="other-shift-open")
     other_entry = create_entry(
         shift=other_shift,
         actor=other,

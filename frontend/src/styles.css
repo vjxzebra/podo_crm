@@ -4966,6 +4966,32 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
 .finance-payment-summary > footer { display: flex; align-items: center; justify-content: space-between; padding: 11px 15px; border-top: 1px solid var(--color-line); background: #f8faf9; }
 .finance-payment-summary > footer span { color: var(--color-muted); font-size: 0.51rem; font-weight: 800; text-transform: uppercase; }
 .finance-payment-summary > footer strong { font-size: 0.76rem; }
+.finance-payment-pricing-group { border-top: 1px solid var(--color-line); background: #f8faf9; }
+.finance-payment-pricing { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 16px; margin: 0; padding: 10px 15px; }
+.finance-payment-pricing > dt,
+.finance-payment-pricing > dd { padding: 6px 0; }
+.finance-payment-pricing dt { color: var(--color-muted); font-size: 0.5rem; font-weight: 700; }
+.finance-payment-pricing dd { margin: 0; font-size: 0.54rem; font-weight: 800; text-align: right; }
+.finance-payment-pricing__total { margin-top: 3px; padding-top: 9px !important; border-top: 1px solid #cbded6; color: var(--color-sage-dark) !important; font-size: 0.67rem !important; font-weight: 900 !important; }
+.finance-payment-pricing__version { padding-top: 4px !important; font-size: 0.46rem !important; }
+.finance-payment-discounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 14px 0 0; padding: 0; border: 0; }
+.finance-payment-discounts > legend { grid-column: 1 / -1; margin-bottom: -2px; font-size: 0.54rem; font-weight: 800; }
+.finance-payment-discounts > label:not(.form-field) { position: relative; cursor: pointer; }
+.finance-payment-discounts > label:not(.form-field) > input { position: absolute; opacity: 0; pointer-events: none; }
+.finance-payment-discounts > label:not(.form-field) > span { display: flex; min-height: 67px; justify-content: center; flex-direction: column; gap: 4px; padding: 10px 13px; border: 1px solid var(--color-line); border-radius: 11px; background: #fff; }
+.finance-payment-discounts > label:not(.form-field) strong,
+.finance-payment-discounts > label:not(.form-field) small { display: block; }
+.finance-payment-discounts > label:not(.form-field) strong { font-size: 0.56rem; }
+.finance-payment-discounts > label:not(.form-field) small { color: var(--color-muted); font-size: 0.47rem; line-height: 1.4; }
+.finance-payment-discounts > label:not(.form-field) > input:checked + span { border-color: #82a99c; background: #eef6f2; box-shadow: 0 0 0 2px #dfece7; }
+.finance-payment-discounts > label:not(.form-field) > input:focus-visible + span { outline: 3px solid rgb(82 121 110 / 25%); outline-offset: 2px; }
+.finance-payment-discounts > label:not(.form-field) > input:disabled + span { cursor: not-allowed; opacity: 0.58; }
+.finance-payment-discount-picker { grid-column: 1 / -1; margin: 2px 0 0; }
+.finance-payment-discounts__state { display: flex; grid-column: 1 / -1; align-items: center; gap: 8px; margin: 0; padding: 9px 11px; border-radius: 9px; color: var(--color-muted); background: #f5f8f6; font-size: 0.48rem; line-height: 1.45; }
+.finance-payment-discounts__state .spinner { width: 15px; height: 15px; }
+.finance-payment-discounts__state svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.finance-payment-discounts__state .text-action { margin-left: auto; }
+.finance-payment-discounts__state--error { color: var(--color-coral-ink); background: var(--color-coral); }
 .finance-payment-methods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 14px 0; padding: 0; border: 0; }
 .finance-payment-methods legend { grid-column: 1 / -1; margin-bottom: -2px; font-size: 0.54rem; font-weight: 800; }
 .finance-payment-methods label { position: relative; cursor: pointer; }
@@ -5122,6 +5148,11 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
   .finance-refund-dialog,
   .finance-cash-movement-dialog { padding: 18px 14px calc(14px + env(safe-area-inset-bottom)); }
   .finance-payment-summary > header { flex-direction: column; }
+  .finance-payment-pricing { align-items: start; }
+  .finance-payment-discounts { grid-template-columns: 1fr; }
+  .finance-payment-discounts > legend,
+  .finance-payment-discount-picker,
+  .finance-payment-discounts__state { grid-column: auto; }
   .finance-payment-methods { grid-template-columns: 1fr; }
   .finance-payment-methods label > span { min-height: 52px; justify-content: flex-start; }
   .finance-payment-results { max-height: min(320px, 45dvh); }
@@ -5245,7 +5276,7 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
 .finance-history-table { max-width: 100%; overflow-x: auto; }
 .finance-history-table:focus-visible { outline: 3px solid rgb(82 121 110 / 25%); outline-offset: -3px; }
 .finance-history-table__head,
-.finance-history-table__row { display: grid; min-width: 1320px; grid-template-columns: minmax(145px, 1fr) minmax(180px, 1.2fr) minmax(115px, 0.75fr) repeat(3, minmax(100px, 0.7fr)) minmax(115px, 0.8fr) minmax(95px, 0.65fr) minmax(82px, 0.6fr) 48px; align-items: center; gap: 10px; }
+.finance-history-table__row { display: grid; min-width: 1420px; grid-template-columns: minmax(145px, 1fr) minmax(180px, 1.2fr) minmax(115px, 0.75fr) minmax(100px, 0.7fr) repeat(3, minmax(100px, 0.7fr)) minmax(115px, 0.8fr) minmax(95px, 0.65fr) minmax(82px, 0.6fr) 48px; align-items: center; gap: 10px; }
 .finance-history-table__head { padding: 9px 17px; color: var(--color-muted); background: #f8faf9; font-size: 0.46rem; font-weight: 850; text-transform: uppercase; }
 .finance-history-table__row { min-height: 71px; padding: 10px 17px; border-top: 1px solid var(--color-line); font-size: 0.54rem; }
 .finance-history-table__row > span { min-width: 0; }
@@ -5859,6 +5890,118 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* TP-1018—TP-1019: discount catalog, loyalty policy and visit pricing preview */
+.discount-settings { display: grid; gap: 16px; }
+.discount-catalog,
+.loyalty-policy { overflow: hidden; }
+.discount-catalog > header,
+.loyalty-policy > .loyalty-policy__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 19px 21px; border-bottom: 1px solid var(--color-line); }
+.discount-catalog > header h2,
+.loyalty-policy > .loyalty-policy__header h2 { margin: 4px 0 0; font-size: 0.86rem; }
+.discount-catalog > header p:last-child,
+.loyalty-policy > .loyalty-policy__header p:last-child { max-width: 760px; margin: 6px 0 0; color: var(--color-muted); font-size: 0.55rem; line-height: 1.55; }
+.discount-catalog__summary { display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 21px 0; }
+.discount-catalog__summary span { display: inline-flex; min-height: 34px; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 999px; color: var(--color-muted); background: #f4f7f5; font-size: 0.51rem; }
+.discount-catalog__summary strong { color: var(--color-ink); font-size: 0.61rem; }
+.discount-filter { display: flex; flex-wrap: wrap; gap: 7px; padding: 12px 21px; }
+.discount-filter button { min-height: 44px; padding: 8px 14px; border: 1px solid var(--color-line); border-radius: 10px; color: var(--color-muted); background: #fff; font: inherit; font-size: 0.53rem; font-weight: 800; cursor: pointer; }
+.discount-filter button.active { border-color: #a8c4ba; color: var(--color-sage-dark); background: var(--color-sage-soft); }
+.discount-list { margin: 0 21px 18px; overflow: hidden; border: 1px solid var(--color-line); border-radius: 14px; }
+.discount-row { display: grid; grid-template-columns: 76px minmax(220px, 1fr) 112px auto; align-items: center; gap: 14px; padding: 13px 15px; border-top: 1px solid var(--color-line); background: #fff; }
+.discount-row:first-child { border-top: 0; }
+.discount-row--inactive { color: var(--color-muted); background: #fafafa; }
+.discount-row__value { display: flex; min-height: 54px; align-items: baseline; justify-content: center; padding: 9px; border-radius: 12px; color: var(--color-sage-dark); background: var(--color-sage-soft); }
+.discount-row__value strong { font-size: 0.9rem; }
+.discount-row__value span { font-size: 0.53rem; font-weight: 850; }
+.discount-row__identity strong,
+.discount-row__identity small { display: block; overflow-wrap: anywhere; }
+.discount-row__identity strong { font-size: 0.61rem; }
+.discount-row__identity small { margin-top: 5px; color: var(--color-muted); font-size: 0.48rem; }
+.discount-row__actions { display: flex; gap: 8px; }
+.discount-row__actions .button { min-height: 40px; padding-inline: 11px; white-space: nowrap; }
+.discount-catalog__empty { margin: 0 21px 18px; border: 1px dashed var(--color-line); border-radius: 14px; }
+.discount-settings__fatal { min-height: 260px; }
+.discount-editor { width: min(560px, calc(100vw - 24px)); }
+.discount-editor__fields { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 14px; padding: 17px 20px; }
+.discount-editor__active { grid-column: 1 / -1; margin: 0; }
+.discount-percent-input { position: relative; display: block; }
+.discount-percent-input input { padding-right: 38px; }
+.discount-percent-input > span { position: absolute; top: 50%; right: 14px; color: var(--color-muted); font-size: 0.58rem; font-weight: 850; transform: translateY(-50%); }
+.loyalty-policy__fields { display: grid; grid-template-columns: minmax(260px, 1.1fr) minmax(150px, 0.45fr) minmax(240px, 1fr); gap: 14px; padding: 18px 21px 8px; }
+.loyalty-policy__toggle { align-self: stretch; margin: 0; }
+.loyalty-policy__fields .form-field { margin: 0; }
+.loyalty-policy__rule { display: flex; align-items: flex-start; gap: 10px; margin: 10px 21px 18px; padding: 13px 15px; border: 1px solid #cfe1da; border-radius: 12px; color: var(--color-sage-dark); background: var(--color-sage-soft); }
+.loyalty-policy__rule svg { width: 19px; height: 19px; flex: 0 0 auto; }
+.loyalty-policy__rule strong,
+.loyalty-policy__rule small { display: block; }
+.loyalty-policy__rule strong { font-size: 0.56rem; }
+.loyalty-policy__rule small { margin-top: 4px; font-size: 0.49rem; line-height: 1.45; }
+.loyalty-policy > footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 21px; border-top: 1px solid var(--color-line); color: var(--color-muted); font-size: 0.51rem; }
+.visit-discount { overflow: hidden; border: 1px solid var(--color-line); border-radius: 14px; background: #fbfcfb; }
+.visit-discount > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--color-line); }
+.visit-discount > header h3 { margin: 3px 0 0; font-size: 0.7rem; }
+.visit-discount > header > span { padding: 7px 10px; border-radius: 999px; color: var(--color-sage-dark); background: var(--color-sage-soft); font-size: 0.5rem; font-weight: 850; }
+.visit-discount__content { display: grid; grid-template-columns: minmax(230px, 0.8fr) minmax(300px, 1.2fr); gap: 16px; padding: 15px 16px; }
+.visit-discount__content .form-field { margin: 0; }
+.visit-discount__totals { display: grid; gap: 8px; margin: 0; }
+.visit-discount__totals div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 11px; border-bottom: 1px solid var(--color-line); }
+.visit-discount__totals div:last-child { border: 0; border-radius: 10px; color: var(--color-sage-dark); background: var(--color-sage-soft); }
+.visit-discount__totals dt { color: var(--color-muted); font-size: 0.5rem; }
+.visit-discount__totals dd { margin: 0; font-size: 0.57rem; font-weight: 850; text-align: right; }
+.visit-discount__error { display: flex; align-items: center; gap: 9px; margin: 0 16px 12px; padding: 10px 12px; border: 1px solid #efc5bd; border-radius: 10px; color: var(--color-coral-ink); background: var(--color-coral); font-size: 0.5rem; }
+.visit-discount__error svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.visit-discount__error .text-action { margin-left: auto; }
+.visit-discount__hint { margin: 0; padding: 11px 16px 14px; border-top: 1px solid var(--color-line); color: var(--color-muted); font-size: 0.49rem; line-height: 1.5; }
+.visit-loyalty-notice { display: flex; align-items: flex-start; gap: 9px; margin: 14px 16px 0; padding: 11px 13px; border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-surface); }
+.visit-loyalty-notice svg { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; color: var(--color-muted); }
+.visit-loyalty-notice span { display: grid; gap: 3px; }
+.visit-loyalty-notice strong { font-size: 0.53rem; font-weight: 850; }
+.visit-loyalty-notice small { color: var(--color-muted); font-size: 0.49rem; line-height: 1.5; }
+.visit-loyalty-notice--active { border-color: #b9d3c2; background: var(--color-sage-soft); }
+.visit-loyalty-notice--active svg,
+.visit-loyalty-notice--active strong { color: var(--color-sage-dark); }
+.visit-loyalty-notice--active small { color: var(--color-sage-dark); }
+.visit-discount__override { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 0 16px 12px; padding: 10px 12px; border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-surface); font-size: 0.5rem; }
+.visit-discount__override svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--color-muted); }
+.visit-discount__override .text-action { margin-left: auto; }
+.visit-discount__override--warning { border-color: #efc5bd; color: var(--color-coral-ink); background: var(--color-coral); }
+.visit-discount__override--warning svg { color: var(--color-coral-ink); }
+
+@media (max-width: 900px) {
+  .discount-row { grid-template-columns: 68px minmax(0, 1fr) auto; }
+  .discount-row__actions { grid-column: 2 / -1; justify-content: flex-end; }
+  .loyalty-policy__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .loyalty-policy__toggle { grid-column: 1 / -1; }
+  .visit-discount__content { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .discount-catalog > header,
+  .loyalty-policy > .loyalty-policy__header { flex-direction: column; padding: 16px 13px; }
+  .discount-catalog > header .button { width: 100%; }
+  .discount-catalog__summary,
+  .discount-filter { padding-inline: 13px; }
+  .discount-list,
+  .discount-catalog__empty { margin-inline: 13px; }
+  .discount-row { grid-template-columns: 60px minmax(0, 1fr); gap: 11px; padding: 12px; }
+  .discount-row > .profile-status { grid-column: 1 / -1; justify-self: start; }
+  .discount-row__actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .discount-row__actions .button { width: 100%; }
+  .discount-editor__fields,
+  .loyalty-policy__fields { grid-template-columns: 1fr; padding-inline: 13px; }
+  .discount-editor__active,
+  .loyalty-policy__toggle { grid-column: auto; }
+  .loyalty-policy__rule { margin-inline: 13px; }
+  .loyalty-policy > footer { align-items: stretch; flex-direction: column; padding-inline: 13px; }
+  .loyalty-policy > footer .button { width: 100%; }
+  .visit-discount__content { padding: 13px; }
+  .visit-discount__error { align-items: flex-start; flex-wrap: wrap; margin-inline: 13px; }
+  .visit-discount__error .text-action { margin-left: 27px; }
+  .visit-loyalty-notice { margin-inline: 13px; }
+  .visit-discount__override { align-items: flex-start; margin-inline: 13px; }
+  .visit-discount__override .text-action { margin-left: 27px; }
 }
 
 /* TP-803 · immutable audit journal */

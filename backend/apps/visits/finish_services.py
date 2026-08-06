@@ -15,7 +15,8 @@ from rest_framework import status
 from apps.accounts.models import User, UserRole
 from apps.audit.registry import AuditAction
 from apps.audit.services import record_audit_event
-from apps.billing.models import Receivable, ReceivableStatus
+from apps.billing.models import Receivable, ReceivableStatus, VisitPricing
+from apps.billing.services import create_visit_pricing, pricing_read_model, pricing_snapshot
 from apps.clinic.models import AppointmentStatusConfig
 from apps.inventory.models import (
     InventoryOperation,
@@ -28,7 +29,9 @@ from apps.scheduling.models import Appointment
 from apps.scheduling.services import (
     _active_room,
     _active_service,
+    _active_services,
     _active_specialist,
+    _replace_service_lines,
     _validate_clinic_time,
     _validate_occupancy,
     appointment_snapshot,
@@ -130,10 +133,15 @@ def _validate_follow_up(
     if data is None:
         return None
     specialist = _active_specialist(actor=actor, specialist_id=data["specialist_id"])
-    service = _active_service(data["service_id"])
+    if "service_ids" in data:
+        services = _active_services(list(data["service_ids"]))
+    else:
+        services = [_active_service(data["service_id"])]
+    primary_service = services[0]
     room = _active_room(data["room_id"])
     starts_at = data["starts_at"]
-    ends_at = starts_at + timedelta(minutes=service.duration_minutes)
+    duration_minutes = sum(service.duration_minutes for service in services)
+    ends_at = starts_at + timedelta(minutes=duration_minutes)
     _validate_clinic_time(starts_at=starts_at, ends_at=ends_at)
     _validate_occupancy(
         specialist=specialist,
@@ -144,10 +152,12 @@ def _validate_follow_up(
     status_config = AppointmentStatusConfig.objects.select_for_update().get(pk="NEW")
     return {
         "specialist": specialist,
-        "service": service,
+        "services": services,
+        "primary_service": primary_service,
         "room": room,
         "starts_at": starts_at,
         "ends_at": ends_at,
+        "duration_minutes": duration_minutes,
         "status": status_config,
     }
 
@@ -161,23 +171,25 @@ def _create_follow_up(
 ) -> Appointment:
     try:
         with transaction.atomic():
-            service = validated["service"]
+            services = validated["services"]
+            primary_service = validated["primary_service"]
             room = validated["room"]
             appointment = Appointment.objects.create(
                 patient=visit.patient,
                 specialist=validated["specialist"],
-                service=service,
+                service=primary_service,
                 room=room,
                 time_range=(validated["starts_at"], validated["ends_at"]),
-                duration_minutes=service.duration_minutes,
-                service_name_snapshot=service.name,
-                service_color_snapshot=service.color,
+                duration_minutes=validated["duration_minutes"],
+                service_name_snapshot=primary_service.name,
+                service_color_snapshot=primary_service.color,
                 room_label_snapshot=room.name,
                 status=validated["status"],
                 complaints="",
                 has_no_complaints=True,
                 comment=f"Наступний прийом після {visit.public_number}",
             )
+            _replace_service_lines(appointment=appointment, services=services)
             appointment.refresh_from_db()
             record_audit_event(
                 actor=actor,
@@ -259,6 +271,7 @@ def finish_result_read_model(
 ) -> dict[str, Any]:
     visit = get_visit(actor=actor, visit_id=result.visit_id)
     receivable = Receivable.objects.get(pk=result.result["receivable_id"])
+    pricing = VisitPricing.objects.get(visit_id=receivable.visit_id)
     return {
         "replayed": replayed,
         "visit": visit_read_model(visit),
@@ -268,6 +281,7 @@ def finish_result_read_model(
             "status": receivable.status,
             "created_at": receivable.created_at,
         },
+        "pricing": pricing_read_model(pricing),
         "inventory_operation_id": result.result["inventory_operation_id"],
         "movement_ids": result.result["movement_ids"],
         "follow_up_appointment_id": result.result["follow_up_appointment_id"],
@@ -341,14 +355,19 @@ def finish_visit(
 
     before = visit_snapshot(visit)
     service_lines, material_lines = _validate_finish_draft(visit)
+    gross_minor = sum(line.line_total_minor for line in service_lines)
+    pricing = create_visit_pricing(
+        actor=actor,
+        visit=visit,
+        gross_minor=gross_minor,
+        manual_discount_id=data.get("discount_id"),
+    )
     lots = _lock_and_validate_lots(material_lines)
     before_balances = {line.lot_id: lots[line.lot_id].current_quantity for line in material_lines}
     validated_follow_up = _validate_follow_up(
         actor=actor,
         data=data.get("follow_up"),
     )
-    total_minor = sum(line.line_total_minor for line in service_lines)
-
     operation = None
     movement_ids: list[str] = []
     if material_lines:
@@ -398,8 +417,8 @@ def finish_visit(
 
     receivable = Receivable.objects.create(
         visit=visit,
-        amount_minor=total_minor,
-        status=(ReceivableStatus.PAID if total_minor == 0 else ReceivableStatus.OPEN),
+        amount_minor=pricing.net_minor,
+        status=(ReceivableStatus.PAID if pricing.net_minor == 0 else ReceivableStatus.OPEN),
     )
     recommendation_text = str(data.get("recommendations", "")).strip()
     if recommendation_text:
@@ -423,7 +442,7 @@ def finish_visit(
     appointment.updated_at = timezone.now()
     appointment.save(update_fields=("status", "version", "updated_at"))
     visit.status = VisitStatus.COMPLETED
-    visit.total_minor = total_minor
+    visit.total_minor = pricing.net_minor
     visit.payment_handoff_requested = data["payment_handoff_requested"]
     visit.completed_at = timezone.now()
     visit.version += 1
@@ -449,6 +468,7 @@ def finish_visit(
         after={
             **visit_snapshot(completed_visit),
             "receivable_id": receivable.pk,
+            "pricing": pricing_snapshot(pricing),
             "inventory_operation_id": operation.pk if operation is not None else None,
             "follow_up_appointment_id": follow_up.pk if follow_up is not None else None,
         },

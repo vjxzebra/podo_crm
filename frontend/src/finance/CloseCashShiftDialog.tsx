@@ -54,6 +54,11 @@ export function CloseCashShiftDialog({
 
   const actualMinor = parseNonNegativeMoneyToMinor(actual);
   const expectedCashMinor = preview?.shift.totals.expected_cash_minor ?? null;
+  const openingSource = preview === null
+    ? "—"
+    : preview.shift.opening_source_shift === null
+      ? preview.shift.opening_basis === "LEGACY" ? "історична зміна" : "перша зміна каси"
+      : preview.shift.opening_source_shift.public_number;
   const discrepancyMinor = actualMinor === null || expectedCashMinor === null
     ? null
     : actualMinor - expectedCashMinor;
@@ -258,7 +263,7 @@ export function CloseCashShiftDialog({
                 ) : null}
 
                 <section className="finance-reconciliation" aria-labelledby="finance-reconciliation-title">
-                  <header><div><p className="eyebrow">Фізична готівка</p><h3 id="finance-reconciliation-title">Звірка каси</h3></div><span><small>Очікується</small><strong>{money(preview.shift.totals.expected_cash_minor)}</strong></span></header>
+                  <header><div><p className="eyebrow">Фізична готівка</p><h3 id="finance-reconciliation-title">Звірка каси</h3></div><span><small>Очікується</small><strong>{money(preview.shift.totals.expected_cash_minor)}</strong><small>Початок {money(preview.shift.opening_cash_minor)} · {openingSource}</small></span></header>
                   <label className="form-field finance-actual-cash">
                     <span>Фактично в касі</span>
                     <span className="finance-money-input"><input

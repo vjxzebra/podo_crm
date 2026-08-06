@@ -85,7 +85,7 @@ def create_notification(
         raise ValueError("Unknown notification kind.")
     if tone not in NotificationTone.values:
         raise ValueError("Unknown notification tone.")
-    return Notification.objects.get_or_create(
+    notification, created = Notification.objects.get_or_create(
         recipient=recipient,
         event_key=normalized_event_key,
         defaults={
@@ -98,6 +98,13 @@ def create_notification(
             "is_important": is_important,
         },
     )
+    if created:
+        from apps.notifications.telegram_services import (
+            enqueue_notification_telegram_delivery_on_commit,
+        )
+
+        enqueue_notification_telegram_delivery_on_commit(notification)
+    return notification, created
 
 
 @transaction.atomic
