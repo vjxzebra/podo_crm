@@ -18,9 +18,9 @@ from apps.visits.models import (
     VisitPhotoIntentStatus,
     VisitPhotoKind,
     VisitPhotoUploadIntent,
-    VisitStatus,
 )
 from apps.visits.tasks import cleanup_expired_visit_photo_intents
+from tests.financial_fixtures import complete_visit_with_neutral_pricing
 from tests.scheduling.test_create_appointment import authenticated_client, create_user
 from tests.visits.test_visit_start_and_draft import arrived_appointment, start
 
@@ -249,8 +249,7 @@ def test_draft_delete_is_audited_and_completed_photo_is_immutable(
         original_name="immutable.jpg",
         created_by=admin,
     )
-    visit.status = VisitStatus.COMPLETED
-    visit.save(update_fields=("status", "updated_at"))
+    complete_visit_with_neutral_pricing(visit)
     rejected = authenticated_client(admin).delete(
         f"/api/v1/visits/{visit.pk}/photos/{immutable.pk}"
     )

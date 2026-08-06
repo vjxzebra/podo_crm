@@ -3,12 +3,29 @@ from django.http import HttpRequest
 
 from apps.billing.models import (
     CashAdjustment,
+    CashDrawer,
     CashLedgerEntry,
     CashShift,
     Payment,
     Receivable,
     Refund,
+    VisitPricing,
 )
+
+
+@admin.register(CashDrawer)
+class CashDrawerAdmin(admin.ModelAdmin):
+    list_display = ("key", "created_at")
+    readonly_fields = ("key", "created_at")
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: CashDrawer | None = None) -> bool:
+        return False
+
+    def has_delete_permission(self, request: HttpRequest, obj: CashDrawer | None = None) -> bool:
+        return False
 
 
 @admin.register(Receivable)
@@ -27,6 +44,21 @@ class ReceivableAdmin(admin.ModelAdmin):
         return False
 
 
+@admin.register(VisitPricing)
+class VisitPricingAdmin(admin.ModelAdmin):
+    list_display = ("visit", "gross_minor", "discount_percent_snapshot", "net_minor", "state")
+    readonly_fields = tuple(field.name for field in VisitPricing._meta.fields)
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: VisitPricing | None = None) -> bool:
+        return False
+
+    def has_delete_permission(self, request: HttpRequest, obj: VisitPricing | None = None) -> bool:
+        return False
+
+
 @admin.register(CashShift)
 class CashShiftAdmin(admin.ModelAdmin):
     list_display = ("public_number", "employee", "status", "opened_at", "closed_at")
@@ -39,6 +71,10 @@ class CashShiftAdmin(admin.ModelAdmin):
         "employee_name_snapshot",
         "employee_email_snapshot",
         "employee_role_snapshot",
+        "drawer",
+        "opening_cash_minor",
+        "opening_source_shift",
+        "opening_basis",
         "status",
         "opened_at",
         "closed_at",
@@ -129,6 +165,14 @@ class PaymentAdmin(admin.ModelAdmin):
         "visit_completed_at_snapshot",
         "visit_payment_handoff_requested_snapshot",
         "visit_total_minor_snapshot",
+        "gross_total_minor_snapshot",
+        "discount_id_snapshot",
+        "discount_name_snapshot",
+        "discount_percent_snapshot",
+        "discount_source_snapshot",
+        "discount_amount_minor_snapshot",
+        "net_total_minor_snapshot",
+        "pricing_snapshot_is_legacy",
         "specialist_id_snapshot",
         "specialist_name_snapshot",
         "employee_name_snapshot",

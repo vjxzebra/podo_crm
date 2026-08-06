@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     "apps.scheduling",
     "apps.inventory",
     "apps.visits",
+    "apps.discounts",
     "apps.billing",
     "apps.global_search",
     "apps.notifications",
@@ -309,6 +310,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "dispatch-due-notification-reminders": {
         "task": "apps.notifications.tasks.dispatch_due_notification_reminders",
+        "schedule": 60,
+    },
+    "dispatch-notification-telegram-deliveries": {
+        "task": "apps.notifications.tasks.dispatch_notification_telegram_deliveries",
         "schedule": 60,
     },
     "dispatch-telegram-booking-request-deliveries": {

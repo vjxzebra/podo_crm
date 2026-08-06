@@ -78,6 +78,14 @@
 | TP-1011 | `done` | Authorized process callback, cross-chat message sync/retry, operations status command і production rollout runbook; 444 backend/227 frontend green; [evidence](../evidence/tp-1011/README.md) |
 | TP-1012 | `done` | Assignee-only Telegram delivery внутрішніх справ, open/overdue/completed/reassigned sync, authorized completion callback і podologist linking; 450 backend/227 frontend green; [evidence](../evidence/tp-1012/README.md) |
 | TP-1013 | `done` | Двосторінкова чорно-біла A4 PDF-квитанція та бланк рекомендацій після оплати; download/print у finance UI, finance-scoped API, 454 backend/231 frontend green; [contract](../architecture/tp-1013-payment-receipt-pdf-contract.md) |
+| TP-1014 | `done` | Multi-service follow-up із ordered active service IDs, aggregate duration, stale availability reset та idempotent service lines; [evidence](../evidence/tp-1014-1021/README.md) |
+| TP-1015 | `done` | Порожнє рукописне поле рекомендованої дати на другій сторінці PDF; дві A4-сторінки без обрізання; [evidence](../evidence/tp-1014-1021/README.md) |
+| TP-1016 | `done` | Singleton clinic cash drawer, одна OPEN-зміна, owner-only mutations і carry-forward фактичного closing balance; [evidence](../evidence/tp-1014-1021/README.md) |
+| TP-1017 | `done` | Exact-recipient Notification → Telegram delivery, durable outbox/retry та failure isolation без зміни read state; [evidence](../evidence/tp-1014-1021/README.md) |
+| TP-1018 | `done` | Admin catalog знижок 1–99%, activation lifecycle та singleton loyalty policy; [evidence](../evidence/tp-1014-1021/README.md) |
+| TP-1019 | `done` | Кожен N-й новий completed visit, idempotent ordinal і canonical gross/discount/net pricing із DB guards; [evidence](../evidence/tp-1014-1021/README.md) |
+| TP-1020 | `done` | Podologist/reception discount override без сумування, atomic payment pricing і immutable receipt/payment snapshots; [evidence](../evidence/tp-1014-1021/README.md) |
+| TP-1021 | `done` | Cross-feature gate: 515 backend, 243 frontend, 44 axe, contracts/build/runtime/PDF/responsive QA green; [evidence](../evidence/tp-1014-1021/README.md) |
 
 ## 3. Володіння модулями
 
@@ -209,6 +217,22 @@
 |---|---|---|---|---|
 | TP-1013 | PDF-квитанція та бланк рекомендацій; [frozen contract](../architecture/tp-1013-payment-receipt-pdf-contract.md) | Finance-scoped `GET /payments/{payment_id}/receipt?disposition=`; immutable Payment snapshots, current recommendations/profile, private no-store response, no ledger mutation | Reception/admin: dialog після успішної оплати та download/print у payment detail; loading/error/retry, server filename | `done` 2026-07-30: 4 focused PDF tests, 454 canonical backend, 231 frontend, Ruff/format/mypy/contracts/build green; two-page A4 render і authenticated UI gate. Не входить: РРО/ПРРО, фіскальний номер/QR, надсилання клієнту |
 
+### Етап 13 — CRM-допрацювання прийому, каси, сповіщень і знижок
+
+Спільний implementation contract:
+[TP-1014—TP-1021](../architecture/tp-1014-1021-crm-improvements-contract.md).
+
+| ID | Вертикальний результат | Ключові інваріанти | Фактичний gate |
+|---|---|---|---|
+| TP-1014 | Кілька послуг у наступному записі | Ordered unique active services, aggregate duration, legacy primary, idempotent finish | `done` 2026-08-06 |
+| TP-1015 | Рукописна рекомендована дата у PDF | Поле не зберігається в БД; документ лишається двосторінковим A4 | `done` 2026-08-06 |
+| TP-1016 | Одна спільна каса | Одна OPEN-зміна, owner-only mutations, carry-forward actual close без ledger entry | `done` 2026-08-06 |
+| TP-1017 | Персональний Telegram | Exact Notification recipient, durable retry, failure isolation, без duplicate work-item delivery | `done` 2026-08-06 |
+| TP-1018 | Каталог знижок і loyalty policy | 1–99%, без delete/history rewrite, admin settings і audit | `done` 2026-08-06 |
+| TP-1019 | Кожен N-й візит і pricing | Лише нові completed visits, idempotent ordinal, одна знижка, gross/discount/net snapshots | `done` 2026-08-06 |
+| TP-1020 | Заміна знижки при finish/payment | KEEP/SET, без сумування, atomic override до settlement, immutable після оплати | `done` 2026-08-06 |
+| TP-1021 | Інтеграційний release gate | 515 backend, 243 frontend, 44 axe, migrations/contracts/PDF/runtime/responsive QA green | `done` 2026-08-06; [evidence](../evidence/tp-1014-1021/README.md) |
+
 ## 5. Покриття acceptance criteria
 
 | AC | Primary packet | Обов’язковий інтеграційний gate |
@@ -239,4 +263,4 @@
 
 ## 6. Порядок найближчого запуску
 
-ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201—TP-207, TP-301—TP-303, TP-401—TP-404, TP-501—TP-503, TP-601—TP-605, TP-701—TP-704, TP-801—TP-804, TP-901—TP-904 і post-MVP TP-1001—TP-1013 завершено. TP-904 закрив MVP із `23/23 verified`; TP-1001 закрив GAP-11 supplier directory, TP-1002—TP-1007 — safe CSV slices та GAP-18, TP-1008—TP-1011 закрили заявки, Bearer API, private Telegram authorization, inline callback і cross-chat sync, TP-1012 — assignee-only Telegram workflow внутрішніх справ, TP-1013 — двосторінковий PDF документа оплати та рекомендацій. Production deploy TP-1013 не виконувався.
+ERD та ADR-001—ADR-006 погоджені 2026-07-20; TP-101—TP-103, TP-201—TP-207, TP-301—TP-303, TP-401—TP-404, TP-501—TP-503, TP-601—TP-605, TP-701—TP-704, TP-801—TP-804, TP-901—TP-904 і post-MVP TP-1001—TP-1021 завершено. TP-904 закрив MVP із `23/23 verified`; TP-1001 закрив GAP-11 supplier directory, TP-1002—TP-1007 — safe CSV slices та GAP-18, TP-1008—TP-1011 закрили заявки, Bearer API, private Telegram authorization, inline callback і cross-chat sync, TP-1012 — assignee-only Telegram workflow внутрішніх справ, TP-1013 — двосторінковий PDF документа оплати та рекомендацій, TP-1014—TP-1021 — multi-service follow-up, singleton касу, exact-recipient Telegram і повний discount/loyalty pricing lifecycle. Production deploy TP-1014—TP-1021 не виконувався.

@@ -22,6 +22,7 @@ from apps.visits.models import (
     VisitServiceLine,
     VisitStatus,
 )
+from tests.financial_fixtures import complete_visit_with_neutral_pricing
 
 KYIV = ZoneInfo("Europe/Kyiv")
 PASSWORD = "test-only-password-placeholder"  # noqa: S105
@@ -87,11 +88,11 @@ def _visit(
     service: Service,
     room: Room,
     status: str = VisitStatus.COMPLETED,
-    total_minor: int | None = 150000,
     complete_fields: bool = True,
 ) -> Visit:
     starts_at = datetime(2026, 7, day, 10, 0, tzinfo=KYIV)
-    appointment_status = "COMPLETED" if status == VisitStatus.COMPLETED else "IN_PROGRESS"
+    persisted_status = status if complete_fields else VisitStatus.DRAFT
+    appointment_status = "COMPLETED" if persisted_status == VisitStatus.COMPLETED else "IN_PROGRESS"
     appointment = Appointment.objects.create(
         patient=patient,
         specialist=specialist,
@@ -111,15 +112,15 @@ def _visit(
         appointment=appointment,
         patient=patient,
         specialist=specialist,
-        status=status,
+        status=VisitStatus.DRAFT,
         complaints=appointment.complaints,
         objective_examination="Локальний гіперкератоз.",
         podologist_notes=f"Клінічний підсумок {day}.",
-        total_minor=total_minor if complete_fields else None,
-        payment_handoff_requested=status == VisitStatus.COMPLETED,
+        total_minor=None,
+        payment_handoff_requested=False,
         version=2,
         started_by=specialist,
-        completed_at=(starts_at + timedelta(minutes=50)) if complete_fields else None,
+        completed_at=None,
     )
     VisitServiceLine.objects.create(
         visit=visit,
@@ -131,6 +132,12 @@ def _visit(
         quantity=1,
         is_primary=True,
     )
+    if persisted_status == VisitStatus.COMPLETED:
+        complete_visit_with_neutral_pricing(
+            visit,
+            completed_at=starts_at + timedelta(minutes=50),
+            payment_handoff_requested=True,
+        )
     return visit
 
 
@@ -188,7 +195,6 @@ def test_admin_history_is_completed_snapshot_newest_first_and_populates_card_pre
         service=service,
         room=room,
         status=VisitStatus.DRAFT,
-        total_minor=None,
     )
     _visit(
         day=24,
@@ -346,7 +352,6 @@ def test_photo_archive_groups_completed_photos_with_fresh_private_urls_and_no_ob
         service=service,
         room=room,
         status=VisitStatus.DRAFT,
-        total_minor=None,
     )
     _photo(visit=completed, actor=podologist, kind=VisitPhotoKind.BEFORE, suffix="ready")
     _photo(

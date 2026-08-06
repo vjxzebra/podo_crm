@@ -14,6 +14,11 @@ import { attachmentFilename, downloadBlob, responseErrorMessage } from "../api/d
 import type { components, operations } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { csrfHeaders, useAuth } from "../auth/AuthContext";
+import {
+  type Discount,
+  listDiscounts,
+  type VisitPricingProjection,
+} from "../discounts/discountApi";
 import { CashMovementDialog } from "./CashMovementDialog";
 import { useFinanceDialogLifecycle } from "./dialogLifecycle";
 import { getFinancePaymentOperation } from "./financeOperationApi";
@@ -47,11 +52,15 @@ type OperationQuery = Omit<GeneratedOperationQuery, "type" | "status"> & {
   readonly refundable_only?: boolean;
 };
 type PaymentCreateRequest = components["schemas"]["PaymentCreateRequest"];
+type DiscountAction = PaymentCreateRequest["discount_action"];
+type PricedFinancePaymentOperation = FinancePaymentOperation & {
+  readonly pricing: VisitPricingProjection;
+};
 type TypeFilter = "all" | OperationType;
 type StatusFilter = "all" | OperationStatus;
 type MethodFilter = "all" | PaymentMethod;
 
-export type FinanceCashActionState = "loading" | "error" | "closed" | "ready";
+export type FinanceCashActionState = "loading" | "error" | "closed" | "foreign" | "ready";
 
 function financeOperationsExportUrl(query: OperationQuery): string {
   const url = new URL("/api/v1/finance/operations/export", window.location.origin);
@@ -83,6 +92,30 @@ const typeLabels: Readonly<Record<OperationType, string>> = {
   WITHDRAWAL: "Вилучення",
 };
 
+const discountSourceLabels: Readonly<Record<VisitPricingProjection["discount_source"], string>> = {
+  "": "Без знижки",
+  LOYALTY: "Програма лояльності",
+  PODOLOGIST: "Подолог",
+  RECEPTION: "Рецепція",
+};
+
+const paymentConflictCodes = new Set([
+  "cash_shift_required",
+  "discount_unavailable",
+  "pricing_missing",
+  "pricing_settled",
+  "pricing_version_conflict",
+  "receivable_already_paid",
+  "receivable_already_refunded",
+  "visit_not_payable",
+]);
+
+function calculateDiscountMinor(grossMinor: number, percent: number): number {
+  const wholeHundreds = Math.floor(grossMinor / 100);
+  const remainder = grossMinor % 100;
+  return (wholeHundreds * percent) + Math.floor((remainder * percent) / 100);
+}
+
 function isZeroSettlement(operation: FinanceOperation): boolean {
   return isPaymentOperation(operation)
     && operation.status === "PAID"
@@ -90,8 +123,30 @@ function isZeroSettlement(operation: FinanceOperation): boolean {
     && operation.payment === null;
 }
 
-function isPayableOperation(operation: FinanceOperation): operation is FinancePaymentOperation {
-  return isPaymentOperation(operation) && operation.status === "OPEN" && operation.amount_minor > 0;
+function isVisitPricingProjection(value: unknown): value is VisitPricingProjection {
+  if (typeof value !== "object" || value === null) return false;
+  const pricing = value as Partial<VisitPricingProjection>;
+  return typeof pricing.gross_minor === "number"
+    && (typeof pricing.discount_id === "string" || pricing.discount_id === null)
+    && typeof pricing.discount_name === "string"
+    && (typeof pricing.discount_percent === "number" || pricing.discount_percent === null)
+    && ["", "LOYALTY", "PODOLOGIST", "RECEPTION"].includes(pricing.discount_source ?? "invalid")
+    && typeof pricing.discount_amount_minor === "number"
+    && typeof pricing.net_minor === "number"
+    && typeof pricing.version === "number"
+    && (pricing.state === "OPEN" || pricing.state === "SETTLED");
+}
+
+function isPricedPaymentOperation(operation: FinanceOperation): operation is PricedFinancePaymentOperation {
+  return isPaymentOperation(operation)
+    && isVisitPricingProjection(operation.pricing);
+}
+
+function isPayableOperation(operation: FinanceOperation): operation is PricedFinancePaymentOperation {
+  return isPricedPaymentOperation(operation)
+    && operation.status === "OPEN"
+    && operation.amount_minor > 0
+    && operation.pricing.state === "OPEN";
 }
 
 function isRefundableOperation(operation: FinanceOperation): operation is FinancePaymentOperation {
@@ -174,7 +229,7 @@ function OperationDetailDialog({
 }: {
   readonly hasOpenShift: boolean;
   readonly onClose: () => void;
-  readonly onPay: (operation: FinancePaymentOperation) => void;
+  readonly onPay: (operation: PricedFinancePaymentOperation) => void;
   readonly onRefund: (operation: FinancePaymentOperation) => void;
   readonly operation: FinanceOperation;
 }) {
@@ -295,10 +350,10 @@ function OperationDetailDialog({
 
 interface PaymentDialogProps {
   readonly actionsEnabled: boolean;
-  readonly initialOperation: FinancePaymentOperation | null;
+  readonly initialOperation: PricedFinancePaymentOperation | null;
   readonly onClose: () => void;
   readonly onConflictRefresh: () => Promise<void>;
-  readonly onSuccess: (operation: FinancePaymentOperation, replayed: boolean) => Promise<void>;
+  readonly onSuccess: (operation: PricedFinancePaymentOperation, replayed: boolean) => Promise<void>;
 }
 
 function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRefresh, onSuccess }: PaymentDialogProps) {
@@ -309,11 +364,17 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
   const continueEditingRef = useRef<HTMLButtonElement>(null);
   const idempotencyKey = useRef(crypto.randomUUID());
   const requestSequence = useRef(0);
+  const submitInFlightRef = useRef(false);
   const [query, setQuery] = useState(initialOperation?.patient.display_name ?? "");
-  const [results, setResults] = useState<readonly FinancePaymentOperation[]>(initialOperation === null ? [] : [initialOperation]);
-  const [selected, setSelected] = useState<FinancePaymentOperation | null>(initialOperation);
+  const [results, setResults] = useState<readonly PricedFinancePaymentOperation[]>(initialOperation === null ? [] : [initialOperation]);
+  const [selected, setSelected] = useState<PricedFinancePaymentOperation | null>(initialOperation);
   const [method, setMethod] = useState<PaymentMethod | "">("");
   const [comment, setComment] = useState("");
+  const [discountAction, setDiscountAction] = useState<DiscountAction>("KEEP");
+  const [discountId, setDiscountId] = useState("");
+  const [discounts, setDiscounts] = useState<readonly Discount[]>([]);
+  const [isDiscountsLoading, setIsDiscountsLoading] = useState(true);
+  const [discountsError, setDiscountsError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(initialOperation === null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -323,8 +384,17 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
   const [showDiscard, setShowDiscard] = useState(false);
   const [isResultsOpen, setIsResultsOpen] = useState(initialOperation === null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const dirty = selected !== initialOperation || method !== "" || comment !== "";
+  const selectedDiscount = useMemo(
+    () => discounts.find((discount) => discount.id === discountId) ?? null,
+    [discountId, discounts],
+  );
+  const dirty = selected !== initialOperation
+    || method !== ""
+    || comment !== ""
+    || discountAction !== "KEEP"
+    || discountId !== "";
   const controlsLocked = !actionsEnabled || isSubmitting || isRetryLocked || conflictCode !== null;
+  const discountSelectionValid = discountAction === "KEEP" || selectedDiscount !== null;
 
   const requestClose = useCallback(() => {
     if (isSubmitting || isRetryLocked) return;
@@ -345,6 +415,29 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
     initialFocusRef: initialOperation === null ? searchRef : firstMethodRef,
     onEscape: requestClose,
   });
+
+  const loadDiscountCatalog = useCallback(async (signal?: AbortSignal) => {
+    setIsDiscountsLoading(true);
+    setDiscountsError(null);
+    const result = await listDiscounts("active", signal).catch(() => null);
+    if (signal?.aborted === true) return;
+    setIsDiscountsLoading(false);
+    if (result === null) {
+      setDiscountsError("Немає зв’язку із сервером. Не вдалося завантажити активні знижки.");
+      return;
+    }
+    if (!result.ok) {
+      setDiscountsError(result.error.message);
+      return;
+    }
+    setDiscounts(result.data.discounts.filter((discount) => discount.is_active));
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadDiscountCatalog(controller.signal);
+    return () => { controller.abort(); };
+  }, [loadDiscountCatalog]);
 
   const searchOpenOperations = useCallback(async (search: string) => {
     const sequence = requestSequence.current + 1;
@@ -388,10 +481,12 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
     if (showDiscard) window.setTimeout(() => { continueEditingRef.current?.focus(); }, 0);
   }, [showDiscard]);
 
-  const selectOperation = (operation: FinancePaymentOperation) => {
+  const selectOperation = (operation: PricedFinancePaymentOperation) => {
     setSelected(operation);
     setQuery(operation.patient.display_name);
     setResults([operation]);
+    setDiscountAction("KEEP");
+    setDiscountId("");
     setIsResultsOpen(false);
     setSubmitError(null);
     setConflictCode(null);
@@ -403,6 +498,8 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
     setSelected(null);
     setMethod("");
     setComment("");
+    setDiscountAction("KEEP");
+    setDiscountId("");
     setConflictCode(null);
     setSubmitError(null);
     setIsRetryLocked(false);
@@ -438,12 +535,25 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
 
   const submit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!actionsEnabled || selected === null || method === "" || conflictCode !== null) return;
+    if (
+      submitInFlightRef.current
+      || !actionsEnabled
+      || selected === null
+      || method === ""
+      || conflictCode !== null
+      || !discountSelectionValid
+    ) return;
+    submitInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
     const body: PaymentCreateRequest = {
       visit_id: selected.visit.id,
       payment_method: method,
+      pricing_version: selected.pricing.version,
+      discount_action: discountAction,
+      ...(discountAction === "SET" && selectedDiscount !== null
+        ? { discount_id: selectedDiscount.id }
+        : {}),
       comment: comment.trim(),
     };
     const response = await apiClient.POST("/api/v1/payments", {
@@ -452,29 +562,61 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
       params: { header: { "Idempotency-Key": idempotencyKey.current } },
     }).catch(() => null);
     if (response === null) {
+      submitInFlightRef.current = false;
       setIsSubmitting(false);
       setIsRetryLocked(true);
       setSubmitError("Немає зв’язку із сервером. Дані збережено у формі — повторіть із тим самим запитом.");
       return;
     }
     if (response.data !== undefined) {
-      await onSuccess(response.data.operation, response.data.replayed);
+      const operation = response.data.operation;
+      if (!isPricedPaymentOperation(operation)) {
+        submitInFlightRef.current = false;
+        setIsSubmitting(false);
+        setIsRetryLocked(false);
+        setSubmitError("Сервер повернув оплату без актуального розрахунку. Оновіть журнал перед повторною спробою.");
+        await onConflictRefresh();
+        return;
+      }
+      await onSuccess(operation, response.data.replayed);
       return;
     }
     const problem = response.error;
     const code = problem.code;
+    submitInFlightRef.current = false;
     setIsSubmitting(false);
     setIsRetryLocked(false);
     setSubmitError(problem.message);
-    if (["receivable_already_paid", "receivable_already_refunded", "visit_not_payable", "cash_shift_required"].includes(code)) {
+    if (paymentConflictCodes.has(code)) {
       setConflictCode(code);
-      await onConflictRefresh();
+      await Promise.all([
+        onConflictRefresh(),
+        code === "discount_unavailable" ? loadDiscountCatalog() : Promise.resolve(),
+      ]);
       return;
     }
     if (["idempotency_payload_mismatch", "idempotency_key_conflict"].includes(code)) {
       idempotencyKey.current = crypto.randomUUID();
     }
   };
+
+  const previewDiscountAmount = selected === null
+    ? 0
+    : discountAction === "SET" && selectedDiscount !== null
+      ? calculateDiscountMinor(selected.pricing.gross_minor, selectedDiscount.percent)
+      : selected.pricing.discount_amount_minor;
+  const previewNet = selected === null
+    ? 0
+    : selected.pricing.gross_minor - previewDiscountAmount;
+  const previewDiscountName = discountAction === "SET" && selectedDiscount !== null
+    ? selectedDiscount.name
+    : selected?.pricing.discount_name ?? "";
+  const previewDiscountPercent = discountAction === "SET" && selectedDiscount !== null
+    ? selectedDiscount.percent
+    : selected?.pricing.discount_percent ?? null;
+  const previewDiscountSource = discountAction === "SET" && selectedDiscount !== null
+    ? "RECEPTION"
+    : selected?.pricing.discount_source ?? "";
 
   return (
     <div
@@ -496,7 +638,7 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
             <span className="finance-payment-discard__icon"><Icon name="warning" /></span>
             <p className="eyebrow">Незбережена оплата</p>
             <h2 id="finance-payment-title">Відхилити введені дані?</h2>
-            <p>Обраний прийом, спосіб оплати та коментар буде втрачено.</p>
+            <p>Обраний прийом, спосіб оплати, знижка та коментар буде втрачено.</p>
             <div>
               <button className="button button--secondary" onClick={() => { setShowDiscard(false); window.setTimeout(() => { (selected === null ? searchRef.current : firstMethodRef.current)?.focus(); }, 0); }} ref={continueEditingRef} type="button">Продовжити заповнення</button>
               <button className="button button--primary" onClick={onClose} type="button">Відхилити дані</button>
@@ -505,7 +647,7 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
         ) : (
           <form onSubmit={(event) => { void submit(event); }}>
             <header className="modal-card__header">
-              <div><p className="eyebrow">Фінанси · Повна оплата</p><h2 id="finance-payment-title">Провести оплату прийому</h2><p>Суму визначає завершений прийом — змінити або розділити її не можна.</p></div>
+              <div><p className="eyebrow">Фінанси · Повна оплата</p><h2 id="finance-payment-title">Провести оплату прийому</h2><p>Можна залишити поточну знижку або замінити її активною з каталогу. Знижки не сумуються.</p></div>
               <button aria-label="Закрити форму оплати" className="icon-button" disabled={isSubmitting || isRetryLocked} onClick={requestClose} type="button"><Icon name="close" /></button>
             </header>
 
@@ -525,6 +667,8 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
                   onChange={(event) => {
                     setQuery(event.target.value);
                     setSelected(null);
+                    setDiscountAction("KEEP");
+                    setDiscountId("");
                     setConflictCode(null);
                     setSubmitError(null);
                     setIsResultsOpen(true);
@@ -567,12 +711,44 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
             {selected === null ? <div className="finance-payment-placeholder"><Icon name="finance" /><p>Знайдіть пацієнта й оберіть завершений неоплачений прийом.</p></div> : (
               <>
                 <section className="finance-payment-summary" aria-labelledby="finance-payment-summary-title">
-                  <header><div><p className="eyebrow">До оплати</p><h3 id="finance-payment-summary-title">{selected.patient.display_name}</h3><p>{selected.visit.public_number} · {dateTimeFormatter.format(new Date(selected.visit.completed_at))} · {selected.visit.specialist.name}</p></div><strong>{money(selected.amount_minor)}</strong></header>
+                  <header><div><p className="eyebrow">До оплати</p><h3 id="finance-payment-summary-title">{selected.patient.display_name}</h3><p>{selected.visit.public_number} · {dateTimeFormatter.format(new Date(selected.visit.completed_at))} · {selected.visit.specialist.name}</p></div><strong>{money(previewNet)}</strong></header>
                   <div>
                     {selected.visit.services.map((service) => <article key={service.id}><span><strong>{service.name}</strong><small>{service.code} · {service.quantity} × {money(service.unit_price_minor)}</small></span><b>{money(service.line_total_minor)}</b></article>)}
                   </div>
-                  <footer><span>Повна сума прийому</span><strong>{money(selected.amount_minor)}</strong></footer>
+                  <div aria-label="Розрахунок оплати" className="finance-payment-pricing-group" role="group">
+                    <dl className="finance-payment-pricing">
+                      <dt>Вартість послуг</dt><dd>{money(selected.pricing.gross_minor)}</dd>
+                      <dt>Знижка</dt><dd>{previewDiscountPercent === null ? "Без знижки" : `${previewDiscountName} · ${String(previewDiscountPercent)}% · −${money(previewDiscountAmount)}`}</dd>
+                      <dt>Джерело знижки</dt><dd>{discountSourceLabels[previewDiscountSource]}</dd>
+                      <dt className="finance-payment-pricing__total">До сплати</dt><dd className="finance-payment-pricing__total">{money(previewNet)}</dd>
+                      <dt className="finance-payment-pricing__version">Версія розрахунку</dt><dd className="finance-payment-pricing__version">№ {selected.pricing.version}</dd>
+                    </dl>
+                  </div>
                 </section>
+
+                <fieldset className="finance-payment-discounts">
+                  <legend>Знижка при оплаті</legend>
+                  <label>
+                    <input checked={discountAction === "KEEP"} disabled={controlsLocked} name="payment-discount-action" onChange={() => { setDiscountAction("KEEP"); setDiscountId(""); setSubmitError(null); }} type="radio" value="KEEP" />
+                    <span><strong>Залишити поточну</strong><small>{selected.pricing.discount_percent === null ? "Прийом без знижки" : `${selected.pricing.discount_name} · ${String(selected.pricing.discount_percent)}%`}</small></span>
+                  </label>
+                  <label>
+                    <input checked={discountAction === "SET"} disabled={controlsLocked || isDiscountsLoading || discounts.length === 0} name="payment-discount-action" onChange={() => { setDiscountAction("SET"); setSubmitError(null); }} type="radio" value="SET" />
+                    <span><strong>Замінити знижку</strong><small>Одна активна знижка від рецепції</small></span>
+                  </label>
+                  {discountAction === "SET" ? (
+                    <label className="form-field finance-payment-discount-picker">
+                      <span>Активна знижка</span>
+                      <select disabled={controlsLocked || isDiscountsLoading} onChange={(event) => { setDiscountId(event.target.value); setSubmitError(null); }} required value={discountId}>
+                        <option value="">Оберіть знижку</option>
+                        {discounts.map((discount) => <option key={discount.id} value={discount.id}>{discount.name} · {discount.percent}%</option>)}
+                      </select>
+                    </label>
+                  ) : null}
+                  {isDiscountsLoading ? <p className="finance-payment-discounts__state" role="status"><span className="spinner" />Завантажуємо активні знижки…</p> : null}
+                  {!isDiscountsLoading && discountsError !== null ? <p className="finance-payment-discounts__state finance-payment-discounts__state--error" role="alert"><Icon name="warning" /><span>{discountsError}</span><button className="text-action" disabled={controlsLocked} onClick={() => { void loadDiscountCatalog(); }} type="button">Повторити</button></p> : null}
+                  {!isDiscountsLoading && discountsError === null && discounts.length === 0 ? <p className="finance-payment-discounts__state">Активних знижок немає — можна лише залишити поточний розрахунок.</p> : null}
+                </fieldset>
 
                 <fieldset className="finance-payment-methods">
                   <legend>Спосіб оплати</legend>
@@ -589,7 +765,7 @@ function PaymentDialog({ actionsEnabled, initialOperation, onClose, onConflictRe
 
             <footer className="modal-card__footer finance-payment-footer">
               <button className="button button--secondary" disabled={isSubmitting || isRetryLocked} onClick={requestClose} type="button">Скасувати</button>
-              <button className="button button--primary" disabled={!actionsEnabled || selected === null || method === "" || isSubmitting || conflictCode !== null} type="submit">{isSubmitting ? "Проводимо…" : isRetryLocked ? "Повторити той самий запит" : "Провести повну оплату"}</button>
+              <button className="button button--primary" disabled={!actionsEnabled || selected === null || method === "" || !discountSelectionValid || isSubmitting || conflictCode !== null} type="submit">{isSubmitting ? "Проводимо…" : isRetryLocked ? "Повторити той самий запит" : "Провести повну оплату"}</button>
             </footer>
           </form>
         )}
@@ -626,7 +802,7 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
   const [detail, setDetail] = useState<FinanceOperation | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<{ readonly message: string; readonly correlationId: string } | null>(null);
-  const [paymentInitial, setPaymentInitial] = useState<FinancePaymentOperation | null | undefined>(undefined);
+  const [paymentInitial, setPaymentInitial] = useState<PricedFinancePaymentOperation | null | undefined>(undefined);
   const [receiptOperation, setReceiptOperation] = useState<FinancePaymentOperation | null>(null);
   const [refundInitial, setRefundInitial] = useState<FinancePaymentOperation | null | undefined>(undefined);
   const [cashMovementType, setCashMovementType] = useState<CashMovementType | null>(null);
@@ -799,7 +975,7 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
     window.setTimeout(() => { detailTriggerRef.current?.focus(); }, 0);
   };
 
-  const openPayment = (operation: FinancePaymentOperation | null, trigger?: HTMLButtonElement) => {
+  const openPayment = (operation: PricedFinancePaymentOperation | null, trigger?: HTMLButtonElement) => {
     if (!mutationActionsAvailable) return;
     paymentTriggerRef.current = trigger ?? detailTriggerRef.current;
     setDetail(null);
@@ -855,7 +1031,7 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
     await Promise.all([load(query), refreshShift()]);
   }, [load, query, refreshShift]);
 
-  const paymentSucceeded = async (operation: FinancePaymentOperation, replayed: boolean) => {
+  const paymentSucceeded = async (operation: PricedFinancePaymentOperation, replayed: boolean) => {
     setIsRefreshingAfterMutation(true);
     setPaymentInitial(undefined);
     await refreshAll();
@@ -897,7 +1073,7 @@ export function FinanceOperations({ availableCashMinor, cashActionState, onOpera
           <div className="finance-operations__header-meta">
             <span>{operations.length} {operationCountLabel(operations.length)}{openCount > 0 ? ` · ${String(openCount)} очікує` : ""}</span>
             {isAdmin ? <button className="button button--secondary finance-operations__export" disabled={exportDisabled} onClick={() => { void exportOperations(); }} type="button">{isExporting ? "Готуємо CSV…" : "Експортувати CSV"}</button> : null}
-            {mutationActionsAvailable ? <div className="finance-operation-actions"><button className="button button--primary" onClick={(event) => { openPayment(null, event.currentTarget); }} type="button"><Icon name="plus" />Провести оплату</button><button className="button button--secondary" onClick={(event) => { openRefund(null, event.currentTarget); }} type="button"><Icon name="refresh" />Повернення</button><button className="button button--secondary" onClick={(event) => { openCashMovement("DEPOSIT", event.currentTarget); }} type="button">+ Внесення</button><button className="button button--secondary" onClick={(event) => { openCashMovement("WITHDRAWAL", event.currentTarget); }} type="button">− Вилучення</button></div> : <span aria-label={effectiveCashActionState === "loading" ? "Оновлюємо касову зміну — операції тимчасово недоступні" : undefined} className="finance-operations__shift-note" role={effectiveCashActionState === "loading" ? "status" : undefined}><Icon name={effectiveCashActionState === "loading" ? "refresh" : "warning"} />{effectiveCashActionState === "loading" ? "Оновлюємо касову зміну — операції тимчасово недоступні" : effectiveCashActionState === "error" ? "Касові операції недоступні до успішного оновлення зміни" : "Для касових операцій відкрийте власну зміну"}</span>}
+            {mutationActionsAvailable ? <div className="finance-operation-actions"><button className="button button--primary" onClick={(event) => { openPayment(null, event.currentTarget); }} type="button"><Icon name="plus" />Провести оплату</button><button className="button button--secondary" onClick={(event) => { openRefund(null, event.currentTarget); }} type="button"><Icon name="refresh" />Повернення</button><button className="button button--secondary" onClick={(event) => { openCashMovement("DEPOSIT", event.currentTarget); }} type="button">+ Внесення</button><button className="button button--secondary" onClick={(event) => { openCashMovement("WITHDRAWAL", event.currentTarget); }} type="button">− Вилучення</button></div> : <span aria-label={effectiveCashActionState === "loading" ? "Оновлюємо касову зміну — операції тимчасово недоступні" : undefined} className="finance-operations__shift-note" role={effectiveCashActionState === "loading" ? "status" : undefined}><Icon name={effectiveCashActionState === "loading" ? "refresh" : "warning"} />{effectiveCashActionState === "loading" ? "Оновлюємо касову зміну — операції тимчасово недоступні" : effectiveCashActionState === "error" ? "Касові операції недоступні до успішного оновлення зміни" : effectiveCashActionState === "foreign" ? "Касові операції проводить власник поточної зміни" : "Для касових операцій відкрийте власну зміну"}</span>}
           </div>
         </header>
 

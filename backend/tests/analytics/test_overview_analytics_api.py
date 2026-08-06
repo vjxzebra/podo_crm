@@ -6,12 +6,19 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import pytest
+from django.db import transaction
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
 from apps.analytics import exports as analytics_exports
 from apps.audit.models import AuditEvent
-from apps.billing.models import CashShift, Receivable, ReceivableStatus
+from apps.billing.models import (
+    CashShift,
+    PricingState,
+    Receivable,
+    ReceivableStatus,
+    VisitPricing,
+)
 from apps.clinic.models import AppointmentStatusConfig, ClinicWorkday, Room, Service
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
@@ -105,47 +112,62 @@ def complete_visit(
     amount_minor: int,
     quantity: int = 1,
 ) -> Visit:
-    appointment = create_appointment(
-        patient=patient,
-        specialist=specialist,
-        service=service,
-        room=room,
-        starts_at=starts_at,
-        status_code="COMPLETED",
-    )
-    visit = Visit.objects.create(
-        appointment=appointment,
-        patient=patient,
-        specialist=specialist,
-        status=VisitStatus.COMPLETED,
-        complaints="",
-        has_no_complaints=True,
-        total_minor=amount_minor,
-        payment_handoff_requested=True,
-        version=2,
-        started_by=specialist,
-        completed_at=starts_at + timedelta(minutes=60),
-    )
-    VisitServiceLine.objects.create(
-        visit=visit,
-        service=service,
-        service_code=service.code,
-        service_name=service.name,
-        duration_minutes=service.duration_minutes,
-        price_minor=amount_minor // quantity,
-        quantity=quantity,
-        is_primary=True,
-    )
+    with transaction.atomic():
+        appointment = create_appointment(
+            patient=patient,
+            specialist=specialist,
+            service=service,
+            room=room,
+            starts_at=starts_at,
+            status_code="COMPLETED",
+        )
+        visit = Visit.objects.create(
+            appointment=appointment,
+            patient=patient,
+            specialist=specialist,
+            status=VisitStatus.DRAFT,
+            complaints="",
+            has_no_complaints=True,
+            started_by=specialist,
+        )
+        VisitServiceLine.objects.create(
+            visit=visit,
+            service=service,
+            service_code=service.code,
+            service_name=service.name,
+            duration_minutes=service.duration_minutes,
+            price_minor=amount_minor // quantity,
+            quantity=quantity,
+            is_primary=True,
+        )
+        VisitPricing.objects.create(
+            visit=visit,
+            gross_minor=amount_minor,
+            discount_amount_minor=0,
+            net_minor=amount_minor,
+            state=PricingState.OPEN,
+        )
+        Receivable.objects.create(
+            visit=visit,
+            amount_minor=amount_minor,
+            status=ReceivableStatus.OPEN,
+        )
+        visit.status = VisitStatus.COMPLETED
+        visit.total_minor = amount_minor
+        visit.payment_handoff_requested = True
+        visit.version = 2
+        visit.completed_at = starts_at + timedelta(minutes=60)
+        visit.save(
+            update_fields=(
+                "status",
+                "total_minor",
+                "payment_handoff_requested",
+                "version",
+                "completed_at",
+                "updated_at",
+            )
+        )
     return visit
-
-
-def create_receivable(visit: Visit) -> Receivable:
-    assert visit.total_minor is not None
-    return Receivable.objects.create(
-        visit=visit,
-        amount_minor=visit.total_minor,
-        status=ReceivableStatus.OPEN,
-    )
 
 
 def post_payment(
@@ -157,6 +179,8 @@ def post_payment(
             {
                 "visit_id": str(visit.pk),
                 "payment_method": "CARD",
+                "pricing_version": visit.pricing.version,
+                "discount_action": "KEEP",
                 "comment": "Аналітичний тест",
             },
             format="json",
@@ -350,8 +374,6 @@ def test_analytics_reconciles_ledger_cohorts_rankings_and_filters() -> None:
         amount_minor=20_000,
         quantity=2,
     )
-    create_receivable(returning_visit)
-    create_receivable(new_visit)
     create_appointment(
         patient=returning_patient,
         specialist=specialist,
@@ -487,7 +509,6 @@ def test_analytics_export_is_filtered_summary_first_safe_and_contains_no_raw_ide
         starts_at=moment(5, 9),
         amount_minor=15_000,
     )
-    create_receivable(visit)
     post_payment(
         client=client_for(cashier),
         visit=visit,

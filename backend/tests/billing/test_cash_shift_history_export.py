@@ -115,7 +115,8 @@ def test_filtered_cash_shift_history_export_has_safe_summary_first_contract() ->
         actual_cash_minor=700,
     )
     shift.refresh_from_db()
-    newest_open = CashShift.objects.create(employee=owner)
+    assert owner_client.post("/api/v1/cash-shifts").status_code == 201
+    newest_open = CashShift.objects.get(status="OPEN")
     audit_count = AuditEvent.objects.count()
     today = timezone.localdate().isoformat()
 
@@ -164,12 +165,18 @@ def test_filtered_cash_shift_history_export_has_safe_summary_first_contract() ->
     assert report["cash_net_minor"] == "0"
     assert report["deposits_minor"] == "1000"
     assert report["withdrawals_minor"] == "250"
-    assert report["expected_cash_minor"] == "750"
-    assert report["actual_cash_minor"] == "700"
-    assert report["discrepancy_minor"] == "-50"
+    assert report["opening_cash_minor"] == ""
+    assert report["expected_cash_minor"] == ""
+    assert report["actual_cash_minor"] == ""
+    assert report["discrepancy_minor"] == ""
     assert open_row["shift_number"] == newest_open.public_number
+    assert open_row["opening_cash_minor"] == "700"
+    assert open_row["opening_source_shift_number"] == shift.public_number
+    assert open_row["expected_cash_minor"] == "700"
     assert open_row["actual_cash_minor"] == ""
     assert closed_row["shift_number"] == shift.public_number
+    assert closed_row["opening_cash_minor"] == "0"
+    assert closed_row["expected_cash_minor"] == "750"
     assert closed_row["employee_name"] == "'=Марина Коваль"
     assert closed_row["opened_at_local"] == timezone.localtime(shift.opened_at).isoformat(
         timespec="seconds"
@@ -208,14 +215,24 @@ def test_empty_cash_shift_history_export_contains_zero_report_summary() -> None:
     assert rows[0]["row_type"] == "REPORT_SUMMARY"
     assert rows[0]["shift_count"] == "0"
     assert rows[0]["operations_count"] == "0"
-    assert rows[0]["actual_cash_minor"] == "0"
+    assert rows[0]["opening_cash_minor"] == ""
+    assert rows[0]["expected_cash_minor"] == ""
+    assert rows[0]["actual_cash_minor"] == ""
 
 
 @pytest.mark.django_db
 def test_cash_shift_history_export_rejects_bounds_and_partial_file(monkeypatch) -> None:
     admin = create_user("bounded-history@example.test", role=UserRole.ADMIN)
-    CashShift.objects.create(employee=create_user("bounded-one@example.test"))
-    CashShift.objects.create(employee=create_user("bounded-two@example.test"))
+    first_owner = create_user("bounded-one@example.test")
+    first = CashShift.objects.create(employee=first_owner)
+    close_shift(
+        authenticated_client(first_owner),
+        first,
+        expected_operations_count=0,
+        actual_cash_minor=0,
+    )
+    second_owner = create_user("bounded-two@example.test")
+    assert authenticated_client(second_owner).post("/api/v1/cash-shifts").status_code == 201
     monkeypatch.setattr(billing_exports, "CASH_SHIFT_HISTORY_EXPORT_ROW_LIMIT", 1)
     client = authenticated_client(admin)
 
@@ -250,7 +267,14 @@ def test_cash_shift_history_export_matches_list_scope_and_employee_filter() -> N
         role=UserRole.PODOLOGIST,
     )
     own_shift = CashShift.objects.create(employee=owner)
-    foreign_shift = CashShift.objects.create(employee=foreign)
+    close_shift(
+        authenticated_client(owner),
+        own_shift,
+        expected_operations_count=0,
+        actual_cash_minor=0,
+    )
+    assert authenticated_client(foreign).post("/api/v1/cash-shifts").status_code == 201
+    foreign_shift = CashShift.objects.get(employee=foreign)
     path = "/api/v1/cash-shifts/export"
 
     owner_response = authenticated_client(owner).get(path)

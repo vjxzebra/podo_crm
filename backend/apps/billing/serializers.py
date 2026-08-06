@@ -7,6 +7,7 @@ from rest_framework import serializers
 from apps.accounts.models import UserRole
 from apps.billing.models import (
     CashLedgerEntryKind,
+    CashShiftOpeningBasis,
     CashShiftStatus,
     PaymentMethod,
     ReceivableStatus,
@@ -17,6 +18,19 @@ CASH_MOVEMENT_TYPES = (
     CashLedgerEntryKind.WITHDRAWAL,
 )
 POSTED_FINANCE_STATUSES = ("POSTED",)
+DISCOUNT_ACTIONS = ("KEEP", "SET")
+
+
+class VisitPricingSerializer(serializers.Serializer[Any]):
+    gross_minor = serializers.IntegerField(min_value=0)
+    discount_id = serializers.UUIDField(allow_null=True)
+    discount_name = serializers.CharField(allow_blank=True)
+    discount_percent = serializers.IntegerField(min_value=1, max_value=99, allow_null=True)
+    discount_source = serializers.CharField(allow_blank=True)
+    discount_amount_minor = serializers.IntegerField(min_value=0)
+    net_minor = serializers.IntegerField(min_value=0)
+    version = serializers.IntegerField(min_value=1)
+    state = serializers.CharField()
 
 
 class CashLedgerEntrySerializer(serializers.Serializer[Any]):
@@ -67,11 +81,26 @@ class CashShiftTotalsSerializer(serializers.Serializer[Any]):
     expected_cash_minor = serializers.IntegerField()
 
 
+class CashShiftOpeningSourceSerializer(serializers.Serializer[Any]):
+    id = serializers.UUIDField()
+    public_number = serializers.CharField()
+
+
+class CashShiftPermissionsSerializer(serializers.Serializer[Any]):
+    can_mutate = serializers.BooleanField()
+    can_close = serializers.BooleanField()
+
+
 class CashShiftProjectionSerializer(serializers.Serializer[Any]):
     id = serializers.UUIDField()
     public_number = serializers.CharField()
     status = serializers.ChoiceField(choices=CashShiftStatus.choices)
     employee = CashShiftEmployeeSerializer()
+    drawer_key = serializers.ChoiceField(choices=("main",))
+    opening_cash_minor = serializers.IntegerField(min_value=0)
+    opening_basis = serializers.ChoiceField(choices=CashShiftOpeningBasis.choices)
+    opening_source_shift = CashShiftOpeningSourceSerializer(allow_null=True)
+    permissions = CashShiftPermissionsSerializer()
     opened_at = serializers.DateTimeField()
     closed_at = serializers.DateTimeField(allow_null=True)
     totals = CashShiftTotalsSerializer()
@@ -84,6 +113,11 @@ class CashShiftSummarySerializer(serializers.Serializer[Any]):
     public_number = serializers.CharField()
     status = serializers.ChoiceField(choices=CashShiftStatus.choices)
     employee = CashShiftEmployeeSerializer()
+    drawer_key = serializers.ChoiceField(choices=("main",))
+    opening_cash_minor = serializers.IntegerField(min_value=0)
+    opening_basis = serializers.ChoiceField(choices=CashShiftOpeningBasis.choices)
+    opening_source_shift = CashShiftOpeningSourceSerializer(allow_null=True)
+    permissions = CashShiftPermissionsSerializer()
     opened_at = serializers.DateTimeField()
     closed_at = serializers.DateTimeField(allow_null=True)
     totals = CashShiftTotalsSerializer()
@@ -209,6 +243,9 @@ class CashShiftCloseResponseSerializer(serializers.Serializer[Any]):
 class PaymentCreateSerializer(StrictInputSerializer):
     visit_id = serializers.UUIDField()
     payment_method = serializers.ChoiceField(choices=PaymentMethod.choices)
+    pricing_version = serializers.IntegerField(min_value=1)
+    discount_action = serializers.ChoiceField(choices=DISCOUNT_ACTIONS)
+    discount_id = serializers.UUIDField(required=False, allow_null=True)
     comment = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -216,6 +253,17 @@ class PaymentCreateSerializer(StrictInputSerializer):
         max_length=2000,
         trim_whitespace=True,
     )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        has_discount_id = "discount_id" in self.initial_data
+        action = attrs["discount_action"]
+        if action == "KEEP" and has_discount_id:
+            raise serializers.ValidationError(
+                {"discount_id": ["Не передавайте discount_id для дії KEEP."]}
+            )
+        if action == "SET" and attrs.get("discount_id") is None:
+            raise serializers.ValidationError({"discount_id": ["Оберіть знижку для дії SET."]})
+        return attrs
 
 
 class RefundCreateSerializer(StrictInputSerializer):
@@ -404,6 +452,7 @@ class FinancePaymentOperationSerializer(serializers.Serializer[Any]):
     amount_minor = serializers.IntegerField(min_value=0)
     patient = FinancePatientSerializer()
     visit = FinanceVisitSerializer()
+    pricing = VisitPricingSerializer()
     payment = FinancePaymentSerializer(allow_null=True)
     refund = FinanceRefundSerializer(allow_null=True)
 

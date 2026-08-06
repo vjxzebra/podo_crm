@@ -102,6 +102,7 @@ describe("TP-704 cash-shift reconciliation", () => {
     const counted = within(dialog).getByRole("checkbox", { name: /Готівку перераховано/ });
     const submit = within(dialog).getByRole("button", { name: "Закрити зміну" });
 
+    expect(within(dialog).getByText(/Початок/)).toHaveTextContent(/перша зміна каси/);
     expect(actual).toHaveValue("");
     expect(counted).toBeDisabled();
     expect(submit).toBeDisabled();

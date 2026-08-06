@@ -17,6 +17,7 @@ from apps.audit.models import AuditEvent
 from apps.audit.registry import AuditAction
 from apps.billing.models import (
     CashAdjustment,
+    CashDrawer,
     CashLedgerEntry,
     CashLedgerEntryKind,
     CashShift,
@@ -305,7 +306,20 @@ def test_history_cursor_filters_snapshot_search_and_complete_detail_entries() ->
             f"history-{index:02d}@example.test",
             first_name=f"Працівник{index:02d}",
         )
-        shifts.append(CashShift.objects.create(employee=employee))
+        employee_client = authenticated_client(employee)
+        opened = employee_client.post("/api/v1/cash-shifts")
+        assert opened.status_code == 201, opened.json()
+        shift = CashShift.objects.get(pk=opened.json()["id"])
+        shifts.append(shift)
+        if index < 40:
+            closed = post_close(
+                employee_client,
+                shift,
+                actual_cash_minor=0,
+                expected_operations_count=0,
+                key=f"history-sequential-close-{index}",
+            )
+            assert closed.status_code == 201, closed.json()
 
     client = authenticated_client(admin)
     first = client.get("/api/v1/cash-shifts")
@@ -345,8 +359,21 @@ def test_history_cursor_filters_snapshot_search_and_complete_detail_entries() ->
     assert len(by_date.json()["shifts"]) == 40
     assert tomorrow.json()["shifts"] == []
 
+    last_owner = shifts[-1].employee
+    assert (
+        post_close(
+            authenticated_client(last_owner),
+            shifts[-1],
+            actual_cash_minor=0,
+            expected_operations_count=0,
+            key="history-last-close",
+        ).status_code
+        == 201
+    )
     detail_actor = create_user("detail-owner@example.test")
-    detail_shift = CashShift.objects.create(employee=detail_actor)
+    detail_open = authenticated_client(detail_actor).post("/api/v1/cash-shifts")
+    assert detail_open.status_code == 201, detail_open.json()
+    detail_shift = CashShift.objects.get(pk=detail_open.json()["id"])
     with transaction.atomic():
         for index in range(45):
             entry = CashLedgerEntry.objects.create(
@@ -377,21 +404,31 @@ def test_history_status_validation_cursor_and_europe_kyiv_date_boundary() -> Non
     first_actor = create_user("boundary-first@example.test")
     second_actor = create_user("boundary-second@example.test")
 
-    def raw_open(actor: User, opened_at: str) -> CashShift:
+    CashDrawer.objects.get_or_create(key=CashDrawer.MAIN_KEY)
+
+    def raw_open(
+        actor: User,
+        opened_at: str,
+        *,
+        source: CashShift | None = None,
+    ) -> CashShift:
         shift_id = uuid4()
+        basis = "INITIAL" if source is None else "CARRY_FORWARD"
+        opening_cash_minor = 0 if source is None else source.actual_cash_at_close_minor
         with connection.cursor() as cursor:
             cursor.execute(
                 """
                 INSERT INTO billing_cashshift (
                     id, public_number, employee_id,
                     employee_name_snapshot, employee_email_snapshot,
-                    employee_role_snapshot, status, opened_at,
+                    employee_role_snapshot, drawer_key, opening_cash_minor,
+                    opening_source_shift_id, opening_basis, status, opened_at,
                     closed_at, expected_cash_at_close_minor,
                     actual_cash_at_close_minor, discrepancy_minor, close_comment,
                     closed_by_id, closed_by_name_snapshot, closed_by_email_snapshot,
                     closed_by_role_snapshot, close_idempotency_key, close_payload_hash
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, 'OPEN', %s,
+                    %s, %s, %s, %s, %s, %s, 'main', %s, %s, %s, 'OPEN', %s,
                     NULL, NULL, NULL, NULL, '', NULL, '', '', '', '', ''
                 )
                 """,
@@ -402,13 +439,15 @@ def test_history_status_validation_cursor_and_europe_kyiv_date_boundary() -> Non
                     actor.display_name,
                     actor.email,
                     actor.role,
+                    opening_cash_minor,
+                    None if source is None else source.pk,
+                    basis,
                     opened_at,
                 ],
             )
         return CashShift.objects.get(pk=shift_id)
 
     local_july_22 = raw_open(first_actor, "2026-07-21T21:30:00+00:00")
-    local_july_23 = raw_open(second_actor, "2026-07-22T21:30:00+00:00")
     close_cash = post_close(
         authenticated_client(first_actor),
         local_july_22,
@@ -417,6 +456,12 @@ def test_history_status_validation_cursor_and_europe_kyiv_date_boundary() -> Non
         key="boundary-close",
     )
     assert close_cash.status_code == 201
+    local_july_22.refresh_from_db()
+    local_july_23 = raw_open(
+        second_actor,
+        "2026-07-22T21:30:00+00:00",
+        source=local_july_22,
+    )
 
     client = authenticated_client(admin)
     july_22 = client.get(
@@ -569,8 +614,19 @@ def test_close_rolls_back_with_audit_failure_and_concurrent_exact_submit_replays
     assert rollback_shift.close_idempotency_key == ""
     assert not AuditEvent.objects.filter(action=AuditAction.CASH_SHIFT_CLOSED).exists()
 
+    cleanup = post_close(
+        authenticated_client(rollback_actor),
+        rollback_shift,
+        actual_cash_minor=0,
+        expected_operations_count=0,
+        key="rollback-cleanup",
+    )
+    assert cleanup.status_code == 201, cleanup.json()
+
     actor = create_user("concurrent-close@example.test")
-    shift = CashShift.objects.create(employee=actor)
+    actor_client = authenticated_client(actor)
+    assert actor_client.post("/api/v1/cash-shifts").status_code == 201
+    shift = CashShift.objects.get(employee=actor)
     barrier = Barrier(2)
 
     def submit(_: int) -> tuple[int, bool]:
@@ -593,7 +649,13 @@ def test_close_rolls_back_with_audit_failure_and_concurrent_exact_submit_replays
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(executor.map(submit, range(2)))
     assert sorted(results) == [(200, True), (201, False)]
-    assert AuditEvent.objects.filter(action=AuditAction.CASH_SHIFT_CLOSED).count() == 1
+    assert (
+        AuditEvent.objects.filter(
+            action=AuditAction.CASH_SHIFT_CLOSED,
+            object_id=str(shift.pk),
+        ).count()
+        == 1
+    )
 
 
 @pytest.mark.django_db(transaction=True)
@@ -656,6 +718,21 @@ def test_payment_refund_and_cash_replays_remain_exact_after_shift_close() -> Non
 
 @pytest.mark.django_db(transaction=True)
 def test_close_serializes_against_payment_refund_and_cash_movement_races() -> None:
+    def finish_open_race_shift(actor: User, shift: CashShift) -> None:
+        shift.refresh_from_db()
+        if shift.status == CashShiftStatus.CLOSED:
+            return
+        operations_count = CashLedgerEntry.objects.filter(cash_shift=shift).count()
+        response = post_close(
+            authenticated_client(actor),
+            shift,
+            actual_cash_minor=0,
+            expected_operations_count=operations_count,
+            comment="Завершення race-сценарію",
+            key=f"race-cleanup-{shift.pk}",
+        )
+        assert response.status_code == 201, response.json()
+
     def run_race(
         *,
         actor: User,
@@ -732,9 +809,12 @@ def test_close_serializes_against_payment_refund_and_cash_movement_races() -> No
             key="race-cash-movement",
         ),
     )
+    finish_open_race_shift(cash_actor, cash_shift)
 
     payment_actor = create_user("race-payment@example.test")
-    payment_shift = CashShift.objects.create(employee=payment_actor)
+    payment_client = authenticated_client(payment_actor)
+    assert payment_client.post("/api/v1/cash-shifts").status_code == 201
+    payment_shift = CashShift.objects.get(employee=payment_actor)
     payment_receivable = completed_receivable(amount_minor=3_500, index=741)
     run_race(
         actor=payment_actor,
@@ -746,10 +826,12 @@ def test_close_serializes_against_payment_refund_and_cash_movement_races() -> No
             payment_method=PaymentMethod.CARD,
         ),
     )
+    finish_open_race_shift(payment_actor, payment_shift)
 
     original_actor = create_user("race-refund-original@example.test")
-    CashShift.objects.create(employee=original_actor)
     original_client = authenticated_client(original_actor)
+    assert original_client.post("/api/v1/cash-shifts").status_code == 201
+    original_shift = CashShift.objects.get(employee=original_actor)
     refund_receivable = completed_receivable(amount_minor=4_500, index=742)
     original_payment = post_full_payment(
         original_client,
@@ -759,8 +841,18 @@ def test_close_serializes_against_payment_refund_and_cash_movement_races() -> No
     )
     assert original_payment.status_code == 201
     original_payment_id = original_payment.json()["operation"]["payment"]["id"]
+    original_close = post_close(
+        original_client,
+        original_shift,
+        actual_cash_minor=0,
+        expected_operations_count=1,
+        key="race-refund-original-close",
+    )
+    assert original_close.status_code == 201, original_close.json()
     refund_actor = create_user("race-refund@example.test")
-    refund_shift = CashShift.objects.create(employee=refund_actor)
+    refund_client = authenticated_client(refund_actor)
+    assert refund_client.post("/api/v1/cash-shifts").status_code == 201
+    refund_shift = CashShift.objects.get(employee=refund_actor)
     run_race(
         actor=refund_actor,
         shift=refund_shift,
@@ -823,6 +915,11 @@ def test_openapi_freezes_close_preview_history_detail_and_strict_close_schema() 
         "public_number",
         "status",
         "employee",
+        "drawer_key",
+        "opening_cash_minor",
+        "opening_basis",
+        "opening_source_shift",
+        "permissions",
         "opened_at",
         "closed_at",
         "totals",

@@ -3511,6 +3511,299 @@
                 }
             }
         },
+        "/api/v1/discounts": {
+            "get": {
+                "operationId": "discount_list",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "active",
+                                "all",
+                                "inactive"
+                            ],
+                            "default": "active"
+                        },
+                        "description": "Admins may filter the catalog; other roles always receive active discounts."
+                    }
+                ],
+                "tags": [
+                    "discounts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DiscountList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "discount_create",
+                "tags": [
+                    "discounts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DiscountCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DiscountCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DiscountCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Discount"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/discounts/{discount_id}": {
+            "get": {
+                "operationId": "discount_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "discount_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "discounts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Discount"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "discount_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "discount_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "discounts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDiscountUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDiscountUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDiscountUpdateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Discount"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/finance/operations": {
             "get": {
                 "operationId": "finance_operation_list",
@@ -5678,6 +5971,133 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/InventoryOperation"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/loyalty-policy": {
+            "get": {
+                "operationId": "loyalty_policy_retrieve",
+                "tags": [
+                    "discounts"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoyaltyPolicy"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "loyalty_policy_update",
+                "tags": [
+                    "discounts"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedLoyaltyPolicyUpdateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedLoyaltyPolicyUpdateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedLoyaltyPolicyUpdateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoyaltyPolicy"
                                 }
                             }
                         },
@@ -11541,6 +11961,37 @@
                     "shifts"
                 ]
             },
+            "CashShiftOpeningSource": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "public_number": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "public_number"
+                ]
+            },
+            "CashShiftPermissions": {
+                "type": "object",
+                "properties": {
+                    "can_mutate": {
+                        "type": "boolean"
+                    },
+                    "can_close": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "can_close",
+                    "can_mutate"
+                ]
+            },
             "CashShiftProjection": {
                 "type": "object",
                 "properties": {
@@ -11556,6 +12007,27 @@
                     },
                     "employee": {
                         "$ref": "#/components/schemas/CashShiftEmployee"
+                    },
+                    "drawer_key": {
+                        "$ref": "#/components/schemas/DrawerKeyEnum"
+                    },
+                    "opening_cash_minor": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "opening_basis": {
+                        "$ref": "#/components/schemas/OpeningBasisEnum"
+                    },
+                    "opening_source_shift": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CashShiftOpeningSource"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "permissions": {
+                        "$ref": "#/components/schemas/CashShiftPermissions"
                     },
                     "opened_at": {
                         "type": "string",
@@ -11586,10 +12058,15 @@
                 },
                 "required": [
                     "closed_at",
+                    "drawer_key",
                     "employee",
                     "entries",
                     "id",
                     "opened_at",
+                    "opening_basis",
+                    "opening_cash_minor",
+                    "opening_source_shift",
+                    "permissions",
                     "public_number",
                     "reconciliation",
                     "status",
@@ -11649,6 +12126,27 @@
                     "employee": {
                         "$ref": "#/components/schemas/CashShiftEmployee"
                     },
+                    "drawer_key": {
+                        "$ref": "#/components/schemas/DrawerKeyEnum"
+                    },
+                    "opening_cash_minor": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "opening_basis": {
+                        "$ref": "#/components/schemas/OpeningBasisEnum"
+                    },
+                    "opening_source_shift": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CashShiftOpeningSource"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "permissions": {
+                        "$ref": "#/components/schemas/CashShiftPermissions"
+                    },
                     "opened_at": {
                         "type": "string",
                         "format": "date-time"
@@ -11672,9 +12170,14 @@
                 },
                 "required": [
                     "closed_at",
+                    "drawer_key",
                     "employee",
                     "id",
                     "opened_at",
+                    "opening_basis",
+                    "opening_cash_minor",
+                    "opening_source_shift",
+                    "permissions",
                     "public_number",
                     "reconciliation",
                     "status",
@@ -12087,6 +12590,102 @@
                 "type": "string",
                 "description": "* `MATCH` - Без різниці\n* `SURPLUS` - Надлишок\n* `SHORTAGE` - Нестача"
             },
+            "Discount": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 120
+                    },
+                    "percent": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "name",
+                    "percent",
+                    "updated_at"
+                ]
+            },
+            "DiscountActionEnum": {
+                "enum": [
+                    "KEEP",
+                    "SET"
+                ],
+                "type": "string",
+                "description": "* `KEEP` - KEEP\n* `SET` - SET"
+            },
+            "DiscountCreateRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "percent": {
+                        "type": "integer",
+                        "maximum": 99,
+                        "minimum": 1
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "default": true
+                    }
+                },
+                "required": [
+                    "name",
+                    "percent"
+                ]
+            },
+            "DiscountList": {
+                "type": "object",
+                "properties": {
+                    "discounts": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Discount"
+                        }
+                    }
+                },
+                "required": [
+                    "discounts"
+                ]
+            },
+            "DrawerKeyEnum": {
+                "enum": [
+                    "main"
+                ],
+                "type": "string",
+                "description": "* `main` - main"
+            },
             "EffectiveScopeEnum": {
                 "enum": [
                     "own",
@@ -12423,6 +13022,9 @@
                     "visit": {
                         "$ref": "#/components/schemas/FinanceVisit"
                     },
+                    "pricing": {
+                        "$ref": "#/components/schemas/VisitPricing"
+                    },
                     "payment": {
                         "allOf": [
                             {
@@ -12446,6 +13048,7 @@
                     "occurred_at",
                     "patient",
                     "payment",
+                    "pricing",
                     "refund",
                     "status",
                     "type",
@@ -12865,6 +13468,53 @@
                 "required": [
                     "email",
                     "password"
+                ]
+            },
+            "LoyaltyPolicy": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "every_n": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "discount": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/Discount"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "version": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "discount",
+                    "key",
+                    "started_at",
+                    "updated_at"
                 ]
             },
             "ManualWriteoffCreateRequest": {
@@ -13566,6 +14216,15 @@
                     null
                 ]
             },
+            "OpeningBasisEnum": {
+                "enum": [
+                    "LEGACY",
+                    "INITIAL",
+                    "CARRY_FORWARD"
+                ],
+                "type": "string",
+                "description": "* `LEGACY` - Історична\n* `INITIAL` - Перша зміна\n* `CARRY_FORWARD` - Перенесення залишку"
+            },
             "OverviewAppointment": {
                 "type": "object",
                 "properties": {
@@ -14013,6 +14672,50 @@
                     "description": {
                         "type": "string",
                         "maxLength": 1000
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                }
+            },
+            "PatchedDiscountUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "percent": {
+                        "type": "integer",
+                        "maximum": 99,
+                        "minimum": 1
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                }
+            },
+            "PatchedLoyaltyPolicyUpdateRequest": {
+                "type": "object",
+                "properties": {
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "every_n": {
+                        "type": "integer",
+                        "maximum": 10000,
+                        "minimum": 1
+                    },
+                    "discount_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
                     },
                     "version": {
                         "type": "integer",
@@ -15095,6 +15798,18 @@
                     "payment_method": {
                         "$ref": "#/components/schemas/PaymentMethodEnum"
                     },
+                    "pricing_version": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "discount_action": {
+                        "$ref": "#/components/schemas/DiscountActionEnum"
+                    },
+                    "discount_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
                     "comment": {
                         "type": "string",
                         "default": "",
@@ -15102,7 +15817,9 @@
                     }
                 },
                 "required": [
+                    "discount_action",
                     "payment_method",
+                    "pricing_version",
                     "visit_id"
                 ],
                 "additionalProperties": false
@@ -16593,6 +17310,10 @@
                     "payment_handoff_requested": {
                         "type": "boolean"
                     },
+                    "discount_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
                     "follow_up": {
                         "allOf": [
                             {
@@ -16619,6 +17340,9 @@
                     "receivable": {
                         "$ref": "#/components/schemas/VisitReceivable"
                     },
+                    "pricing": {
+                        "$ref": "#/components/schemas/VisitPricing"
+                    },
                     "inventory_operation_id": {
                         "type": "string",
                         "format": "uuid",
@@ -16641,6 +17365,7 @@
                     "follow_up_appointment_id",
                     "inventory_operation_id",
                     "movement_ids",
+                    "pricing",
                     "receivable",
                     "replayed",
                     "visit"
@@ -16657,6 +17382,15 @@
                         "type": "string",
                         "format": "uuid"
                     },
+                    "service_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "maxItems": 20,
+                        "minItems": 1
+                    },
                     "specialist_id": {
                         "type": "integer",
                         "minimum": 1
@@ -16668,9 +17402,62 @@
                 },
                 "required": [
                     "room_id",
-                    "service_id",
                     "specialist_id",
                     "starts_at"
+                ]
+            },
+            "VisitLoyalty": {
+                "type": "object",
+                "properties": {
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "every_n": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "visit_number": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "eligible": {
+                        "type": "boolean"
+                    },
+                    "discount": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/VisitLoyaltyDiscount"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "discount",
+                    "eligible",
+                    "every_n",
+                    "is_active",
+                    "visit_number"
+                ]
+            },
+            "VisitLoyaltyDiscount": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "percent": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "percent"
                 ]
             },
             "VisitMaterialLine": {
@@ -17007,6 +17794,58 @@
                     "visit_id"
                 ]
             },
+            "VisitPricing": {
+                "type": "object",
+                "properties": {
+                    "gross_minor": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "discount_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "discount_name": {
+                        "type": "string"
+                    },
+                    "discount_percent": {
+                        "type": "integer",
+                        "maximum": 99,
+                        "minimum": 1,
+                        "nullable": true
+                    },
+                    "discount_source": {
+                        "type": "string"
+                    },
+                    "discount_amount_minor": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "net_minor": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "version": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "state": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "discount_amount_minor",
+                    "discount_id",
+                    "discount_name",
+                    "discount_percent",
+                    "discount_source",
+                    "gross_minor",
+                    "net_minor",
+                    "state",
+                    "version"
+                ]
+            },
             "VisitReceivable": {
                 "type": "object",
                 "properties": {
@@ -17164,6 +18003,9 @@
                     "editable": {
                         "type": "boolean"
                     },
+                    "loyalty": {
+                        "$ref": "#/components/schemas/VisitLoyalty"
+                    },
                     "started_at": {
                         "type": "string",
                         "format": "date-time"
@@ -17186,6 +18028,7 @@
                     "editable",
                     "has_no_complaints",
                     "id",
+                    "loyalty",
                     "material_lines",
                     "objective_examination",
                     "patient",

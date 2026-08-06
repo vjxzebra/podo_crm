@@ -5,13 +5,12 @@ import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
 import { Icon } from "../app/Icon";
 import { csrfHeaders } from "../auth/AuthContext";
-import type { CashShiftCloseResponse } from "./cashShiftTypes";
+import type { CashShiftCloseResponse, CashShiftProjection } from "./cashShiftTypes";
 import { CloseCashShiftDialog } from "./CloseCashShiftDialog";
 import { FinanceOperations, type FinanceCashActionState } from "./FinanceOperations";
 import { FinanceSubnav } from "./FinanceSubnav";
 
 type CashLedgerEntry = components["schemas"]["CashLedgerEntry"];
-type CashShiftProjection = components["schemas"]["CashShiftProjection"];
 
 const moneyFormatter = new Intl.NumberFormat("uk-UA", {
   style: "currency",
@@ -167,8 +166,8 @@ function OpenShiftDialog({
 
         <div className="finance-opening-balance">
           <span className="finance-opening-balance__icon" aria-hidden="true"><Icon name="finance" /></span>
-          <span><small>Початковий залишок</small><strong>{money(0)}</strong></span>
-          <p>Для MVP зміна завжди відкривається з нульовим початковим залишком. Довільна сума не вводиться.</p>
+          <span><small>Початковий залишок</small><strong>Автоматично</strong></span>
+          <p>Система перенесе фактично перераховану готівку з останньої закритої зміни. Для першої зміни залишок дорівнює нулю.</p>
         </div>
 
         {error === null ? null : <div className="form-message form-message--error" role="alert"><Icon name="warning" /><span>{error}</span></div>}
@@ -195,6 +194,9 @@ function ShiftSummary({
 }) {
   const totals = shift.totals;
   const entries = shift.entries;
+  const openingSource = shift.opening_source_shift === null
+    ? shift.opening_basis === "LEGACY" ? "історична зміна" : "перша зміна каси"
+    : `перенесено зі ${shift.opening_source_shift.public_number}`;
 
   return (
     <>
@@ -210,13 +212,13 @@ function ShiftSummary({
             <span className="avatar" aria-hidden="true">{shift.employee.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toLocaleUpperCase("uk")}</span>
             <span><small>Касир</small><strong>{shift.employee.name}</strong><small>{employeeRoleLabels[shift.employee.role] ?? shift.employee.role} · {shift.employee.email}</small></span>
           </div>
-          <button className="button button--danger" onClick={onCloseShift} ref={closeTriggerRef} type="button">Закрити зміну</button>
+          {shift.permissions.can_close ? <button className="button button--danger" onClick={onCloseShift} ref={closeTriggerRef} type="button">Закрити зміну</button> : <span className="finance-operations__shift-note"><Icon name="lock" />Зміну веде {shift.employee.name}</span>}
         </div>
       </section>
 
       <section className="finance-summary-grid" aria-label="Підсумки поточної касової зміни">
         <article className="panel finance-summary-card finance-summary-card--accent"><span>Виторг</span><strong>{money(totals.revenue_minor)}</strong><small>{totals.payment_count} {paymentCountLabel(totals.payment_count)} · без службових рухів</small></article>
-        <article className="panel finance-summary-card finance-summary-card--cash"><span>Очікувана готівка</span><strong>{money(totals.expected_cash_minor)}</strong><small>За ledger поточної зміни</small></article>
+        <article className="panel finance-summary-card finance-summary-card--cash"><span>Очікувана готівка</span><strong>{money(totals.expected_cash_minor)}</strong><small>Початок {money(shift.opening_cash_minor)} · {openingSource}</small></article>
         <article className="panel finance-summary-card"><span>Усього оплат</span><strong>{money(totals.payments_total_minor)}</strong><small>{totals.payment_count} проведено</small></article>
         <article className="panel finance-summary-card"><span>Повернення</span><strong>{money(totals.refunds_total_minor)}</strong><small>{totals.refund_count} проведено</small></article>
       </section>
@@ -298,8 +300,9 @@ export function FinancePage() {
       setError(result.error.message);
       return null;
     }
-    setShift(result.data.shift);
-    return result.data.shift;
+    const currentShift = result.data.shift;
+    setShift(currentShift);
+    return currentShift;
   }, []);
 
   useEffect(() => { void loadCurrent(); }, [loadCurrent]);
@@ -350,7 +353,11 @@ export function FinancePage() {
 
   const cashActionState: FinanceCashActionState = isLoading
     ? "loading"
-    : error !== null ? "error" : shift === null ? "closed" : "ready";
+    : error !== null
+      ? "error"
+      : shift === null
+        ? "closed"
+        : shift.permissions.can_mutate ? "ready" : "foreign";
 
   const closeCurrentDialog = useCallback(() => {
     setIsCloseDialogVisible(false);
@@ -384,7 +391,7 @@ export function FinancePage() {
 
       {isLoading ? <div aria-label="Завантаження поточної касової зміни" className="finance-loading" role="status"><span /><span /><span /></div> : null}
       {!isLoading && error !== null ? <section className="panel finance-state finance-state--error" role="alert"><Icon name="warning" /><div><h2>Не вдалося завантажити касову зміну</h2><p>{error}</p></div><button className="button button--secondary" onClick={() => { void loadCurrent(); }} type="button"><Icon name="refresh" />Повторити</button></section> : null}
-      {!isLoading && error === null && shift === null ? <section className="panel finance-state finance-state--empty" aria-labelledby="finance-no-shift-title"><span className="finance-state__icon"><Icon name="finance" /></span><div><p className="eyebrow">Початок робочого дня</p><h2 id="finance-no-shift-title">Касову зміну ще не відкрито</h2><p>Перед першою фінансовою операцією відкрийте власну зміну. Початковий залишок автоматично дорівнює нулю.</p></div><button className="button button--primary" onClick={(event) => { openTriggerRef.current = event.currentTarget; setOpenError(null); setIsOpenDialogVisible(true); }} ref={openTriggerRef} type="button"><Icon name="plus" />Відкрити касову зміну</button></section> : null}
+      {!isLoading && error === null && shift === null ? <section className="panel finance-state finance-state--empty" aria-labelledby="finance-no-shift-title"><span className="finance-state__icon"><Icon name="finance" /></span><div><p className="eyebrow">Початок робочого дня</p><h2 id="finance-no-shift-title">Касову зміну ще не відкрито</h2><p>Відкрийте спільну касу перед фінансовими операціями. Залишок автоматично переноситься з останньої закритої зміни.</p></div><button className="button button--primary" onClick={(event) => { openTriggerRef.current = event.currentTarget; setOpenError(null); setIsOpenDialogVisible(true); }} ref={openTriggerRef} type="button"><Icon name="plus" />Відкрити касову зміну</button></section> : null}
       {!isLoading && error === null && shift !== null ? <ShiftSummary closeTriggerRef={closeTriggerRef} headingRef={shiftHeadingRef} onCloseShift={() => { setIsCloseDialogVisible(true); }} shift={shift} /> : null}
 
       <FinanceOperations

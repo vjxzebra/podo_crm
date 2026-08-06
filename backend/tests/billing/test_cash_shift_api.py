@@ -85,6 +85,11 @@ def test_open_shift_returns_zero_projection_and_writes_same_transaction_audit(ro
         "email": actor.email,
         "role": role,
     }
+    assert body["drawer_key"] == "main"
+    assert body["opening_cash_minor"] == 0
+    assert body["opening_basis"] == "INITIAL"
+    assert body["opening_source_shift"] is None
+    assert body["permissions"] == {"can_mutate": True, "can_close": True}
     assert body["entries"] == []
     assert body["totals"] == {
         "operations_count": 0,
@@ -136,22 +141,112 @@ def test_duplicate_open_returns_stable_conflict_without_second_shift_or_audit() 
 
 
 @pytest.mark.django_db
-def test_current_shift_is_always_actor_owned_for_reception_and_admin() -> None:
+def test_current_shift_is_global_but_permissions_remain_owner_scoped() -> None:
     reception = create_user(email="reception@example.test", role=UserRole.RECEPTION)
     other = create_user(email="other@example.test", role=UserRole.RECEPTION)
     admin = create_user(email="admin@example.test", role=UserRole.ADMIN)
 
     reception_body = post_open(authenticated_client(reception)).json()
-    other_body = post_open(authenticated_client(other)).json()
+    other_open = post_open(authenticated_client(other))
 
     reception_current = (
         authenticated_client(reception).get("/api/v1/cash-shifts/current").json()["shift"]
     )
+    other_current = authenticated_client(other).get("/api/v1/cash-shifts/current").json()["shift"]
     admin_current = authenticated_client(admin).get("/api/v1/cash-shifts/current").json()["shift"]
 
+    assert other_open.status_code == 409
     assert reception_current["id"] == reception_body["id"]
-    assert reception_current["id"] != other_body["id"]
-    assert admin_current is None
+    assert other_current["id"] == reception_body["id"]
+    assert admin_current["id"] == reception_body["id"]
+    assert reception_current["permissions"] == {"can_mutate": True, "can_close": True}
+    assert other_current["permissions"] == {"can_mutate": False, "can_close": False}
+    assert admin_current["permissions"] == {"can_mutate": False, "can_close": True}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_closed_actual_is_carried_to_next_owner_without_becoming_ledger_or_revenue() -> None:
+    first_owner = create_user(email="first-owner@example.test", role=UserRole.RECEPTION)
+    next_owner = create_user(email="next-owner@example.test", role=UserRole.RECEPTION)
+    first_client = authenticated_client(first_owner)
+    next_client = authenticated_client(next_owner)
+    first = post_open(first_client).json()
+
+    deposit = first_client.post(
+        "/api/v1/cash-movements",
+        {"type": "DEPOSIT", "amount_minor": 10_000, "reason": "Розмін"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="opening-deposit",
+    )
+    assert deposit.status_code == 201, deposit.json()
+    close = first_client.post(
+        f"/api/v1/cash-shifts/{first['id']}/close",
+        {
+            "actual_cash_minor": 8_500,
+            "expected_operations_count": 1,
+            "cash_count_confirmed": True,
+            "comment": "Перерахований фактичний залишок",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="opening-close",
+    )
+    assert close.status_code == 201, close.json()
+
+    opened = post_open(next_client)
+    assert opened.status_code == 201, opened.json()
+    body = opened.json()
+    assert body["employee"]["id"] == next_owner.pk
+    assert body["opening_cash_minor"] == 8_500
+    assert body["opening_basis"] == "CARRY_FORWARD"
+    assert body["opening_source_shift"] == {
+        "id": first["id"],
+        "public_number": first["public_number"],
+    }
+    assert body["totals"]["expected_cash_minor"] == 8_500
+    assert body["totals"]["operations_count"] == 0
+    assert body["totals"]["revenue_minor"] == 0
+    assert body["totals"]["deposits_minor"] == 0
+
+    full_withdrawal = next_client.post(
+        "/api/v1/cash-movements",
+        {"type": "WITHDRAWAL", "amount_minor": 8_500, "reason": "Вилучення"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="opening-withdrawal",
+    )
+    assert full_withdrawal.status_code == 201, full_withdrawal.json()
+    rejected = next_client.post(
+        "/api/v1/cash-movements",
+        {"type": "WITHDRAWAL", "amount_minor": 1, "reason": "Зайве"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="opening-overdraft",
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["code"] == "insufficient_cash"
+
+
+@pytest.mark.django_db
+def test_foreign_reception_sees_owner_but_cannot_mutate_shared_shift() -> None:
+    owner = create_user(email="shared-owner@example.test", role=UserRole.RECEPTION)
+    foreign = create_user(email="shared-foreign@example.test", role=UserRole.RECEPTION)
+    assert post_open(authenticated_client(owner)).status_code == 201
+    foreign_client = authenticated_client(foreign)
+
+    current = foreign_client.get("/api/v1/cash-shifts/current")
+    movement = foreign_client.post(
+        "/api/v1/cash-movements",
+        {"type": "DEPOSIT", "amount_minor": 100, "reason": "Чужий рух"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="foreign-movement",
+    )
+
+    assert current.status_code == 200
+    assert current.json()["shift"]["employee"]["id"] == owner.pk
+    assert current.json()["shift"]["permissions"] == {
+        "can_mutate": False,
+        "can_close": False,
+    }
+    assert movement.status_code == 409
+    assert movement.json()["code"] == "cash_shift_required"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -273,12 +368,15 @@ def test_open_shift_rolls_back_if_audit_write_fails() -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_concurrent_open_creates_exactly_one_shift_and_audit() -> None:
-    actor = create_user(email="reception@example.test", role=UserRole.RECEPTION)
+    actors = [
+        create_user(email=f"reception-{index}@example.test", role=UserRole.RECEPTION)
+        for index in range(2)
+    ]
     barrier = Barrier(2)
 
     def submit(_: int) -> tuple[int, str]:
         close_old_connections()
-        request_actor = User.objects.get(pk=actor.pk)
+        request_actor = User.objects.get(pk=actors[_].pk)
         barrier.wait(timeout=5)
         try:
             response = post_open(authenticated_client(request_actor))
@@ -293,6 +391,7 @@ def test_concurrent_open_creates_exactly_one_shift_and_audit() -> None:
     assert {result for _, result in results} == {"created", "cash_shift_already_open"}
     assert CashShift.objects.count() == 1
     assert AuditEvent.objects.filter(action=AuditAction.CASH_SHIFT_OPENED).count() == 1
+    assert CashShift.objects.get().employee_id in {actor.pk for actor in actors}
 
 
 @pytest.mark.django_db
@@ -362,6 +461,11 @@ def test_openapi_freezes_cash_shift_component_names_and_contract() -> None:
         "public_number",
         "status",
         "employee",
+        "drawer_key",
+        "opening_cash_minor",
+        "opening_basis",
+        "opening_source_shift",
+        "permissions",
         "opened_at",
         "closed_at",
         "totals",

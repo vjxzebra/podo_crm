@@ -689,9 +689,28 @@ export const visitFixture = {
   photos: [],
   recommendations: [],
   editable: true,
+  loyalty: {
+    is_active: true,
+    every_n: 5,
+    visit_number: 3,
+    eligible: false,
+    discount: null,
+  },
   started_at: "2026-07-21T08:05:00Z",
   updated_at: "2026-07-21T08:05:00Z",
   completed_at: null,
+} as const;
+
+export const loyaltyEligibleVisitLoyalty = {
+  is_active: true,
+  every_n: 5,
+  visit_number: 5,
+  eligible: true,
+  discount: {
+    id: "70190000-0000-4000-8000-000000000001",
+    name: "Постійний клієнт",
+    percent: 10,
+  },
 } as const;
 
 export const visitPhotoBeforeFixture = {
@@ -815,6 +834,14 @@ export const cashShiftFixture = {
     email: "admin@example.test",
     role: "admin",
   },
+  drawer_key: "main",
+  opening_cash_minor: 0,
+  opening_basis: "INITIAL",
+  opening_source_shift: null,
+  permissions: {
+    can_mutate: true,
+    can_close: true,
+  },
   opened_at: "2026-07-22T07:15:00Z",
   totals: {
     operations_count: 2,
@@ -869,6 +896,16 @@ export const emptyCashShiftFixture = {
   entries: [],
 };
 
+export const financeReceptionDiscount = {
+  id: "70180000-0000-4000-8000-000000000001",
+  name: "Постійний клієнт",
+  percent: 10,
+  is_active: true,
+  version: 1,
+  created_at: "2026-07-22T07:00:00Z",
+  updated_at: "2026-07-22T07:00:00Z",
+} as const;
+
 export const financeOpenOperation = {
   id: "70110000-0000-4000-8000-000000000001",
   type: "PAYMENT",
@@ -907,6 +944,17 @@ export const financeOpenOperation = {
       },
     ],
   },
+  pricing: {
+    gross_minor: 135000,
+    discount_id: null,
+    discount_name: "",
+    discount_percent: null,
+    discount_source: "",
+    discount_amount_minor: 0,
+    net_minor: 135000,
+    version: 3,
+    state: "OPEN",
+  },
   payment: null,
   refund: null,
 } as const;
@@ -938,6 +986,17 @@ export const financePaidOperation = {
       unit_price_minor: 250000,
       line_total_minor: 250000,
     }],
+  },
+  pricing: {
+    gross_minor: 250000,
+    discount_id: null,
+    discount_name: "",
+    discount_percent: null,
+    discount_source: "",
+    discount_amount_minor: 0,
+    net_minor: 250000,
+    version: 4,
+    state: "SETTLED",
   },
   payment: {
     id: "70150000-0000-4000-8000-000000000001",
@@ -971,6 +1030,17 @@ export const financeZeroOperation = {
     completed_at: "2026-07-22T08:30:00Z",
     total_minor: 0,
     services: [],
+  },
+  pricing: {
+    gross_minor: 0,
+    discount_id: null,
+    discount_name: "",
+    discount_percent: null,
+    discount_source: "",
+    discount_amount_minor: 0,
+    net_minor: 0,
+    version: 2,
+    state: "SETTLED",
   },
   payment: null,
   refund: null,
@@ -1146,6 +1216,11 @@ export const financePaymentResult = {
     ...financeOpenOperation,
     status: "PAID",
     occurred_at: "2026-07-22T10:45:00Z",
+    pricing: {
+      ...financeOpenOperation.pricing,
+      version: 4,
+      state: "SETTLED",
+    },
     payment: {
       id: "70150000-0000-4000-8000-000000000002",
       ledger_entry_id: "70160000-0000-4000-8000-000000000002",
@@ -1414,6 +1489,9 @@ beforeEach(() => {
       }
       if (url.includes("/api/v1/services") && method === "GET") {
         return Promise.resolve(jsonResponse({ services: [clinicService] }));
+      }
+      if (new URL(url).pathname === "/api/v1/discounts" && method === "GET") {
+        return Promise.resolve(jsonResponse({ discounts: [financeReceptionDiscount] }));
       }
       if (url.includes("/api/v1/appointment-status-configs") && method === "GET") {
         return Promise.resolve(jsonResponse({ statuses: clinicStatuses }));

@@ -919,7 +919,7 @@ def _create_finance_payments(
         },
     )
     receivables = list(
-        Receivable.objects.select_related("visit")
+        Receivable.objects.select_related("visit", "visit__pricing")
         .filter(status="OPEN")
         .order_by("visit__completed_at", "pk")
     )
@@ -934,6 +934,8 @@ def _create_finance_payments(
             data={
                 "visit_id": receivable.visit_id,
                 "payment_method": methods[index % len(methods)],
+                "pricing_version": receivable.visit.pricing.version,
+                "discount_action": "KEEP",
                 "comment": "Демонстраційна повна оплата.",
             },
         )

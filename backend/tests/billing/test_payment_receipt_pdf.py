@@ -83,6 +83,9 @@ def test_receipt_is_two_page_cyrillic_a4_pdf_from_payment_snapshots() -> None:
     assert "1 450,00 грн" in first_page
     assert "Картка" in first_page
     assert "БЛАНК РЕКОМЕНДАЦІЙ" in second_page
+    assert "Рекомендована дата наступного візиту" not in first_page
+    assert "Рекомендована дата наступного візиту" in second_page
+    assert "____ / ____ / ______" in second_page
     assert "Щодня наносити доглядовий крем" in second_page
     assert "скарг" not in (first_page + second_page).lower()
 
@@ -109,6 +112,44 @@ def test_receipt_supports_inline_print_and_survives_unavailable_optional_logo() 
     assert response.status_code == 200
     assert response["Content-Disposition"].startswith("inline;")
     assert response.content.startswith(b"%PDF-")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_blank_recommended_date_field_survives_empty_recommendations_and_refund() -> None:
+    reception, payment = _paid_receipt(payment_method=PaymentMethod.CARD)
+    client = authenticated_client(reception)
+    VisitRecommendation.objects.filter(visit=payment.receivable.visit).delete()
+
+    without_recommendations = client.get(
+        f"/api/v1/payments/{payment.pk}/receipt",
+        HTTP_ACCEPT="application/pdf",
+    )
+    assert without_recommendations.status_code == 200
+    without_reader = PdfReader(BytesIO(without_recommendations.content))
+    assert len(without_reader.pages) == 2
+    without_text = without_reader.pages[1].extract_text()
+    assert "Рекомендації не внесені." in without_text
+    assert "Рекомендована дата наступного візиту" in without_text
+    assert "____ / ____ / ______" in without_text
+
+    refunded = client.post(
+        f"/api/v1/payments/{payment.pk}/refunds",
+        {"reason": "Повернення для перевірки квитанції"},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="receipt-refund-date-field",
+    )
+    assert refunded.status_code == 201, refunded.json()
+    after_refund = client.get(
+        f"/api/v1/payments/{payment.pk}/receipt",
+        HTTP_ACCEPT="application/pdf",
+    )
+    assert after_refund.status_code == 200
+    refunded_reader = PdfReader(BytesIO(after_refund.content))
+    assert len(refunded_reader.pages) == 2
+    assert "ОПЛАТУ ПОВНІСТЮ ПОВЕРНЕНО" in refunded_reader.pages[0].extract_text()
+    refunded_second_page = refunded_reader.pages[1].extract_text()
+    assert "Рекомендована дата наступного візиту" in refunded_second_page
+    assert "____ / ____ / ______" in refunded_second_page
 
 
 @pytest.mark.django_db

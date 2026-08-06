@@ -13,6 +13,7 @@ import {
   financeOperationsFixture,
   financePaidOperation,
   financePaymentResult,
+  financeReceptionDiscount,
   financeRefundResult,
   financeWithdrawalResult,
   jsonResponse,
@@ -60,6 +61,7 @@ function mockFinanceApi({
   openShift = responseFactory(emptyCashShiftFixture, 201),
   operations,
   operationExports = [csvResponse()],
+  discounts = responseFactory({ discounts: [financeReceptionDiscount] }),
   payment = responseFactory(financePaymentResult, 201),
   receipt = pdfResponse(),
   refund = responseFactory(financeRefundResult, 201),
@@ -70,6 +72,7 @@ function mockFinanceApi({
   readonly openShift?: ResponseFactory;
   readonly operations?: ResponseFactory;
   readonly operationExports?: readonly ResponseFactory[];
+  readonly discounts?: ResponseFactory;
   readonly payment?: ResponseFactory;
   readonly receipt?: ResponseFactory;
   readonly refund?: ResponseFactory;
@@ -110,6 +113,9 @@ function mockFinanceApi({
         correlation_id: "test",
       }, 404));
     }
+    if (url.pathname === "/api/v1/discounts" && request.method === "GET") {
+      return discounts(request);
+    }
     if (url.pathname === "/api/v1/payments" && request.method === "POST") {
       return payment(request);
     }
@@ -149,7 +155,7 @@ describe("TP-701 current cash shift", () => {
     expect(await screen.findByRole("heading", { name: "Поточна касова зміна" })).toBeInTheDocument();
   });
 
-  it("confirms a zero-balance opening with focus trap, Escape and focus return", async () => {
+  it("confirms an automatic carry-forward opening with focus trap, Escape and focus return", async () => {
     mockFinanceApi({ current: [responseFactory({ shift: null })] });
     render(<FinancePage />);
 
@@ -163,6 +169,7 @@ describe("TP-701 current cash shift", () => {
     expect(cancel).toHaveFocus();
     expect(document.body.style.overflow).toBe("hidden");
     expect(within(dialog).queryByRole("spinbutton")).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/перенесе фактично перераховану готівку/)).toBeInTheDocument();
     close.focus();
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
     expect(confirm).toHaveFocus();
@@ -243,6 +250,37 @@ describe("TP-701 current cash shift", () => {
     expect(screen.getByRole("button", { name: "− Вилучення" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Закрити зміну" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Експортувати CSV" })).toBeInTheDocument();
+  });
+
+  it("shows the shared shift owner and carried opening while blocking a foreign reception", async () => {
+    const sharedShift = {
+      ...cashShiftFixture,
+      employee: {
+        id: adminSession.user.id,
+        name: adminSession.user.display_name,
+        email: adminSession.user.email,
+        role: adminSession.user.role,
+      },
+      opening_cash_minor: 12_500,
+      opening_basis: "CARRY_FORWARD",
+      opening_source_shift: {
+        id: "840f933c-5a86-468a-8862-010166bca111",
+        public_number: "CSH-PREVIOUS",
+      },
+      permissions: { can_mutate: false, can_close: false },
+      totals: { ...cashShiftFixture.totals, expected_cash_minor: 62_500 },
+    } as const;
+    mockFinanceApi({
+      current: [responseFactory({ shift: sharedShift })],
+      session: receptionSession,
+    });
+    render(<FinancePage />);
+
+    expect(await screen.findByText(/CSH-PREVIOUS/)).toBeInTheDocument();
+    expect(screen.getByText(`Зміну веде ${adminSession.user.display_name}`)).toBeInTheDocument();
+    expect(screen.getByText("Касові операції проводить власник поточної зміни")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Закрити зміну" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Провести оплату" })).not.toBeInTheDocument();
   });
 });
 
@@ -327,7 +365,7 @@ describe("TP-702 finance operations and full payment", () => {
     expect(within(dialog).queryByRole("button", { name: "Провести оплату" })).not.toBeInTheDocument();
   });
 
-  it("posts only visit, one method and optional comment with one stable key", async () => {
+  it("keeps authoritative pricing and posts its version with one stable key", async () => {
     const paymentRequests: Request[] = [];
     const operationRequests: Request[] = [];
     mockFinanceApi({
@@ -351,8 +389,11 @@ describe("TP-702 finance operations and full payment", () => {
 
     expect(within(dialog).getByText("Медичний педикюр")).toBeInTheDocument();
     expect(within(dialog).getAllByText(/1.?350,00/).length).toBeGreaterThan(0);
+    const pricing = within(dialog).getByRole("group", { name: "Розрахунок оплати" });
+    expect(within(pricing).getByText("№ 3")).toBeInTheDocument();
+    expect(within(pricing).getAllByText("Без знижки")).toHaveLength(2);
     expect(within(dialog).queryByRole("spinbutton")).not.toBeInTheDocument();
-    expect(within(dialog).getAllByRole("radio")).toHaveLength(3);
+    expect(within(within(dialog).getByRole("group", { name: "Спосіб оплати" })).getAllByRole("radio")).toHaveLength(3);
     fireEvent.click(within(dialog).getByRole("radio", { name: "Картка" }));
     fireEvent.change(within(dialog).getByPlaceholderText("Додаткова інформація про оплату"), { target: { value: "Повна оплата" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Провести повну оплату" }));
@@ -365,6 +406,8 @@ describe("TP-702 finance operations and full payment", () => {
     expect(await request?.clone().json()).toEqual({
       visit_id: financeOpenOperation.visit.id,
       payment_method: "CARD",
+      pricing_version: financeOpenOperation.pricing.version,
+      discount_action: "KEEP",
       comment: "Повна оплата",
     });
     const receiptDialog = await screen.findByRole("dialog", { name: "Квитанція готова" });
@@ -373,6 +416,44 @@ describe("TP-702 finance operations and full payment", () => {
     fireEvent.click(within(receiptDialog).getByRole("button", { name: "Готово" }));
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Фінансові операції" })).toHaveFocus();
+    });
+  });
+
+  it("replaces, rather than stacks, the current discount and posts SET with its id", async () => {
+    const paymentRequests: Request[] = [];
+    mockFinanceApi({
+      payment: (request) => {
+        paymentRequests.push(request);
+        return Promise.resolve(jsonResponse(financePaymentResult, 201));
+      },
+    });
+    render(<FinancePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Оплатити / }));
+    const dialog = screen.getByRole("dialog", { name: "Провести оплату прийому" });
+    const replaceDiscount = await within(dialog).findByRole("radio", { name: /Замінити знижку/ });
+    fireEvent.click(replaceDiscount);
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Активна знижка" }), {
+      target: { value: financeReceptionDiscount.id },
+    });
+
+    const pricing = within(dialog).getByRole("group", { name: "Розрахунок оплати" });
+    expect(within(pricing).getByText(/Постійний клієнт · 10% · −135,00/)).toBeInTheDocument();
+    expect(within(pricing).getByText(/1.?215,00/)).toBeInTheDocument();
+    expect(within(pricing).getByText("Рецепція")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Картка" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Провести повну оплату" }));
+
+    await screen.findByRole("dialog", { name: "Квитанція готова" });
+    expect(paymentRequests).toHaveLength(1);
+    expect(await paymentRequests[0]?.clone().json()).toEqual({
+      visit_id: financeOpenOperation.visit.id,
+      payment_method: "CARD",
+      pricing_version: financeOpenOperation.pricing.version,
+      discount_action: "SET",
+      discount_id: financeReceptionDiscount.id,
+      comment: "",
     });
   });
 
@@ -439,8 +520,9 @@ describe("TP-702 finance operations and full payment", () => {
     expect(paymentRequests[0]?.headers.get("Idempotency-Key")).toBe(paymentRequests[1]?.headers.get("Idempotency-Key"));
   });
 
-  it("refreshes authoritative list and shift on an already-paid conflict", async () => {
+  it("refreshes authoritative operations and blocks duplicate payment on a stale pricing conflict", async () => {
     let operationLoads = 0;
+    const paymentRequests: Request[] = [];
     mockFinanceApi({
       current: [responseFactory({ shift: cashShiftFixture }), responseFactory({ shift: cashShiftFixture })],
       operations: (request) => {
@@ -448,12 +530,15 @@ describe("TP-702 finance operations and full payment", () => {
         const status = new URL(request.url).searchParams.get("status");
         return Promise.resolve(jsonResponse(status === "OPEN" ? { operations: [financeOpenOperation], next_cursor: null } : financeOperationsFixture));
       },
-      payment: responseFactory({
-        code: "receivable_already_paid",
-        message: "Прийом уже оплачено.",
-        fields: {},
-        correlation_id: "payment-conflict",
-      }, 409),
+      payment: (request) => {
+        paymentRequests.push(request);
+        return Promise.resolve(jsonResponse({
+          code: "pricing_version_conflict",
+          message: "Розрахунок уже змінився. Оновіть дані та повторіть оплату.",
+          fields: { pricing_version: ["Версія розрахунку застаріла."] },
+          correlation_id: "pricing-conflict",
+        }, 409));
+      },
     });
     render(<FinancePage />);
     fireEvent.click(await screen.findByRole("button", { name: /^Оплатити / }));
@@ -461,10 +546,13 @@ describe("TP-702 finance operations and full payment", () => {
     fireEvent.click(within(dialog).getByRole("radio", { name: "Переказ" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Провести повну оплату" }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Прийом уже оплачено");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Розрахунок уже змінився");
     expect(within(dialog).getByRole("button", { name: "Обрати інший прийом" })).toBeInTheDocument();
     expect(operationLoads).toBeGreaterThanOrEqual(2);
-    expect(within(dialog).getByRole("button", { name: "Провести повну оплату" })).toBeDisabled();
+    const submit = within(dialog).getByRole("button", { name: "Провести повну оплату" });
+    expect(submit).toBeDisabled();
+    fireEvent.click(submit);
+    expect(paymentRequests).toHaveLength(1);
     fireEvent.click(within(dialog).getByRole("button", { name: "Обрати інший прийом" }));
     expect(within(dialog).getByRole("combobox", { name: "Неоплачений прийом" })).toHaveValue("");
     await waitFor(() => { expect(within(dialog).getByRole("combobox", { name: "Неоплачений прийом" })).toHaveFocus(); });

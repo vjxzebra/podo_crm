@@ -11,6 +11,7 @@ from apps.billing.services import close_cash_shift
 
 MIGRATION_OLD = [("billing", "0004_refund_cash_adjustments")]
 MIGRATION_NEW = [("billing", "0005_cash_shift_close_history")]
+MIGRATION_LATEST = [("billing", "0010_pricing_contract")]
 
 
 @pytest.mark.django_db(transaction=True)
@@ -109,7 +110,7 @@ def test_forward_backfills_typed_actor_labels_while_append_only_trigger_is_resto
         executor.migrate(MIGRATION_OLD)
     finally:
         executor = MigrationExecutor(connection)
-        executor.migrate(MIGRATION_NEW)
+        executor.migrate(MIGRATION_LATEST)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -133,13 +134,17 @@ def test_reverse_migration_rejects_loss_of_closed_reconciliation_metadata() -> N
         },
     )
 
-    executor = MigrationExecutor(connection)
-    with pytest.raises(RuntimeError, match="Cannot reverse billing.0005"):
-        executor.migrate(MIGRATION_OLD)
+    try:
+        executor = MigrationExecutor(connection)
+        with pytest.raises(RuntimeError, match="Cannot reverse billing.0008"):
+            executor.migrate(MIGRATION_OLD)
 
-    assert MigrationExecutor(connection).loader.applied_migrations.__contains__(
-        ("billing", "0005_cash_shift_close_history")
-    )
+        applied = MigrationExecutor(connection).loader.applied_migrations
+        assert ("billing", "0008_cash_drawer_contract") in applied
+        assert ("billing", "0009_pricing_expand") not in applied
+        assert ("billing", "0010_pricing_contract") not in applied
+    finally:
+        MigrationExecutor(connection).migrate(MIGRATION_LATEST)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -178,4 +183,4 @@ def test_forward_preflight_rejects_legacy_closed_shift_without_inventing_metadat
                 "DROP TRIGGER IF EXISTS billing_cash_shift_lifecycle ON billing_cashshift"
             )
             cursor.execute("DELETE FROM billing_cashshift WHERE id = %s", [shift_id])
-        MigrationExecutor(connection).migrate(MIGRATION_NEW)
+        MigrationExecutor(connection).migrate(MIGRATION_LATEST)

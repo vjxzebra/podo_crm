@@ -50,6 +50,12 @@ class CashShiftStatus(models.TextChoices):
     CLOSED = "CLOSED", "Закрита"
 
 
+class CashShiftOpeningBasis(models.TextChoices):
+    LEGACY = "LEGACY", "Історична"
+    INITIAL = "INITIAL", "Перша зміна"
+    CARRY_FORWARD = "CARRY_FORWARD", "Перенесення залишку"
+
+
 class CashLedgerEntryKind(models.TextChoices):
     PAYMENT = "PAYMENT", "Оплата"
     REFUND = "REFUND", "Повернення"
@@ -152,12 +158,22 @@ class Receivable(models.Model):
                 .objects.only("visit_id", "amount_minor", "status", "created_at")
                 .get(pk=self.pk)
             )
-            if (
-                loaded.visit_id != self.visit_id
-                or loaded.amount_minor != self.amount_minor
-                or loaded.created_at != self.created_at
-            ):
-                raise ImmutableReceivableError("Receivable visit and amount are immutable.")
+            if loaded.visit_id != self.visit_id or loaded.created_at != self.created_at:
+                raise ImmutableReceivableError("Receivable identity is immutable.")
+            amount_changed = loaded.amount_minor != self.amount_minor
+            if amount_changed:
+                can_reprice = (
+                    loaded.status == ReceivableStatus.OPEN
+                    and self.status == ReceivableStatus.OPEN
+                    and self.amount_minor > 0
+                    and not self.payment_records.exists()
+                )
+                if not can_reprice:
+                    raise ImmutableReceivableError(
+                        "Only an unpaid open receivable can be repriced."
+                    )
+                super().save(*args, **kwargs)
+                return
             allowed_transition = (
                 loaded.status == ReceivableStatus.OPEN and self.status == ReceivableStatus.PAID
             ) or (
@@ -184,6 +200,174 @@ class Receivable(models.Model):
         return super().from_db(db, field_names, values)
 
 
+class PricingState(models.TextChoices):
+    OPEN = "OPEN", "Очікує розрахунку"
+    SETTLED = "SETTLED", "Зафіксовано"
+
+
+class DiscountSource(models.TextChoices):
+    LOYALTY = "LOYALTY", "Програма лояльності"
+    PODOLOGIST = "PODOLOGIST", "Подолог"
+    RECEPTION = "RECEPTION", "Рецепція"
+
+
+class VisitPricingQuerySet(models.QuerySet["VisitPricing"]):
+    def update(self, **kwargs: Any) -> int:
+        raise ImmutablePaymentError("Visit pricing must change through the billing service.")
+
+    def delete(self) -> tuple[int, dict[str, int]]:
+        raise ImmutablePaymentError("Visit pricing cannot be deleted.")
+
+
+class VisitPricing(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    visit = models.OneToOneField(
+        "visits.Visit",
+        on_delete=models.PROTECT,
+        related_name="pricing",
+    )
+    gross_minor = models.PositiveBigIntegerField(editable=False)
+    discount = models.ForeignKey(
+        "discounts.Discount",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="visit_pricings",
+    )
+    discount_name_snapshot = models.CharField(max_length=120, blank=True, editable=False)
+    discount_percent_snapshot = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    discount_source = models.CharField(
+        max_length=16,
+        choices=DiscountSource.choices,
+        blank=True,
+        editable=False,
+    )
+    applied_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="applied_visit_discounts",
+        editable=False,
+    )
+    discount_amount_minor = models.PositiveBigIntegerField(default=0, editable=False)
+    net_minor = models.PositiveBigIntegerField(editable=False)
+    is_legacy_backfill = models.BooleanField(default=False, editable=False)
+    version = models.PositiveIntegerField(default=1)
+    state = models.CharField(max_length=16, choices=PricingState.choices)
+    settled_at = models.DateTimeField(null=True, blank=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = VisitPricingQuerySet.as_manager()
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(version__gt=0),
+                name="billing_pricing_version_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(discount_amount_minor__lte=models.F("gross_minor")),
+                name="billing_pricing_discount_lte_gross",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    net_minor=models.F("gross_minor") - models.F("discount_amount_minor")
+                ),
+                name="billing_pricing_net_formula",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        discount__isnull=True,
+                        discount_name_snapshot="",
+                        discount_percent_snapshot__isnull=True,
+                        discount_source="",
+                        discount_amount_minor=0,
+                        applied_by__isnull=True,
+                    )
+                    | models.Q(
+                        gross_minor__gt=0,
+                        discount__isnull=False,
+                        discount_percent_snapshot__gte=1,
+                        discount_percent_snapshot__lte=99,
+                        discount_source__in=DiscountSource.values,
+                    )
+                ),
+                name="billing_pricing_discount_consistent",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(state=PricingState.OPEN, settled_at__isnull=True)
+                    | models.Q(state=PricingState.SETTLED, settled_at__isnull=False)
+                ),
+                name="billing_pricing_state_consistent",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.visit.public_number} · {self.net_minor}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            loaded = type(self).objects.get(pk=self.pk)
+            if (
+                loaded.visit_id != self.visit_id
+                or loaded.gross_minor != self.gross_minor
+                or loaded.is_legacy_backfill != self.is_legacy_backfill
+                or loaded.created_at != self.created_at
+            ):
+                raise ImmutablePaymentError(
+                    "Visit pricing identity, gross and provenance are immutable."
+                )
+            if loaded.state == PricingState.SETTLED:
+                raise ImmutablePaymentError("Settled visit pricing is immutable.")
+            if self.state not in (PricingState.OPEN, PricingState.SETTLED):
+                raise ImmutablePaymentError("Invalid visit pricing lifecycle transition.")
+            if self.version != loaded.version + 1:
+                raise ImmutablePaymentError("Visit pricing version must advance exactly once.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        raise ImmutablePaymentError("Visit pricing cannot be deleted.")
+
+
+class CashDrawer(models.Model):
+    """The clinic's one physical cash drawer."""
+
+    MAIN_KEY = "main"
+
+    key = models.CharField(primary_key=True, max_length=32, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(key="main"),
+                name="billing_cash_drawer_is_main",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.key
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if self.key != self.MAIN_KEY:
+            raise ImmutableCashShiftError("Only the main clinic cash drawer is supported.")
+        if not self._state.adding:
+            raise ImmutableCashShiftError("The clinic cash drawer is immutable.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        raise ImmutableCashShiftError("The clinic cash drawer cannot be deleted.")
+
+
 class CashShift(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     public_number = models.CharField(max_length=24, unique=True, editable=False)
@@ -195,6 +379,29 @@ class CashShift(models.Model):
     employee_name_snapshot = models.CharField(max_length=255, default="", editable=False)
     employee_email_snapshot = models.EmailField(default="", editable=False)
     employee_role_snapshot = models.CharField(max_length=20, default="", editable=False)
+    drawer = models.ForeignKey(
+        CashDrawer,
+        db_column="drawer_key",
+        default=CashDrawer.MAIN_KEY,
+        on_delete=models.PROTECT,
+        related_name="shifts",
+        editable=False,
+    )
+    opening_cash_minor = models.PositiveBigIntegerField(default=0, editable=False)
+    opening_source_shift = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="carried_forward_to_shifts",
+        editable=False,
+    )
+    opening_basis = models.CharField(
+        max_length=16,
+        choices=CashShiftOpeningBasis.choices,
+        default=CashShiftOpeningBasis.INITIAL,
+        editable=False,
+    )
     status = models.CharField(
         max_length=16,
         choices=CashShiftStatus.choices,
@@ -232,11 +439,22 @@ class CashShift(models.Model):
 
     class Meta:
         ordering = ("-opened_at", "-id")
+        indexes = [
+            models.Index(
+                fields=("drawer", "status", "-closed_at", "-id"),
+                name="billing_drawer_state_idx",
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
-                fields=("employee",),
+                fields=("drawer",),
                 condition=models.Q(status=CashShiftStatus.OPEN),
-                name="billing_one_open_cash_shift_per_employee",
+                name="billing_one_open_cash_shift_per_drawer",
+            ),
+            models.UniqueConstraint(
+                fields=("opening_source_shift",),
+                condition=models.Q(opening_source_shift__isnull=False),
+                name="billing_cash_shift_source_used_once",
             ),
             models.UniqueConstraint(
                 fields=("closed_by", "close_idempotency_key"),
@@ -303,6 +521,32 @@ class CashShift(models.Model):
                 ),
                 name="billing_cash_shift_discrepancy_comment",
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        opening_basis=CashShiftOpeningBasis.LEGACY,
+                        opening_cash_minor=0,
+                        opening_source_shift__isnull=True,
+                    )
+                    | models.Q(
+                        opening_basis=CashShiftOpeningBasis.INITIAL,
+                        opening_cash_minor=0,
+                        opening_source_shift__isnull=True,
+                    )
+                    | models.Q(
+                        opening_basis=CashShiftOpeningBasis.CARRY_FORWARD,
+                        opening_source_shift__isnull=False,
+                    )
+                ),
+                name="billing_cash_shift_opening_mode",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(opening_source_shift__isnull=True)
+                    | ~models.Q(opening_source_shift=models.F("id"))
+                ),
+                name="billing_cash_shift_source_not_self",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -317,6 +561,10 @@ class CashShift(models.Model):
                 "employee_name_snapshot",
                 "employee_email_snapshot",
                 "employee_role_snapshot",
+                "drawer_id",
+                "opening_cash_minor",
+                "opening_source_shift_id",
+                "opening_basis",
                 "opened_at",
             )
             if any(getattr(loaded, field) != getattr(self, field) for field in immutable_fields):
@@ -326,6 +574,7 @@ class CashShift(models.Model):
             if self.status != CashShiftStatus.CLOSED:
                 raise ImmutableCashShiftError("An open cash shift can only transition to closed.")
         else:
+            CashDrawer.objects.get_or_create(key=CashDrawer.MAIN_KEY)
             if not self.employee_name_snapshot:
                 self.employee_name_snapshot = self.employee.display_name
             if not self.employee_email_snapshot:
@@ -510,6 +759,23 @@ class Payment(models.Model):
     visit_completed_at_snapshot = models.DateTimeField(editable=False)
     visit_payment_handoff_requested_snapshot = models.BooleanField(editable=False)
     visit_total_minor_snapshot = models.PositiveBigIntegerField(editable=False)
+    gross_total_minor_snapshot = models.PositiveBigIntegerField(editable=False)
+    discount_id_snapshot = models.UUIDField(null=True, blank=True, editable=False)
+    discount_name_snapshot = models.CharField(max_length=120, blank=True, editable=False)
+    discount_percent_snapshot = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    discount_source_snapshot = models.CharField(
+        max_length=16,
+        choices=DiscountSource.choices,
+        blank=True,
+        editable=False,
+    )
+    discount_amount_minor_snapshot = models.PositiveBigIntegerField(editable=False)
+    net_total_minor_snapshot = models.PositiveBigIntegerField(editable=False)
+    pricing_snapshot_is_legacy = models.BooleanField(default=False, editable=False)
     specialist_id_snapshot = models.PositiveBigIntegerField(editable=False)
     specialist_name_snapshot = models.CharField(max_length=255, editable=False)
     employee_name_snapshot = models.CharField(max_length=255, editable=False)
@@ -564,6 +830,36 @@ class Payment(models.Model):
                     & ~models.Q(services_search_snapshot="")
                 ),
                 name="billing_payment_snapshot_identity_nonempty",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    net_total_minor_snapshot=(
+                        models.F("gross_total_minor_snapshot")
+                        - models.F("discount_amount_minor_snapshot")
+                    ),
+                    visit_total_minor_snapshot=models.F("net_total_minor_snapshot"),
+                    net_total_minor_snapshot__gt=0,
+                ),
+                name="billing_payment_pricing_formula",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        discount_id_snapshot__isnull=True,
+                        discount_name_snapshot="",
+                        discount_percent_snapshot__isnull=True,
+                        discount_source_snapshot="",
+                        discount_amount_minor_snapshot=0,
+                    )
+                    | models.Q(
+                        discount_id_snapshot__isnull=False,
+                        discount_percent_snapshot__gte=1,
+                        discount_percent_snapshot__lte=99,
+                        discount_source_snapshot__in=DiscountSource.values,
+                    )
+                    & ~models.Q(discount_name_snapshot="")
+                ),
+                name="billing_payment_discount_snapshot_consistent",
             ),
         ]
 

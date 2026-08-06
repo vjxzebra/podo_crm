@@ -7,7 +7,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from apps.accounts.models import User
-from apps.billing.models import CashShift, Payment, Receivable, Refund
+from apps.billing.models import CashShift, Payment, Receivable, Refund, VisitPricing
 from apps.clinic.models import (
     AppointmentStatusConfig,
     ClinicProfile,
@@ -100,6 +100,11 @@ def test_small_demo_seed_is_cross_domain_secret_safe_and_idempotent() -> None:
     assert Receivable.objects.exists()
     assert Payment.objects.exists()
     assert Refund.objects.exists()
+    completed_visit_count = Visit.objects.filter(status="COMPLETED").count()
+    assert VisitPricing.objects.filter(visit__status="COMPLETED").count() == completed_visit_count
+    assert Receivable.objects.filter(visit__status="COMPLETED").count() == completed_visit_count
+    assert not VisitPricing.objects.filter(is_legacy_backfill=True).exists()
+    assert not Payment.objects.filter(pricing_snapshot_is_legacy=True).exists()
     assert CashShift.objects.count() == 2
     assert WorkItem.objects.count() == 16
     assert Notification.objects.count() >= 16

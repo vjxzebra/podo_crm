@@ -14,6 +14,7 @@ from apps.clinic.models import AppointmentStatusConfig, Service
 from apps.inventory.models import InventoryOperation, StockMovement
 from apps.scheduling.models import Appointment, AppointmentServiceLine
 from apps.visits.models import DetectedCondition, Visit, VisitStatus
+from tests.financial_fixtures import complete_visit_with_neutral_pricing
 from tests.scheduling.test_create_appointment import (
     appointment_payload,
     authenticated_client,
@@ -269,8 +270,7 @@ def test_draft_rejects_stale_or_completed_visit() -> None:
     saved = client.put(url, {"version": 1, "podologist_notes": "Перша версія"}, format="json")
     stale = client.put(url, {"version": 1, "podologist_notes": "Втрачена зміна"}, format="json")
     visit = Visit.objects.get()
-    visit.status = VisitStatus.COMPLETED
-    visit.save(update_fields=("status", "updated_at"))
+    complete_visit_with_neutral_pricing(visit)
     completed = client.put(
         url,
         {"version": saved.json()["version"], "podologist_notes": "Не можна"},

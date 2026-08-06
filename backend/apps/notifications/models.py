@@ -6,6 +6,8 @@ from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 
+from apps.booking_requests.models import TelegramDeliveryStatus
+
 
 class NotificationKind(models.TextChoices):
     APPOINTMENT_ARRIVED = "appointment_arrived", "Пацієнт прибув"
@@ -91,3 +93,56 @@ class Notification(models.Model):
     @property
     def is_read(self) -> bool:
         return self.read_at is not None
+
+
+class NotificationTelegramDelivery(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    notification = models.ForeignKey(
+        Notification,
+        on_delete=models.PROTECT,
+        related_name="telegram_deliveries",
+    )
+    subscription = models.ForeignKey(
+        "booking_requests.TelegramSubscription",
+        on_delete=models.PROTECT,
+        related_name="notification_deliveries",
+    )
+    chat_id = models.BigIntegerField()
+    message_id = models.BigIntegerField(blank=True, null=True)
+    status = models.CharField(
+        max_length=32,
+        choices=TelegramDeliveryStatus.choices,
+        default=TelegramDeliveryStatus.PENDING,
+    )
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(blank=True, null=True)
+    error_code = models.CharField(max_length=64, blank=True)
+    error_message = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        indexes = [
+            models.Index(
+                fields=("status", "next_attempt_at", "created_at"),
+                name="notif_tg_delivery_due_idx",
+            ),
+            models.Index(
+                fields=("notification", "status"),
+                name="notif_tg_notification_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("notification", "subscription"),
+                name="notif_tg_notif_sub_unique",
+            ),
+            models.CheckConstraint(
+                condition=Q(attempt_count__gte=0),
+                name="notif_tg_attempt_nonnegative",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.notification_id} · Notification Telegram delivery"

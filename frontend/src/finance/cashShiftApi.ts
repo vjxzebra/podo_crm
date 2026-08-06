@@ -47,7 +47,7 @@ export async function listCashShifts(
   });
   return data === undefined
     ? { ok: false, error, status: response.status }
-    : { ok: true, data, status: response.status };
+    : { ok: true, data: data as unknown as CashShiftListResponse, status: response.status };
 }
 
 export async function getCashShift(

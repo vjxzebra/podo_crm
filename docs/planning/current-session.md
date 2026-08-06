@@ -386,3 +386,60 @@ browser QA на `390×844`, `768×1024` та default desktop підтверди�
 action heights `112/154 px`, body lock, focus/Escape lifecycle і чисту
 readiness-відповідь `200`. Тимчасовий synthetic visit використано лише для
 read-only UI gate і видалено після перевірки. Production deploy не виконувався.
+
+## TP-1014—TP-1021 — допрацювання прийому, каси, Telegram і знижок
+
+2026-08-06 виконано повний scope за
+[frozen contract](../architecture/tp-1014-1021-crm-improvements-contract.md) і
+[AI development plan](tp-1014-1021-ai-development-plan.md).
+
+У завершенні прийому next appointment тепер приймає до 20 впорядкованих
+унікальних активних послуг, використовує їх сумарну тривалість і створює всі
+service lines idempotently. PDF-квитанція лишилася двосторінковою A4 та отримала
+порожнє поле рекомендованої дати для заповнення ручкою.
+
+Cash drawer переведений на одну касу `main`: на всю клініку дозволена лише одна
+OPEN-зміна, owner виконує касові mutations, а opening наступної зміни дорівнює
+фактичному closing balance попередньої незалежно від працівника. Carry-forward
+не створює ledger entry. Expand/contract migrations і PostgreSQL triggers
+захищають singleton, owner snapshot, carry source, immutable ledger та pricing
+інваріанти.
+
+Додано admin-каталог активних/неактивних знижок 1–99% і singleton loyalty
+policy. Loyalty рахує лише нові успішно завершені прийоми після запуску та
+пропонує знижку на кожен N-й; failed/canceled/draft та idempotent replay не
+змінюють ordinal. Подолог може встановити або замінити одну знижку під час
+finish, рецепція — атомарно під час оплати. Знижки не сумуються, а після
+settlement gross/discount/net pricing та payment/receipt snapshots незмінні.
+
+Кожне внутрішнє `Notification`, крім уже окремо доставлених work-item events,
+отримує durable Telegram delivery лише для exact recipient із чинною private
+subscription. Retry/backoff і permanent failure не відкочують бізнес-транзакцію
+і не змінюють `read_at`; зовнішній Bot API у tests не викликався.
+
+Фінальний `scripts/run-tests.ps1` green: `515/515` backend tests,
+`243/243` frontend tests, зокрема `44/44` axe scenarios; Ruff/format для 327
+Python files, mypy для 243 source files, Django checks/migrations, OpenAPI,
+generated TypeScript client, ESLint, strict typecheck і Vite production build.
+Poppler render підтвердив дві A4-сторінки без clipping. Authenticated browser QA
+settings пройдено на `1440×900`, `768×1024` і `390×844`, а finance та
+notifications — на desktop/mobile; horizontal overflow і console errors немає.
+
+Під час gate окремими recovery-підзадачами відновлено Docker Desktop після
+partial hang, Poppler wrapper, transient Vitest teardown та Docker bind share
+після повторюваного `EIO`. Для фінального локального QA backend/worker/beat
+перезапущені з immutable image без `/app` bind. Після першого soak integrity
+sweep виявив один Gunicorn worker timeout у новому `psycopg.connect()` до
+виконання SQL; PostgreSQL залишався healthy без lock waits, deadlocks або
+connection exhaustion, а другий worker продовжував обслуговувати запити.
+
+У тимчасовий immutable override точково додано `PGCONNECT_TIMEOUT=5`. Повторний
+post-fix soak: `13/13` readiness probes за 125,4 секунди, 5–24 мс, стабільний
+container ID, restart count `0`, два Gunicorn workers і жодних нових
+`WORKER TIMEOUT`, traceback, `OSError` або `EIO`. Authenticated session,
+current shift та finance operations повернули `200`; volumes і domain data не
+видалялися. Повний evidence:
+[TP-1014—TP-1021](../evidence/tp-1014-1021/README.md).
+
+Production deployment не виконувався. Реальні Telegram-відправлення не
+виконувалися. Локальні credentials лишилися тільки в Git-ignored `.env.local`.
