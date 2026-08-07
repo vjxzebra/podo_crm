@@ -49,13 +49,148 @@ function fieldMessage(fields: ErrorFields, name: string): string | null {
   return fields[name]?.[0] ?? null;
 }
 
+function foldCase(value: string): string {
+  return value.trim().toLocaleLowerCase("uk");
+}
+
+interface CategoryComboboxProps {
+  readonly value: string;
+  readonly categories: readonly string[];
+  readonly error: string | null;
+  readonly onChange: (value: string) => void;
+}
+
+/**
+ * Free-text category field with case-insensitive suggestions from the existing
+ * catalogue. Typing an unknown name still creates a new category; picking a
+ * suggestion reuses its canonical spelling so the catalogue does not collect
+ * entries that differ only by case.
+ */
+function CategoryCombobox({ value, categories, error, onChange }: CategoryComboboxProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const wrapper = useRef<HTMLDivElement>(null);
+  const folded = foldCase(value);
+  const matches = useMemo(
+    () => (folded === ""
+      ? [...categories]
+      : categories.filter((item) => foldCase(item).includes(folded))),
+    [categories, folded],
+  );
+  // An exact case-insensitive hit means we reuse an existing category, not add one.
+  const exact = categories.find((item) => foldCase(item) === folded) ?? null;
+  const createsNew = folded !== "" && exact === null;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnOutside = (event: MouseEvent) => {
+      if (wrapper.current !== null && !wrapper.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+    return () => { document.removeEventListener("mousedown", closeOnOutside); };
+  }, [isOpen]);
+
+  const pick = (next: string) => {
+    onChange(next);
+    setIsOpen(false);
+    setActiveIndex(-1);
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (matches.length === 0) return;
+      setIsOpen(true);
+      setActiveIndex((current) => {
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        const next = current + step;
+        if (next < 0) return matches.length - 1;
+        if (next >= matches.length) return 0;
+        return next;
+      });
+      return;
+    }
+    if (event.key === "Enter" && isOpen && activeIndex >= 0) {
+      const option = matches[activeIndex];
+      if (option !== undefined) {
+        event.preventDefault();
+        pick(option);
+      }
+      return;
+    }
+    if (event.key === "Escape" && isOpen) {
+      // Keep the dialog open; only dismiss the suggestion list.
+      event.stopPropagation();
+      setIsOpen(false);
+      setActiveIndex(-1);
+    }
+  };
+
+  const listboxId = "material-category-options";
+  const activeOptionId = activeIndex >= 0 && matches[activeIndex] !== undefined
+    ? `material-category-option-${String(activeIndex)}`
+    : undefined;
+  return (
+    <div className="form-field category-combobox" ref={wrapper}>
+      <label htmlFor="material-category-input"><span>Категорія</span></label>
+      <input
+        aria-activedescendant={activeOptionId}
+        aria-autocomplete="list"
+        aria-controls={isOpen ? listboxId : undefined}
+        aria-expanded={isOpen}
+        autoComplete="off"
+        id="material-category-input"
+        maxLength={100}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setIsOpen(true);
+          setActiveIndex(-1);
+        }}
+        onFocus={() => { setIsOpen(true); }}
+        onKeyDown={onKeyDown}
+        required
+        role="combobox"
+        value={value}
+      />
+      {isOpen && matches.length > 0 ? (
+        <ul className="category-combobox__list" id={listboxId} role="listbox" aria-label="Наявні категорії">
+          {matches.map((item, index) => (
+            <li
+              aria-selected={index === activeIndex}
+              className={index === activeIndex ? "is-active" : undefined}
+              id={`material-category-option-${String(index)}`}
+              key={item}
+              onMouseDown={(event) => { event.preventDefault(); pick(item); }}
+              role="option"
+            >
+              {item}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {error === null ? (
+        <small data-testid="category-hint">
+          {createsNew
+            ? `Нова категорія «${value.trim()}» — буде додана.`
+            : exact !== null
+              ? `Наявна категорія «${exact}».`
+              : "Почніть друкувати, щоб знайти наявну категорію."}
+        </small>
+      ) : <small className="field-error">{error}</small>}
+    </div>
+  );
+}
+
 interface MaterialEditorDialogProps {
   readonly editor: EditorState;
+  readonly categories: readonly string[];
   readonly onClose: () => void;
   readonly onSaved: (material: Material, message: string) => void;
 }
 
-function MaterialEditorDialog({ editor, onClose, onSaved }: MaterialEditorDialogProps) {
+function MaterialEditorDialog({ editor, categories, onClose, onSaved }: MaterialEditorDialogProps) {
   const source = editor.mode === "edit" ? editor.material : null;
   const [sku, setSku] = useState(source?.sku ?? "");
   const [name, setName] = useState(source?.name ?? "");
@@ -144,7 +279,7 @@ function MaterialEditorDialog({ editor, onClose, onSaved }: MaterialEditorDialog
           <div className="material-editor__grid">
             <label className="form-field"><span>Артикул</span><input maxLength={48} onChange={(event) => { setSku(event.target.value); }} ref={firstInput} required value={sku} />{fieldMessage(fields, "sku") === null ? null : <small className="field-error">{fieldMessage(fields, "sku")}</small>}</label>
             <label className="form-field material-editor__wide"><span>Назва</span><input maxLength={180} onChange={(event) => { setName(event.target.value); }} required value={name} />{fieldMessage(fields, "name") === null ? null : <small className="field-error">{fieldMessage(fields, "name")}</small>}</label>
-            <label className="form-field"><span>Категорія</span><input maxLength={100} onChange={(event) => { setCategory(event.target.value); }} required value={category} />{fieldMessage(fields, "category") === null ? null : <small className="field-error">{fieldMessage(fields, "category")}</small>}</label>
+            <CategoryCombobox categories={categories} error={fieldMessage(fields, "category")} onChange={setCategory} value={category} />
             <label className="form-field"><span>Одиниця виміру</span><input disabled={unitIsLocked} maxLength={24} onChange={(event) => { setUnit(event.target.value); }} required value={unit} />{unitIsLocked ? <small>Захищено після першої партії.</small> : null}{fieldMessage(fields, "unit") === null ? null : <small className="field-error">{fieldMessage(fields, "unit")}</small>}</label>
             <label className="form-field"><span>Мінімальний залишок</span><input min="0" onChange={(event) => { setMinimumQuantity(event.target.value); }} required step="0.001" type="number" value={minimumQuantity} />{fieldMessage(fields, "minimum_quantity") === null ? null : <small className="field-error">{fieldMessage(fields, "minimum_quantity")}</small>}</label>
             <label className="toggle-field material-editor__active"><input checked={isActive} onChange={(event) => { setIsActive(event.target.checked); }} type="checkbox" /><span /><strong>Активний матеріал</strong><small>Неактивний лишається в історії та партіях.</small></label>
@@ -351,7 +486,7 @@ export function InventoryPage() {
       </section></> : view === "suppliers" ? <InventorySuppliers /> : <MovementJournal materials={materials} />}
       {isLoadingDetails ? <div className="inventory-detail-loading" role="status"><span className="spinner" />Відкриваємо матеріал…</div> : null}
       {detailError === null ? null : <div className="inventory-detail-loading inventory-detail-loading--error" role="alert"><Icon name="warning" /><span>{detailError}</span><button className="button button--secondary" onClick={() => { if (requestedMaterialId !== null) void loadDetails(requestedMaterialId); }} type="button">Повторити</button><button className="button button--secondary" onClick={() => { closeDetails(); }} type="button">Закрити</button></div>}
-      {editor === null ? null : <MaterialEditorDialog editor={editor} onClose={() => { setEditor(null); }} onSaved={replaceMaterial} />}
+      {editor === null ? null : <MaterialEditorDialog categories={categories} editor={editor} onClose={() => { setEditor(null); }} onSaved={replaceMaterial} />}
       {details === null ? null : <MaterialDetailsDialog material={details.material} lots={details.lots} onClose={() => { closeDetails(); }} onEdit={(material) => { closeDetails(false); setEditor({ mode: "edit", material }); }} onStocktake={(material) => { closeDetails(false); setStocktakeScope(material.id); setStocktakeOpen(true); }} onWriteoff={(material, lots) => { closeDetails(false); setWriteoff({ material, lots }); }} />}
       {receiptOpen ? <ReceiptDialog materials={materials} onClose={() => { setReceiptOpen(false); }} onPosted={(operation) => { operationPosted(operation, operation.replayed ? "Надходження вже було проведено" : "Надходження проведено"); }} /> : null}
       {writeoff === null ? null : <WriteoffDialog lots={writeoff.lots} material={writeoff.material} onClose={() => { setWriteoff(null); }} onPosted={(operation) => { operationPosted(operation, operation.replayed ? "Списання вже було проведено" : "Списання проведено"); }} />}

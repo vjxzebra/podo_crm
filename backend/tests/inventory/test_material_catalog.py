@@ -295,3 +295,64 @@ def test_deferred_material_lot_fields_do_not_recurse_and_still_protect_identity(
         deferred_lot.save()
 
     assert MaterialLot.objects.filter(pk=lot.pk).delete()[0] == 1
+
+
+@pytest.mark.django_db
+def test_case_variant_category_reuses_existing_spelling_and_new_one_is_kept():
+    admin = create_user(email="category-admin@example.test", role=UserRole.ADMIN)
+    client = authenticated_client(admin)
+    create_material(sku="KAP-001", name="Каполін, 1 см", category="Перев’язувальні")
+
+    reused = client.post(
+        "/api/v1/inventory/materials",
+        {
+            "sku": "KAP-002",
+            "name": "Каполін, 2 см",
+            "category": "  перев’язувальні  ",
+            "unit": "шт.",
+            "minimum_quantity": "5",
+        },
+        format="json",
+    )
+    added = client.post(
+        "/api/v1/inventory/materials",
+        {
+            "sku": "ANT-014",
+            "name": "Octenisept, 250 мл",
+            "category": "Антисептики",
+            "unit": "мл",
+            "minimum_quantity": "1000",
+        },
+        format="json",
+    )
+
+    # A case-only variant must not become a second category.
+    assert reused.status_code == 201, reused.json()
+    assert reused.json()["category"] == "Перев’язувальні"
+    # A genuinely new name is stored as typed.
+    assert added.status_code == 201, added.json()
+    assert added.json()["category"] == "Антисептики"
+    assert sorted(set(Material.objects.values_list("category", flat=True))) == [
+        "Антисептики",
+        "Перев’язувальні",
+    ]
+
+
+@pytest.mark.django_db
+def test_case_variant_category_is_canonicalised_on_update():
+    admin = create_user(email="category-update@example.test", role=UserRole.ADMIN)
+    client = authenticated_client(admin)
+    create_material(sku="KAP-001", name="Каполін, 1 см", category="Перев’язувальні")
+    target = create_material(sku="GLV-001", name="Рукавички", category="Захист")
+
+    response = client.patch(
+        f"/api/v1/inventory/materials/{target.pk}",
+        {"category": "ПЕРЕВ’ЯЗУВАЛЬНІ", "version": target.version},
+        format="json",
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["category"] == "Перев’язувальні"
+    assert sorted(set(Material.objects.values_list("category", flat=True))) == [
+        "Перев’язувальні",
+    ]

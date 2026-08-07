@@ -244,6 +244,42 @@ describe("TP-501 inventory material and lot catalog", () => {
     });
   });
 
+  it("suggests existing categories case-insensitively and marks an unknown one as new", async () => {
+    renderApp("/inventory");
+
+    await screen.findByText("Каполін, 1 см");
+    fireEvent.click(screen.getByRole("button", { name: "Додати матеріал" }));
+    const editor = await screen.findByRole("dialog", { name: "Новий матеріал" });
+    const field = within(editor).getByLabelText("Категорія");
+
+    // Lower-case input still finds the capitalised catalogue entry.
+    fireEvent.change(field, { target: { value: "захист" } });
+    const listbox = within(editor).getByRole("listbox", { name: "Наявні категорії" });
+    expect(within(listbox).getByRole("option", { name: "Захист" })).toBeInTheDocument();
+    expect(within(listbox).queryByRole("option", { name: "Перев’язувальні" })).not.toBeInTheDocument();
+    expect(within(editor).getByTestId("category-hint")).toHaveTextContent("Наявна категорія «Захист»");
+
+    // Picking the suggestion adopts its canonical spelling.
+    fireEvent.mouseDown(within(listbox).getByRole("option", { name: "Захист" }));
+    expect(field).toHaveValue("Захист");
+    expect(within(editor).queryByRole("listbox")).not.toBeInTheDocument();
+
+    // A substring match works too, from any case.
+    fireEvent.change(field, { target: { value: "ВʼЯЗУВАЛЬ" } });
+    expect(within(editor).getByTestId("category-hint")).toHaveTextContent("буде додана");
+
+    fireEvent.change(field, { target: { value: "перев’язувальні" } });
+    expect(within(editor).getByRole("option", { name: "Перев’язувальні" })).toBeInTheDocument();
+    expect(within(editor).getByTestId("category-hint"))
+      .toHaveTextContent("Наявна категорія «Перев’язувальні»");
+
+    // An unknown name is offered as a new category instead of being blocked.
+    fireEvent.change(field, { target: { value: "Антисептики" } });
+    expect(within(editor).queryByRole("listbox")).not.toBeInTheDocument();
+    expect(within(editor).getByTestId("category-hint"))
+      .toHaveTextContent("Нова категорія «Антисептики» — буде додана");
+  });
+
   it("locks the unit field after the first lot while keeping other settings editable", async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse(adminSession))

@@ -3150,6 +3150,11 @@ pre { min-height: 180px; margin: 18px 0; padding: 15px; overflow: auto; border-r
 .material-editor__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 .material-editor__wide { grid-column: 2; grid-row: 1; }
 .material-editor__active { grid-column: 1 / -1; margin-top: 6px; }
+.category-combobox { position: relative; }
+.category-combobox__list { position: absolute; z-index: 5; top: 100%; left: 0; right: 0; max-height: 208px; overflow-y: auto; margin: 3px 0 0; padding: 5px; border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-surface); box-shadow: 0 12px 28px rgb(31 45 38 / 14%); list-style: none; }
+.category-combobox__list li { padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 0.55rem; }
+.category-combobox__list li:hover,
+.category-combobox__list li.is-active { color: var(--color-sage-dark); background: var(--color-sage-soft); }
 .modal-card__footer { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 21px; padding-top: 16px; border-top: 1px solid var(--color-line); }
 .material-details { width: min(100%, 1040px); }
 .material-details__header { align-items: center; }

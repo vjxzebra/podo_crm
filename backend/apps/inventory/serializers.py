@@ -94,7 +94,18 @@ class MaterialWriteSerializer(serializers.Serializer):
         return value.strip()
 
     def validate_category(self, value: str) -> str:
-        return value.strip()
+        normalized = value.strip()
+        if normalized == "":
+            return normalized
+        # Reuse the spelling already in the catalogue so a case-only variant
+        # ("гель" next to "Гель") does not become a second category.
+        existing = (
+            Material.objects.filter(category__iexact=normalized)
+            .order_by("category")
+            .values_list("category", flat=True)
+            .first()
+        )
+        return existing if existing is not None else normalized
 
     def validate_unit(self, value: str) -> str:
         return value.strip()
